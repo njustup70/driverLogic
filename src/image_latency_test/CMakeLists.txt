@@ -45,7 +45,8 @@ install(TARGETS
   intra_process_image_latency
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
-
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY include/
   DESTINATION include/
 )

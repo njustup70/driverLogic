@@ -27,17 +27,25 @@ private:
 
         ++count_;
         latency_sum_ms_ += latency_ms;
+        // 打印平均话题hz
 
         if (count_ % 100 == 0) {
             double avg = latency_sum_ms_ / static_cast<double>(count_);
             RCLCPP_INFO(
                 this->get_logger(), "[multi_sub] frames=%llu avg=%.3f ms last=%.3f ms",
                 static_cast<unsigned long long>(count_), avg, latency_ms);
+            // 算出话题频率
+            double elapsed = this->now().seconds() - start_time_;
+            RCLCPP_INFO(
+                this->get_logger(), "[multi_sub] elapsed=%.3f s hz=%.2f", elapsed,
+                static_cast<double>(100) / elapsed);
+            start_time_ = this->now().seconds();
         }
     }
 
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
     std::uint64_t count_;
+    std::uint64_t start_time_;
     double latency_sum_ms_;
 };
 
