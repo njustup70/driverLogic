@@ -9,12 +9,18 @@ def generate_launch_description():
         executable='image_publisher_node',
         name='image_publisher_node',
         output='screen',
+        parameters=[
+            {"width": 1920},
+            {"height": 1080},
+            {"publish_rate": 100.0},
+        ]
     )
     sub=Node(
         package='image_latency_test',
         executable='image_subscriber_node',
         name='image_subscriber_node',
         output='screen',
+        emulate_tty=True,
     )
     intra=Node(
         package='image_latency_test',

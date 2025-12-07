@@ -1,9 +1,8 @@
 #include <cstdint>
+#include <cstdio> // 必须包含此头文件
 #include <functional>
-
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
-
 class MultiImageSubscriberNode : public rclcpp::Node {
 public:
     MultiImageSubscriberNode()
@@ -31,21 +30,22 @@ private:
 
         if (count_ % 100 == 0) {
             double avg = latency_sum_ms_ / static_cast<double>(count_);
+            // 算出话题频率
+            double elapsed = this->now().seconds() - start_time_;
+            double hz      = static_cast<double>(100) / elapsed;
             RCLCPP_INFO(
                 this->get_logger(), "[multi_sub] frames=%llu avg=%.3f ms last=%.3f ms",
                 static_cast<unsigned long long>(count_), avg, latency_ms);
-            // 算出话题频率
-            double elapsed = this->now().seconds() - start_time_;
-            RCLCPP_INFO(
-                this->get_logger(), "[multi_sub] elapsed=%.3f s hz=%.2f", elapsed,
-                static_cast<double>(100) / elapsed);
+            std::printf(
+                "frames=%llu,avg=%.2f,last=%.2f,elapsed=%.2f,hz=%.2f\n",
+                static_cast<unsigned long long>(count_), avg, latency_ms, elapsed, hz);
             start_time_ = this->now().seconds();
         }
     }
 
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
     std::uint64_t count_;
-    std::uint64_t start_time_;
+    double start_time_;
     double latency_sum_ms_;
 };
 
