@@ -29,7 +29,7 @@ def generate_launch_description():
         'color_width': '1280',
         'color_height': '800',
         'color_fps': '30',
-        'color.image_raw.enable_pub_plugins': '["image_transport/raw"]',
+        'color.image_raw.enable_pub_plugins': ["image_transport/raw"],
         'depth.image_raw.enable_pub_plugins': ["image_transport/raw"],
         'color_qos':'SENSOR_DATA',
         'depth_qos':'SENSOR_DATA',
@@ -39,7 +39,7 @@ def generate_launch_description():
     log_launch_arguments = LogInfo(msg=['Launch arguments: ', str(launch_arguments)])
 
     include_sdk_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(orbbec_pkg_package_prefix, 'launch', 'gemini2.launch.py')),
+        PythonLaunchDescriptionSource(os.path.join(orbbec_pkg_package_prefix, 'launch', 'gemini_330_series_low_cpu.launch.py')),
         launch_arguments=launch_arguments.items()
     )
     ld.add_action(log_launch_arguments)
