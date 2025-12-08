@@ -4,7 +4,7 @@ services:
     # build:
     #   context: ..
     #   dockerfile: .devcontainer/Dockerfile
-    image: elainasuki/rc2025:ros2_driver
+    image: elainasuki/rc2026:ros2_driver
     container_name: ros2driver_container_dev
     environment:
       - DISPLAY=${DISPLAY}
