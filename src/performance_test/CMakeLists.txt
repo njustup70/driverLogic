@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(image_latency_test)
+project(performance_test)
 
 add_compile_options(-g -O3)
 

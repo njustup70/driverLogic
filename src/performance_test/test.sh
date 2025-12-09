@@ -10,7 +10,7 @@ WIDTH="${WIDTH:-1440}"
 HEIGHT="${HEIGHT:-1080}"
 
 LOG_DIR="$WS/logs"
-BIN_DIR="$WS/install/image_latency_test/lib/image_latency_test"
+BIN_DIR="$WS/install/performance_test/lib/performance_test"
 
 mkdir -p "$LOG_DIR"
 
@@ -41,7 +41,7 @@ ensure_binaries() {
      [ ! -x "$BIN_DIR/image_subscriber_node" ] || \
      [ ! -x "$BIN_DIR/intra_process_image_latency" ]; then
     echo "[INFO] 找不到可执行文件，开始 colcon build image_latency_test ..."
-    colcon build --packages-select image_latency_test
+    colcon build --packages-select performance_test
     echo "[INFO] build 完成。"
   fi
 }
