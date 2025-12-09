@@ -38,7 +38,11 @@ ament_target_dependencies(intra_process_image_latency
   rclcpp
   sensor_msgs
 )
-
+file(GLOB SCRIPT_FILES scripts/*.py)
+install(
+  PROGRAMS ${SCRIPT_FILES}
+  DESTINATION lib/${PROJECT_NAME}
+)
 install(TARGETS
   image_publisher_node
   image_subscriber_node
