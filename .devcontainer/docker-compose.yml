@@ -8,7 +8,7 @@ x-common:
     - NVIDIA_DRIVER_CAPABILITIES=all
     - OMP_WAIT_POLICY=passive
     - TERM=xterm-256color
-    - RMW_IMPLEMENTATION=rmw_zenoh_cpp # 使用CycloneDDS就取消注释此行
+    - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp # 使用CycloneDDS就取消注释此行
     - ROS_LOCALHOST_ONLY=1
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix
@@ -37,11 +37,6 @@ services:
     #   image: elainasuki/ros:ros-noetic-full
     #   container_name: ros-noetic-master
     #   entrypoint: [ "/bin/bash", "-c", "source /opt/ros/noetic/setup.bash && roscore" ]
-  ros_zenoh:
-    image: elainasuki/rc2026:ros2_driver
-    container_name: ros_zenoh
-    <<: *common
-    entrypoint: [ "/bin/bash", "-c", "-i", "source ~/.bashrc && ros2 run rmw_zenoh_cpp rmw_zenohd" ]
 volumes:
   ros2_driver_volume:
     driver: local
