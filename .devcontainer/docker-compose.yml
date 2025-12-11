@@ -1,4 +1,4 @@
-version: '3'
+name: driver
 x-common:
   # 定义别名，用于引用
   &common
