@@ -90,11 +90,6 @@ def generate_launch_description():
         output='screen',
         emulate_tty=True,
     )
-    websocket_bridge=ExecuteProcess(
-        # condition=IfCondition(LaunchConfiguration('use_rosbridge')),
-        cmd=["bash","-c","ros2 launch rosbridge_server rosbridge_websocket_launch.xml"],
-       
-    )
     ld.add_action(ros_master_rm)
     ld.add_action(ros_master_exe)
     ld.add_action(ros_bridge_exe)
@@ -102,5 +97,4 @@ def generate_launch_description():
     ld.add_action(shutdown_docker)
     # ld.add_action(ros_bag_action)
     ld.add_action(compose_container)
-    ld.add_action(websocket_bridge)
     return ld

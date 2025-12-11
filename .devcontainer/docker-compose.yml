@@ -1,4 +1,24 @@
 version: '3'
+x-common:
+  # 定义别名，用于引用
+  &common
+  environment:
+    - DISPLAY=${DISPLAY}
+    - NVIDIA_VISIBLE_DEVICES=all
+    - NVIDIA_DRIVER_CAPABILITIES=all
+    - OMP_WAIT_POLICY=passive
+    - TERM=xterm-256color
+    - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp # 使用CycloneDDS就取消注释此行
+    - ROS_LOCALHOST_ONLY=1
+  volumes:
+    - /tmp/.X11-unix:/tmp/.X11-unix
+  tty: true
+  network_mode: host
+  pid: "host" # 添加 pid 命名空间共享
+  ipc: "host" # 添加 ipc 命名空间共享    
+  privileged: true
+  user: "Elaina"
+  stdin_open: true
 services:
   ros2driver-service:
     # build:
@@ -6,30 +26,17 @@ services:
     #   dockerfile: .devcontainer/Dockerfile
     image: elainasuki/rc2026:ros2_driver
     container_name: ros2driver_container_dev
-    environment:
-      - DISPLAY=${DISPLAY}
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - OMP_WAIT_POLICY=passive
-      - TERM=xterm-256color
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp # 使用CycloneDDS就取消注释此行
-      - ROS_LOCALHOST_ONLY=1
-
+    <<: *common
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
       - ros2_driver_volume:/home/Elaina/ros2_driver
       - /var/run/docker.sock:/var/run/docker.sock
       - /dev:/dev
-    network_mode: host
-    pid: "host" # 添加 pid 命名空间共享
-    ipc: "host" # 添加 ipc 命名空间共享    
-    privileged: true
-    stdin_open: true
-    tty: true
-    user: "Elaina"
-    # runtime: "nvidia"
     working_dir: "/home/Elaina/ros2_driver" # 指定默认工作目录
-    # entrypoint: [ "/bin/bash", "-i", "-c", " source ~/.bashrc && ros2 launch rc_bringup didi.launch.py "]
+    # ros-noetic:
+    #   <<: *common
+    #   image: elainasuki/ros:ros-noetic-full
+    #   container_name: ros-noetic-master
+    #   entrypoint: [ "/bin/bash", "-c", "source /opt/ros/noetic/setup.bash && roscore" ]
 volumes:
   ros2_driver_volume:
     driver: local
