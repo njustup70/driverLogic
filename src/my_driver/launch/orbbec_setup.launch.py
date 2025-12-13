@@ -13,7 +13,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     # 获取 OrbbecSDK_ROS2 包的路径
     orbbec_ws_package_prefix = os.path.join(os.environ['HOME'], 'packages/orbbec_ws/src/OrbbecSDK_ROS2')
-    orbbec_pkg_package_prefix = os.path.join(orbbec_ws_package_prefix, 'orbbec_camera')
+    orbbec_pkg_package_prefix = get_package_share_directory('orbbec_camera')
     
     # 创建 LaunchDescription 对象
     ld = LaunchDescription()
