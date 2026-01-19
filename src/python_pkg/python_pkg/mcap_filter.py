@@ -14,7 +14,7 @@ class FilterMcapNode(Node):
     def __init__(self):
         super().__init__('filter_mcap_node')
 
-        self.declare_parameter('rosbag_root_path', '/home/Elaina/ros2_driver/bag_play/mcap_filter')
+        self.declare_parameter('rosbag_root_path', '/home/Elaina/ros2_ws/bag_play/mcap_filter')
         self.declare_parameter('whitelist', ['/livox/lidar/pc'])
         self.declare_parameter('start_time', '')
         self.declare_parameter('end_time', '')

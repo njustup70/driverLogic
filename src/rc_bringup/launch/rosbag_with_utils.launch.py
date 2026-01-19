@@ -21,7 +21,7 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument('loop',default_value='false',description='loop of rosbag play'))
     package_path=get_package_share_directory('rc_bringup')
     #启动rosbag
-    rosbag_root_path='/home/Elaina/ros2_driver/bag_play'
+    rosbag_root_path='/home/Elaina/ros2_ws/bag_play'
     qos_file=os.path.join(package_path,'config','ros_bag_play_qos.yaml')
     #查找root_path中的第一个文件夹中的db播放
     folders = [d for d in os.listdir(rosbag_root_path) if os.path.isdir(os.path.join(rosbag_root_path, d))]

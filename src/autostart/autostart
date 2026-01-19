@@ -8,14 +8,14 @@
 ### END INIT INFO
 
 # 配置文件路径
-LOG_FILE="/home/up70/ros2_driver/src/autostart/startlog.log"
-LOCK_FILE="/home/up70/ros2_driver/src/autostart/startlog.lock"
+LOG_FILE="/home/up70/ros2_ws/src/autostart/startlog.log"
+LOCK_FILE="/home/up70/ros2_ws/src/autostart/startlog.lock"
 
 # 项目目录定义
 VOXEL_SLAM_DIR="/home/up70/slam_docker/VoxelSlam/.devcontainer"
 LIO_SAM_DIR="/home/up70/slam_docker/lio_sam/.devcontainer"
 POINT_LIO_DIR="/home/up70/slam_docker/point_lio/.devcontainer"
-ROS2_DRIVER_DIR="/home/up70/ros2_driver/.devcontainer"
+ros2_ws_DIR="/home/up70/ros2_ws/.devcontainer"
 
 init_log() {
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -122,9 +122,9 @@ start_voxel_slam() {
 
 
 # 启动ROS2 Driver容器
-start_ros2_driver() {
+start_ros2_ws() {
     log "🚀 启动ROS2 Driver容器..."
-    pushd "${ROS2_DRIVER_DIR}" >/dev/null || { log "❌ 无法进入目录: ${ROS2_DRIVER_DIR}"; return 1; }
+    pushd "${ros2_ws_DIR}" >/dev/null || { log "❌ 无法进入目录: ${ros2_ws_DIR}"; return 1; }
     
     # 后台启动容器并记录日志
     docker compose up -d >> "${LOG_FILE}" 2>&1
@@ -191,7 +191,7 @@ start() {
     echo $$ > "${LOCK_FILE}"
     
     clean_containers
-    start_ros2_driver || return 1
+    start_ros2_ws || return 1
     sleep 5 
     start_ros2_launch || return 1
     sleep 6
@@ -210,7 +210,7 @@ stop() {
     # 停止docker compose服务
     pushd "${LIO_SAM_DIR}" >/dev/null && docker compose down
     popd >/dev/null
-    pushd "${ROS2_DRIVER_DIR}" >/dev/null && docker compose down
+    pushd "${ros2_ws_DIR}" >/dev/null && docker compose down
     popd >/dev/null
     pushd "${VOXEL_SLAM_DIR}" >/dev/null && docker compose down
     popd >/dev/null

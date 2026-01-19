@@ -39,13 +39,13 @@ def generate_launch_description():
     )
     ros_master_exe=ExecuteProcess(
         # condition=IfCondition(LaunchConfiguration('use_ros1_bridge')),
-        cmd=["bash","-c","cd ~/ros2_driver/packages/roscore && sudo docker-compose up -d"]
+        cmd=["bash","-c","cd ~/ros2_ws/packages/roscore && sudo docker-compose up -d"]
     )
     shutdown_docker= RegisterEventHandler(
         OnShutdown(
             on_shutdown=[
                 ExecuteProcess(
-                    cmd=["bash", "-c", "cd ~/ros2_driver/packages/roscore && sudo docker-compose down"],
+                    cmd=["bash", "-c", "cd ~/ros2_ws/packages/roscore && sudo docker-compose down"],
                     output='screen'
                 )
             ]
@@ -54,7 +54,7 @@ def generate_launch_description():
     ros_bridge_exe=ExecuteProcess(
         # condition=IfCondition(LaunchConfiguration('use_ros1_bridge')),
         # cmd=["bash","-c","~/docker/ros2-modules/packages/ros-bridge/ros_bridge_run.sh"],
-        cmd=["bash","-c","python3 ~/ros2_driver/packages/ros-bridge/ros_bridge_run.py"],
+        cmd=["bash","-c","python3 ~/ros2_ws/packages/ros-bridge/ros_bridge_run.py"],
         output='screen',
     )
     #TF树相关

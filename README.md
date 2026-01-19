@@ -19,6 +19,6 @@
 | [rc_bringup](src/rc_bringup/README.md) | 综合启动     |
 ## 1.在第一次打开项目的时候先运行自定义udev规则(注意其中的sudo权限)
 ```bash
-ros2_driver$ sudo ./udev_init.bash
+ros2_ws$ sudo ./udev_init.bash
 ```
 - 需要在主机下运行

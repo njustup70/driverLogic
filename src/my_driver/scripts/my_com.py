@@ -11,7 +11,7 @@ from std_msgs.msg import String
 import time
 import sys
 import numpy as np
-sys.path.append('/home/Elaina/ros2_driver/src') 
+sys.path.append('/home/Elaina/ros2_ws/src') 
 from protocol_lib.myserial import AsyncSerial_t
 
 

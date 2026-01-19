@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Startup Script
-Exec=/home/nagisa/ros2_driver/src/autostart/autostart
+Exec=/home/nagisa/ros2_ws/src/autostart/autostart
 Terminal=true
 Type=Application
 Categories=Utility;Application;  

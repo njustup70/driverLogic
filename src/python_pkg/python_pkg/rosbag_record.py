@@ -33,7 +33,7 @@ class SmartBagRecorder(Node):
         self.max_folder_num = self.get_parameter('max_folder_num').value
         self.topic_blacklist = self.get_parameter('topic_blacklist').value
         self.record_dir_root = os.path.abspath(os.path.join(
-            os.path.expanduser('~'), "ros2_driver/rosbag_record"))
+            os.path.expanduser('~'), "ros2_ws/rosbag_record"))
         self.bag_path = self.prepare_record_path()
         print(f'\033[95m📁 Recording to: {self.bag_path}\033[0m')
 

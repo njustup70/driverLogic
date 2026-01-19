@@ -3,7 +3,7 @@
 set -eo pipefail
 
 # ===== 基本配置 =====
-WS="${WS:-$HOME/ros2_driver}"
+WS="${WS:-$HOME/ros2_ws}"
 DURATION="${DURATION:-30}"          # 每种模式测试时长（秒）
 RATE="${RATE:-30.0}"
 WIDTH="${WIDTH:-1440}"
