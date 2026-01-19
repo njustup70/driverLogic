@@ -1,5 +1,5 @@
 {
-    "name": "ros2driver-container",
+    "name": "driverLogic-container",
     "dockerComposeFile": "docker-compose.yml",
     "service": "driverLogic-service",
     "workspaceFolder": "/home/Elaina/ros2_ws",
