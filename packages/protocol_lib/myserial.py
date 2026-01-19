@@ -15,7 +15,7 @@ import asyncio
 import time
 import threading
 class AsyncSerial_t:
-    def __init__(self, port, baudrate):
+    def __init__(self, port, baudrate,callback=None):
         """ 初始化异步串口 """
         self.port = port
         self.baudrate = baudrate
@@ -24,10 +24,11 @@ class AsyncSerial_t:
         self._wait_time = 0.01
         self._raw_data = b''
         self._connect_lock = asyncio.Lock()
-        self._loop=None
+        self._loop:asyncio.AbstractEventLoop
         self._thread=None
         self.last_len=0
         self.data_queue = asyncio.Queue()
+        self.startListening(callback)
     async def _connect_serial(self):
         """尝试连接串口，如果失败则等待重试"""
         while True:
@@ -132,11 +133,6 @@ class AsyncSerial_t:
         """后台线程中运行事件循环"""
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
-    async def process_queue(self):
-        """示例消费者：在主协程里调用"""
-        while True:
-            frame = await self.data_queue.get()
-            print(f"[PROCESS] Got frame: {frame}")
 # 示例主函数
 async def main_async() -> None:
     # serial = AsyncSerial_t("/dev/COM2", 115200)

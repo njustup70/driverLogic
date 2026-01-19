@@ -1,15 +1,8 @@
-
-
-
-
-
-
 import os
 import subprocess
 import rclpy
 from rclpy.node import Node
-
-
+from collections.abc import Iterable,Sequence
 class FilterMcapNode(Node):
     def __init__(self):
         super().__init__('filter_mcap_node')
@@ -19,7 +12,7 @@ class FilterMcapNode(Node):
         self.declare_parameter('start_time', '')
         self.declare_parameter('end_time', '')
 
-        self.rosbag_root_path = self.get_parameter('rosbag_root_path').value
+        self.rosbag_root_path = self.get_parameter('rosbag_root_path').value or ''
         self.whitelist = self.get_parameter('whitelist').get_parameter_value().string_array_value
         self.start_time = self.get_parameter('start_time').value
         self.end_time = self.get_parameter('end_time').value
@@ -69,7 +62,7 @@ class FilterMcapNode(Node):
             '--include-metadata',
             '--include-attachments'
         ]
-
+        assert isinstance(self.whitelist, Iterable) and isinstance(self.whitelist, Sequence)
         if len(self.whitelist) == 0 or (len(self.whitelist) == 1 and self.whitelist[0] == ''):
             self.get_logger().warn('白名单为空，将不过滤话题！')
             return

@@ -29,9 +29,9 @@ class SmartBagRecorder(Node):
         ])
 
         # 参数解析
-        self.max_size_bytes = int(self.get_parameter('max_size_gb').value * 1024 ** 3)
-        self.max_folder_num = self.get_parameter('max_folder_num').value
-        self.topic_blacklist = self.get_parameter('topic_blacklist').value
+        self.max_size_bytes:int = int((self.get_parameter('max_size_gb').value or 0)* 1024 ** 3)
+        self.max_folder_num = self.get_parameter('max_folder_num').value or 4
+        self.topic_blacklist: list[str] = self.get_parameter('topic_blacklist').value or []
         self.record_dir_root = os.path.abspath(os.path.join(
             os.path.expanduser('~'), "ros2_ws/rosbag_record"))
         self.bag_path = self.prepare_record_path()
