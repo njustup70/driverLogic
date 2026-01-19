@@ -53,9 +53,9 @@ def generate_launch_description():
     )
     #启动下位机通信
     communicate_node=Node(
-        package='my_driver',
-        executable='com.py',
-        name='communicate',
+        package='serial_dispose',
+        executable='serial_dispose',
+        name='serial_dispose',
         output='screen',
         emulate_tty=True,
         parameters=[
@@ -64,15 +64,13 @@ def generate_launch_description():
              }
         ]
     )
-    test_car_node=Node(
-        package='my_driver',
-        executable='test_car_com.py',
-        name='test_car_com',
+    slam_fusion=Node(
+        package='perception',
+        executable='slam_riqiang.py',
+        name='slam_riqiang',
         output='screen',
         emulate_tty=True,
-        parameters=[
-            {'serial_port': '/dev/serial_sick',
-                'serial_baudrate':115200,}])
+    )
     #启动fuck_slam
     fuck_slam_node=Node(
         package='my_driver',
@@ -109,12 +107,11 @@ def generate_launch_description():
     )
     # ld.add_action(fusion_node)
     ld.add_action(mid360_launch)
+    ld.add_action(communicate_node)
     # ld.add_action(imu_transform_launch)
     ld.add_action(utils_launch)
     ld.add_action(joy_launch)
-    # ld.add_action(communicate_node)
-    ld.add_action(test_car_node)
-    # ld.add_action(ms200_launch)
+    ld.add_action(slam_fusion)
     ld.add_action(ros_bag_action)
     ld.add_action(fuck_slam_node)
     return ld
