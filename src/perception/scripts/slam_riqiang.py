@@ -21,7 +21,7 @@ class fusion_node_t(Node):
         self.declare_parameter('laser_to_base', [0.1,-0.1, 0.0])  # 激光雷达到base_link的偏移 右手系下 x y xita 弧度 
         self.declare_parameter('riqiang_y', -0.10975) #日墙时候的雷达y偏移
         self.declare_parameter('slam_to_map',[0.46876+0.26775,-0.08475-0.0815,0.0])
-        self.declare_parameter('debug', False)
+        self.declare_parameter('debug', True) # 如果不想在终端看见打印信息就设为False
         self.debug = self.get_parameter('debug').value
         self.odom_topic = self.get_parameter('odom_topic').value
         self.odom_frame = self.get_parameter('odom_frame').value #轮式里程计坐标
@@ -50,7 +50,7 @@ class fusion_node_t(Node):
         self.base_link_x=0.0
         self.base_link_y=0.0
         self.r = math.sqrt(self.laser_to_base[0]**2 + self.laser_to_base[1]**2)
-        self.laser_angle = math.atan2(self.laser_to_base[0], -self.laser_to_base[1])
+        self.laser_angle = math.atan2(self.laser_to_base[1], self.laser_to_base[0])
         # if (self.debug == True):
         print(f"激光雷达到base_link的距离:{self.r} 激光雷达到base_link的角度:{self.laser_angle}")
         self.x_diff,self.y_diff,self.yaw_diff = 0.0,0.0,0.0
@@ -128,6 +128,7 @@ class fusion_node_t(Node):
             return
 
     def odom_callback(self,msg:Vector3Stamped):
+        
         stamp = rclpy.time.Time.from_msg(msg.header.stamp)
         # print(f'{stamp}') # 获取odom话题的原始时间戳
         odom_data = {
@@ -142,8 +143,10 @@ class fusion_node_t(Node):
         self.odom_y = msg.vector.y
         self.odom_yaw = msg.vector.z
         self.tf_publish(self.odom_frame, self.base_frame, self.odom_x, self.odom_y, self.odom_yaw)
+        
 
     def fuse_callback(self):
+        
         if self.latest_slam_time is None:
             return
         
@@ -164,21 +167,9 @@ class fusion_node_t(Node):
         elif dyaw < -math.pi:
             dyaw += 2 * math.pi
 
-        #这里的计算目前是基于激光雷达在机器人前方右前方的假设
+        #根据雷达位置推车体中心位置
         self.base_link_x=self.slam_x - self.r*math.sin(self.laser_angle + self.slam_yaw) +self.laser_to_base[1]
-        self.base_link_y=self.slam_y + self.r*math.cos(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
-
-        # #左前方
-        # self.base_link_x=self.slam_x - self.r*math.sin(self.laser_angle + self.slam_yaw) +self.laser_to_base[1]
-        # self.base_link_y=self.slam_y - self.r*math.cos(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
-
-        # #左后方
-        # self.base_link_x=self.slam_x + self.r*math.sin(self.laser_angle + self.slam_yaw) +self.laser_to_base[1]
-        # self.base_link_y=self.slam_y - self.r*math.cos(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
-
-        # #右后方
-        # self.base_link_x=self.slam_x + self.r*math.sin(self.laser_angle + self.slam_yaw) +self.laser_to_base[1]
-        # self.base_link_y=self.slam_y + self.r*math.cos(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
+        self.base_link_y=self.slam_y - self.r*math.cos(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
 
         self.x_diff= self.base_link_x-(odom_x*math.cos(dyaw)-odom_y*math.sin(dyaw)) 
         self.y_diff= self.base_link_y-(odom_x*math.sin(dyaw)+odom_y*math.cos(dyaw))
@@ -188,19 +179,47 @@ class fusion_node_t(Node):
         if target_time is None or len(self.odom_buffer) == 0:
             return None
         
-        if(self.debug == True):
-            print("---- last 50 odom ----")
-            for o in list(self.odom_buffer)[-50:]:
-                print(o['stamp'].nanoseconds, o['x'], o['y'], o['yaw'])
-            print("---- end ----")
-
-        return min(
+        # 1. 先找到最佳匹配项 (为了在打印时知道高亮哪一行)
+        best_match = min(
             self.odom_buffer,
             key=lambda o: abs((o['stamp'] - target_time).nanoseconds)
         )
 
+        if self.debug:
+            # 定义颜色代码
+            class Colors:
+                HEADER = '\033[95m'
+                BLUE = '\033[94m'
+                GREEN = '\033[92m' # 绿色，用于高亮匹配项
+                YELLOW = '\033[93m'
+                FAIL = '\033[91m'
+                ENDC = '\033[0m'   # 重置颜色
+                BOLD = '\033[1m'
 
-       
+            print(f"{Colors.HEADER}---- Searching for Target: {target_time.nanoseconds} ----{Colors.ENDC}")
+            print(f"{'Stamp (ns)':<20} | {'Diff (ms)':<10} | {'X':<10} | {'Y':<10} | {'Yaw':<10}")
+            print("-" * 75)
+
+            # 遍历最后 50 个数据
+            for o in list(self.odom_buffer)[-50:]:
+                # 计算时间差 (用于显示)
+                diff_ns = (o['stamp'] - target_time).nanoseconds
+                diff_ms = diff_ns / 1e6 
+                
+                # 准备打印的数据字符串 (使用 f-string 对齐)
+                line_str = f"{o['stamp'].nanoseconds:<20} | {diff_ms:>10.2f} | {o['x']:<10.4f} | {o['y']:<10.4f} | {o['yaw']:<10.4f}"
+
+                # 判断：如果是最佳匹配项，或者是时间差极小的项，用绿色高亮
+                if o == best_match:
+                    print(f"{Colors.GREEN}{Colors.BOLD}>>> {line_str} <<< (MATCH){Colors.ENDC}")
+                else:
+                    # 普通数据用默认颜色，或者稍微置灰
+                    print(line_str)
+            
+            print(f"{Colors.HEADER}---- End of Buffer ----{Colors.ENDC}")
+
+        return best_match
+
     def robot_state_callback(self, msg: String):
         """功能描述：ros2的订阅者的回调函数,接收到消息的时候进行解析，有两个状态，'日墙'就去计算slam的坐标系和真实坐标系的一个yaw角的偏差，'reset_slam就认为yaw没有偏差'"""
         """
