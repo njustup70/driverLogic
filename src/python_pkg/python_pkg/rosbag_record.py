@@ -53,6 +53,7 @@ class SmartBagRecorder(Node):
         # 初始化变量
         self.subscribers = []
         self.subscribed_topics = set()
+        self.blacklisted_topics_checked = set()  # 记录已检查过的黑名单话题
         # 预处理黑名单规则（转换为匹配函数）
         self.blacklist_rules = [self._compile_rule(rule) for rule in self.topic_blacklist]
 
@@ -153,9 +154,13 @@ class SmartBagRecorder(Node):
             return
 
         # 检查是否在黑名单中
+        if topic_name in self.blacklisted_topics_checked:
+            return
+
         for matcher in self.blacklist_rules:
             if matcher(topic_name):
                 print(f'\033[93m🔇 Skipping blacklisted topic: {topic_name}\033[0m')
+                self.blacklisted_topics_checked.add(topic_name)
                 return
 
         try:
