@@ -35,7 +35,7 @@ def generate_launch_description():
         )
     ros_master_rm=ExecuteProcess(
         # condition=IfCondition(LaunchConfiguration('use_ros1_bridge')),
-        cmd=["bash","-c","sudo docker rm ros-noetic-full"]
+        cmd=["bash","-c","sudo docker stop ros-noetic-full && sudo docker rm ros-noetic-full"]
     )
     ros_master_exe=ExecuteProcess(
         # condition=IfCondition(LaunchConfiguration('use_ros1_bridge')),

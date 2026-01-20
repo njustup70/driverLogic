@@ -18,31 +18,46 @@ from launch.conditions import LaunchConfigurationEquals
 def generate_launch_description():
     ld=LaunchDescription()
     ld.add_action(DeclareLaunchArgument('rate',default_value='1',description='rate of rosbag play'))
-    ld.add_action(DeclareLaunchArgument('loop',default_value='false',description='loop of rosbag play'))
+    ld.add_action(DeclareLaunchArgument('loop',default_value='true',description='loop of rosbag play'))
     package_path=get_package_share_directory('rc_bringup')
-    #启动rosbag
-    rosbag_root_path='/home/Elaina/ros2_ws/bag_play'
-    qos_file=os.path.join(package_path,'config','ros_bag_play_qos.yaml')
-    #查找root_path中的第一个文件夹中的db播放
-    folders = [d for d in os.listdir(rosbag_root_path) if os.path.isdir(os.path.join(rosbag_root_path, d))]
-    if folders:
-        first_folder = folders[0]  # 取第一个文件夹
-        rosbag_path = os.path.join(rosbag_root_path, first_folder)
+        #启动rosbag
+    rosbag_root_path = '/home/Elaina/ros2_ws/bag_play'
+    exclude_folder_name = 'mcap_filter'
 
-        # 查找 .db3 文件
-        db3_files = glob.glob(os.path.join(rosbag_path, "*.db3"))
-        if db3_files:
-            rosbag_path=db3_files[0]
+    # 1. 获取所有子文件夹，同时排除掉 mcap_filter
+    folders = [
+        d for d in os.listdir(rosbag_root_path) 
+        if os.path.isdir(os.path.join(rosbag_root_path, d)) and d != exclude_folder_name
+    ]
+
+    rosbag_path = None
+
+    if folders:
+        # 取第一个符合条件的文件夹
+        first_folder = folders[0]
+        target_dir = os.path.join(rosbag_root_path, first_folder)
+
+        # 2. 同时查找 .db3 和 .mcap 文件
+        # 使用 glob.glob 的通配符能力，或者合并两个列表
+        bag_files = glob.glob(os.path.join(target_dir, "*.db3")) + \
+                    glob.glob(os.path.join(target_dir, "*.mcap"))
+
+        if bag_files:
+            # 取找到的第一个文件
+            rosbag_path = bag_files[0]
+            print(f"成功找到录制文件: {rosbag_path}")
+        else:
+            print(f"在文件夹 {first_folder} 中没有找到 .db3 或 .mcap 文件")
     else:
-        print("没有找到文件夹")
+        print("没有找到符合条件的文件夹（已排除 mcap_filter 或文件夹为空）")
     ros_bag_exe=ExecuteProcess(
         # cmd=["bash","-c","ros2 bag play --loop {}".format(rosbag_path)],
-        cmd=["ros2","bag","play","--rate",LaunchConfiguration('rate'),rosbag_path,"--qos-profile-overrides-path",qos_file,'--remap','/tf_static:=/trash'],
+        cmd=["ros2","bag","play","--rate",LaunchConfiguration('rate'),rosbag_path,'--remap','/tf_static:=/trash'],
         output='screen',
         condition=LaunchConfigurationEquals('loop', 'false')
     )
     ros_bag_loop_exe=ExecuteProcess(
-        cmd=["ros2","bag","play","--rate",LaunchConfiguration('rate'),"--loop",rosbag_path,"--qos-profile-overrides-path",qos_file,'--remap','/tf_static:=/trash'],
+        cmd=["ros2","bag","play","--rate",LaunchConfiguration('rate'),"--loop",rosbag_path,'--remap','/tf_static:=/trash'],
         output='screen',
         condition=IfCondition(LaunchConfiguration('loop'))
     )
