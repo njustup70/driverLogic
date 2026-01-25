@@ -8,7 +8,7 @@ def generate_launch_description():
     # -------- Launch 参数声明 --------
     port_arg = DeclareLaunchArgument(
         'port',
-        default_value='/dev/tnt1',
+        default_value='/dev/serial_sick',
         description='Serial port device'
     )
 

@@ -17,7 +17,7 @@ class fusion_node_t(Node):
         self.declare_parameter('base_frame', 'base_link') # 地图坐标系下融合码盘的base_link坐标
         self.declare_parameter('slam_odom',['camera_init']) # 被监听的tf地图坐标 
         self.declare_parameter('slam_base_link',['body','aft_mapped'])  # 被监听的tf基座坐标
-        self.declare_parameter('odom_topic','/odom')   #轮式里程计
+        self.declare_parameter('odom_topic','/odom_data')   #轮式里程计
         self.declare_parameter('laser_to_base', [0.1,-0.1, 0.0])  # 激光雷达到base_link的偏移 右手系下 x y xita 弧度 
         self.declare_parameter('riqiang_y', -0.10975) #日墙时候的雷达y偏移
         self.declare_parameter('slam_to_map',[0.46876+0.26775,-0.08475-0.0815,0.0])

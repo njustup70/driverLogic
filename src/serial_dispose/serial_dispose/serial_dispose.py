@@ -21,7 +21,7 @@ class SerialDisposeNode(Node):
         )
         self.serial.startListening(lambda data: self.serial_callback(data))
         self.publisher_ = self.create_publisher(Vector3Stamped, 'lidar_position', 10)
-        self.publisher_odom = self.create_publisher(Vector3Stamped, 'odom', 10)
+        self.publisher_odom = self.create_publisher(Vector3Stamped, 'odom_data', 10)
         self.subscription_cmd_vel = self.create_subscription(Twist,'cmd_vel',self.cmd_vel_callback,10)
         self.rx_queue = Queue()
         self.guard = self.create_guard_condition(self.process_rx_queue)
