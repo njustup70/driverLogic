@@ -13,13 +13,15 @@ from get_dispose_serial.myserial import AsyncSerial_t
 class SerialDisposeNode(Node):
     def __init__(self):
         super().__init__('serial_dispose_node')
+        self.declare_parameter('port', '/dev/tnt1')
+        self.declare_parameter('baudrate', 115200)
         self.serial = AsyncSerial_t(
-            port="/dev/tnt1",
-            baudrate=115200,
+            port=self.get_parameter('port').get_parameter_value().string_value,
+            baudrate=self.get_parameter('baudrate').get_parameter_value().integer_value,
         )
         self.serial.startListening(lambda data: self.serial_callback(data))
         self.publisher_ = self.create_publisher(Vector3Stamped, 'lidar_position', 10)
-        self.publisher_odom = self.create_publisher(Vector3Stamped, 'odom_data', 10)
+        self.publisher_odom = self.create_publisher(Vector3Stamped, 'odom', 10)
         self.subscription_cmd_vel = self.create_subscription(Twist,'cmd_vel',self.cmd_vel_callback,10)
         self.rx_queue = Queue()
         self.guard = self.create_guard_condition(self.process_rx_queue)

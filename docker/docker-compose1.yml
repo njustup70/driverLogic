@@ -51,7 +51,7 @@ services:
     container_name: ros2yolo_runtime
     volumes:
       - ros2yolo_volume:/home/Elaina/yolo
-      - /dev:/dev
+      #- /dev:/dev
     user: "Elaina"
     working_dir: "/home/Elaina/yolo" # 指定默认工作目录
     entrypoint: [ "/bin/bash", "-i", "-c", " source ~/.bashrc && ros2 launch yolov5_ros2 yolov5_launch.py" ]

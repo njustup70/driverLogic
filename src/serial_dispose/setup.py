@@ -1,11 +1,31 @@
 from setuptools import setup, find_packages
+import os
+from glob import glob
+
+package_name = 'serial_dispose'
 
 setup(
-    name='serial_dispose',
+    name=package_name,
     version='0.0.1',
-    packages=find_packages(),  # 自动找到 serial_dispose 子目录和 get_dispose_serial
-    install_requires=['setuptools', 'pyserial'],  # 如果你要用 serial 库
+    packages=find_packages(),
+
+    install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
+
+    # ⭐⭐⭐ ROS2 关键部分 ⭐⭐⭐
+    data_files=[
+        # ament 索引
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+
+        # package.xml
+        ('share/' + package_name, ['package.xml']),
+
+        # launch 文件
+        (os.path.join('share', package_name, 'launch'),
+            glob('launch/*.launch.py')),
+    ],
+
     entry_points={
         'console_scripts': [
             'serial_dispose = serial_dispose.serial_dispose:main',
