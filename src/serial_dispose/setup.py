@@ -12,7 +12,6 @@ setup(
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
 
-    # ⭐⭐⭐ ROS2 关键部分 ⭐⭐⭐
     data_files=[
         # ament 索引
         ('share/ament_index/resource_index/packages',
