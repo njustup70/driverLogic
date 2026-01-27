@@ -58,9 +58,10 @@ class SickGetNode(Node):
         # 6	    Temperature compensation value	温漂补偿值
         # 7	    Confidence / Quality	测距置信度或内部质量参数
 
-        distance = floats[0]-0.05
-        self.get_logger().info(f"distance: {distance:.4f}")
+        distance = 1.0667 * floats[0] - 0.0533
+        # self.get_logger().info(f"distance: {distance:.4f}")
         msg = Float32()
+
         msg.data = distance
         self.publisher_.publish(msg)
 

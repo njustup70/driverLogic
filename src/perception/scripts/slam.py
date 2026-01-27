@@ -181,7 +181,7 @@ class fusion_node_t(Node):
             elif self.slam_yaw < -math.pi:
                 self.slam_yaw += 2 * math.pi
 
-            self.tf_publish(self.map_frame, self.odom_frame, self.x_diff,self.y_diff, self.yaw_diff) 
+            self.tf_publish(self.slam_map_frame, self.odom_frame, self.x_diff,self.y_diff, self.yaw_diff) 
             
         except Exception as e:
             self.get_logger().error(f"SLAM坐标转换错误: {e}")
