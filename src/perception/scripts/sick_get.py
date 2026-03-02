@@ -5,31 +5,33 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
 
-FRAME_LEN = 36  # 帧长度
+FRAME_LEN = 20  # 帧长度
 
 class SickGetNode(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
-        self.declare_parameter('port', '/dev/ttyACM0')
+        self.declare_parameter('port', '/dev/ttyUSB0')
         port_name = self.get_parameter('port').value
 
         self.get_logger().info(f'Node {node_name} 启动.')
         self.publisher_ = self.create_publisher(Float32, 'sick_data', 10)
 
-        serial = AsyncSerial_t(port_name, 230400)
+        serial = AsyncSerial_t(port_name, 115200)
         serial.startListening(callback = self.parse_frame)
 
     def parse_frame(self, frame: bytes):
         if len(frame) != FRAME_LEN:
             print("长度错误:", len(frame))
             return None
+        
+
 
         # ------------- 提取字段 ---------------
         header = frame[0]
         frame_type = frame[1]
         data_len = frame[2]
-        payload = frame[3:35]      # 8 * float = 32B
-        tail = frame[35]
+        payload = frame[3:19]      # 8 * float = 32B  # 4* 16B
+        tail = frame[19]
 
         # ----------- 校验头部和长度 ----------
         if header != tail:
@@ -37,7 +39,7 @@ class SickGetNode(Node):
             return None
 
         # ----------- 校验（uint16 求和）---------
-        calc_sum = sum(frame[1:35]) & 0xFF
+        calc_sum = sum(frame[1:19]) & 0xFF
         recv_sum = tail
 
         if calc_sum != recv_sum:
@@ -45,7 +47,7 @@ class SickGetNode(Node):
             return None
 
         # ----------- 解 8 个 float --------------
-        floats = struct.unpack("<8f", payload)
+        floats = struct.unpack("<4f", payload)
 
         # 8 个 float 分别表示：（可能，未找到官方数据）
         # 通道    名称	                    说明
@@ -59,7 +61,7 @@ class SickGetNode(Node):
         # 7	    Confidence / Quality	测距置信度或内部质量参数
 
         distance = 1.0667 * floats[0] - 0.0533
-        # self.get_logger().info(f"distance: {distance:.4f}")
+        self.get_logger().info(f"distance: {distance:.4f}")
         msg = Float32()
 
         msg.data = distance
