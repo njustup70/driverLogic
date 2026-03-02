@@ -10,21 +10,22 @@ from rclpy.time import Time
 import tf2_ros
 import math
 from typing import Optional
-from task_list.exec_order import ExecListNode
 
 class DoingExec(Node):
-    def __init__(self,exec_list_node: ExecListNode):
+    def __init__(self):
         super().__init__('doing_exec')
         self.declare_parameter('error_value_xy', 0.1)
         self.declare_parameter('error_value_yaw', 0.1)
-        error_xy = self.get_parameter('error_value_xy').value
-        error_yaw = self.get_parameter('error_value_yaw').value
+        self.declare_parameter('R2place1_exec_list', '[]')
+        R2place1_exec_list_str = self.get_parameter('R2place1_exec_list').get_parameter_value().string_value
+        self.R2place1_exec_list = json.loads(R2place1_exec_list_str)
+        self.error_value_xy = self.get_parameter('error_value_xy').get_parameter_value().double_value
+        self.error_value_yaw = self.get_parameter('error_value_yaw').get_parameter_value().double_value
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.control_pub = self.create_publisher(String, 'control', 10)
         self.location_pub = self.create_publisher(String, 'location', 10)
         self.exec_callback_sub = self.create_subscription(String, 'exec_callback', self.exec_callback, 10)
-        self.exec_list = exec_list_node
         #self.pose_queue = asyncio.Queue()
         self.move_event = asyncio.Event()
         self.turn_event = asyncio.Event()
@@ -39,7 +40,7 @@ class DoingExec(Node):
         self.last_yaw = None
         self.timer = self.create_timer(0.1, self.tf_update_wrapper)
     async def doing_exec(self):
-        for item in self.exec_list.R2place1_exec_list:
+        for item in self.R2place1_exec_list:
             await self.doing_event.wait()
             self.doing_event.clear()
             cmd = item[0]
@@ -151,54 +152,29 @@ class DoingExec(Node):
         except tf2_ros.TransformException:
             return None
 def main():
-    """
-    程序启动入口
-
-    设计说明：
-    1. rclpy 使用自己的事件循环（executor）
-    2. doing_exec 是 asyncio 协程，需要 asyncio 事件循环
-    3. 因此我们使用：
-         - asyncio 作为主循环
-         - rclpy.spin 放入线程执行
-    这样可以保证：
-         - ROS2 回调正常执行
-         - asyncio 协程正常运行
-    """
-
-    # 初始化 ROS2
     rclpy.init()
+    node = DoingExec()
 
-    # 创建执行列表节点（你的任务来源）
-    exec_list_node = ExecListNode()
-
-    # 创建执行节点
-    doing_exec_node = DoingExec(exec_list_node)
-
-    # 获取 asyncio 事件循环
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     try:
-        # 把 rclpy.spin 放入线程池执行
-        # 这样 ROS 的回调不会阻塞 asyncio
-        loop.run_in_executor(
-            None,               # 使用默认线程池
-            rclpy.spin,         # 在线程中运行 spin
-            doing_exec_node     # 传入节点
-        )
+        # ROS spin 放后台线程
+        spin_task = loop.run_in_executor(None, rclpy.spin, node)
 
-        # 在 asyncio 主循环中运行行为调度协程
-        loop.run_until_complete(
-            doing_exec_node.doing_exec()
-        )
+        # asyncio 主任务
+        main_task = loop.create_task(node.doing_exec())
+
+        loop.run_until_complete(main_task)
 
     except KeyboardInterrupt:
-        # Ctrl+C 时安全退出
         pass
 
     finally:
-        doing_exec_node.destroy_node()
-        exec_list_node.destroy_node()
+        node.destroy_node()
         rclpy.shutdown()
+        loop.stop()
+        loop.close()
 
 
 if __name__ == '__main__':

@@ -26,7 +26,7 @@ def generate_launch_description():
     #启动mid360
     mid360_launch=IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('my_driver'),'launch','mid360_bringup.launch.py')
+            os.path.join(get_package_share_directory('my_driver'),'rs_airy.launch.py')
         ),
         launch_arguments={
             'use_rviz': 'false',  #不启动rviz

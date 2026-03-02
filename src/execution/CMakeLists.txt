@@ -17,10 +17,5 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-# 安装 task_list
-install(
-  DIRECTORY task_list
-  DESTINATION lib/${PROJECT_NAME}
-)
 
 ament_package()

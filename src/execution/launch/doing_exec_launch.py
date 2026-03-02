@@ -1,38 +1,26 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
-
+import json
 
 def generate_launch_description():
 
-    # 声明可配置参数（可在命令行覆盖）
-    error_value_xy_arg = DeclareLaunchArgument(
-        'error_value_xy',
-        default_value='0.1',
-        description='Position tolerance threshold'
-    )
+    exec_list = [
+        ["move", 11, 11],
+        ["turn", 90]
+    ]
 
-    error_value_yaw_arg = DeclareLaunchArgument(
-        'error_value_yaw',
-        default_value='0.1',
-        description='Yaw tolerance threshold'
-    )
-
-    # 创建节点
     doing_exec_node = Node(
-        package='execution',          # ⚠ 改成你的包名
-        executable='doing_exec.py',              # ⚠ 改成你的入口名
+        package='execution',
+        executable='doing_exec.py',
         name='doing_exec',
         output='screen',
         parameters=[{
-            'error_value_xy': LaunchConfiguration('error_value_xy'),
-            'error_value_yaw': LaunchConfiguration('error_value_yaw'),
+            'error_value_xy': 0.1,
+            'error_value_yaw': 0.1,
+            'R2place1_exec_list': json.dumps(exec_list)
         }]
     )
 
     return LaunchDescription([
-        error_value_xy_arg,
-        error_value_yaw_arg,
         doing_exec_node
     ])
