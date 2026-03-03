@@ -7,8 +7,6 @@ on:
     types: [rerequested, completed]
   check_suite:
     types: [completed]
-  create:
-  delete:
   deployment_status:
   discussion:
     types: [created, edited, answered]
@@ -50,8 +48,6 @@ on:
   release:
     types: [published]
   status:
-  watch:
-    types: [started]
   schedule:
     - cron: '30 2 * * *'
 
