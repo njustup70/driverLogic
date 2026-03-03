@@ -9,6 +9,7 @@
 例程:
 serial = AsyncSerial_t("COM2", 115200)
 serial.startListening(lambda data: serial.write(data))
+飞书文档🔗:https://tcnpd0yows2w.feishu.cn/wiki/Op9GwK7FSi5OEJk6JL4cukWInVz
 """
 import serial
 import asyncio
