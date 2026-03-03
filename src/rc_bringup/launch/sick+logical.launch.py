@@ -14,13 +14,21 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     ld = LaunchDescription()
+
+    '''西克部分启动'''
     ld.add_action(DeclareLaunchArgument('use_simulation', default_value='true', description='是否启动机器人仿真节点'))
-    ld.add_action(DeclareLaunchArgument('sick_port', default_value='/dev/ch340', description='Sick雷达的串口路径'))
+    ld.add_action(DeclareLaunchArgument('sick_port', default_value='/dev/ttyACM0', description='Sick雷达的串口路径'))
     # use_simulation=true 时参数才影响
     ld.add_action(DeclareLaunchArgument('enable_odom', default_value='true', description='仿真: 开启里程计'))
-    ld.add_action(DeclareLaunchArgument('enable_sick', default_value='false', description='仿真: 开启虚拟雷达'))
+    ld.add_action(DeclareLaunchArgument('enable_sick', default_value='true', description='仿真: 开启虚拟雷达'))
     ld.add_action(DeclareLaunchArgument('enable_slam_tf', default_value='false', description='仿真: 开启虚拟SLAM TF'))
+    '''驱动部分启动'''
+    ld.add_action()
 
+
+    '''串口部分启动'''
+
+    '''逻辑部分启动'''
 
     sim_node = Node(
         package='perception',

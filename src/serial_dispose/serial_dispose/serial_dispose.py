@@ -9,6 +9,7 @@ import sys
 import numpy as np
 from rclpy.guard_condition import GuardCondition
 from queue import Queue
+import json
 from get_dispose_serial.myserial import AsyncSerial_t 
 class SerialDisposeNode(Node):
     def __init__(self):
@@ -22,16 +23,22 @@ class SerialDisposeNode(Node):
         self.serial.startListening(lambda data: self.serial_callback(data))
         self.publisher_ = self.create_publisher(Vector3Stamped, 'lidar_position', 10)
         self.publisher_odom = self.create_publisher(Vector3Stamped, 'odom_data', 10)
-        self.subscription_cmd_vel = self.create_subscription(Twist,'cmd_vel',self.cmd_vel_callback,10)
+        self.publisher_exec_callback = self.create_publisher(String, 'exec_callback', 10)
+        self.subscription_control = self.create_subscription(String,'control',self.control_callback,10)
+        self.subscription_location = self.create_subscription(String,'location',self.location_callback,10)
         self.rx_queue = Queue()
         self.guard = self.create_guard_condition(self.process_rx_queue)
         self.out_first_frame = b'\xFA'
         self.out_frame_list = {
-            "joy_cmd": {
-            "id": b'\xA0',
-            "fmt": "<fff"
+            "cmd_vel": {
+                "id": b'\xA0',
+                "fmt": "<fff"
+            },
+            "location": {
+                "id": b'\xA1',
+                "fmt": "<fff"
+            },
         }
-}
         self.in_first_frame = b'\xFF'
         self.in_frame_list = {
             b'\xAA': {
@@ -40,14 +47,33 @@ class SerialDisposeNode(Node):
                 "send": self.publisher_odom,
                 "fmt": "<fff"
             },
-        }   
-    def cmd_vel_callback(self, msg):
-        linear_x = msg.linear.x
-        linear_y = msg.linear.y
-        angular_z = msg.angular.z
-        data = struct.pack(self.out_frame_list["joy_cmd"]["fmt"], linear_x,linear_y, angular_z)
-        send_joy = self.out_first_frame + self.out_frame_list["joy_cmd"]["id"] + data
-        self.serial.write(send_joy)
+            b'\xAB': {
+                "name": "exec_callback_frame",
+                "dispose": self.dispose_exec_callback,
+                "send": self.publisher_exec_callback,   
+                "fmt": "<B"
+            },
+        }
+    def control_callback(self, msg):
+        msg_data = json.loads(msg.data)
+        if msg_data["topic_name"] not in self.out_frame_list:
+            self.get_logger().warn(f"未知topic: {msg_data['topic_name']}")
+            return
+        try:
+            struct.pack(self.out_frame_list[msg_data["topic_name"]]["fmt"], *msg_data["data"])
+            print("格式匹配")
+        except struct.error as error:
+            print("格式不匹配:", error)
+            return
+        data = struct.pack(self.out_frame_list[msg_data["topic_name"]]["fmt"], *msg_data["data"])
+        send = self.out_first_frame + self.out_frame_list[msg_data["topic_name"]]["id"] + data
+        self.serial.write(send)
+    def location_callback(self, msg):
+        msg_data = json.loads(msg.data)
+        self.get_logger().info(f"接收到位置信息: {msg_data}")
+        data = struct.pack("<fff", *msg_data)
+        send = self.out_first_frame + self.out_frame_list["location"]["id"] + data
+        self.serial.write(send)
     def serial_callback(self, data): 
         print("RX:", data.hex())
         self.rx_queue.put(data)
@@ -76,6 +102,14 @@ class SerialDisposeNode(Node):
         msg.vector.y = y
         msg.vector.z = z
         return msg
+    def dispose_exec_callback(self, data, fmt):
+        for name, config in self.out_frame_list.items():
+            if config["id"] == data:
+                msg = String()
+                msg.data = name
+                return msg
+        self.get_logger().warn(f"未知回调ID: {data}")
+        return String(data="Unknown frame")
         
 def main(args=None):
     rclpy.init(args=args)
