@@ -67,6 +67,7 @@ class SerialDisposeNode(Node):
             return
         data = struct.pack(self.out_frame_list[msg_data["topic_name"]]["fmt"], *msg_data["data"])
         send = self.out_first_frame + self.out_frame_list[msg_data["topic_name"]]["id"] + data
+        print("发送数据:", send.hex())
         self.serial.write(send)
     def location_callback(self, msg):
         msg_data = json.loads(msg.data)

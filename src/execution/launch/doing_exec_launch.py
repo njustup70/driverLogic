@@ -5,7 +5,7 @@ import json
 def generate_launch_description():
 
     exec_list = [
-        ["move", 11, 11],
+        ["move", 1, 1],
         ["turn", 90]
     ]
 
