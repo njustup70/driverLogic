@@ -12,8 +12,9 @@ import math
 from typing import Optional
 
 class DoingExec(Node):
-    def __init__(self):
+    def __init__(self,loop):
         super().__init__('doing_exec')
+        self.loop = loop
         self.declare_parameter('error_value_xy', 0.1)
         self.declare_parameter('error_value_yaw', 0.1)
         self.declare_parameter('R2place1_exec_list', '[]')
@@ -37,9 +38,10 @@ class DoingExec(Node):
         self.last_stamp = None
         self.moving = False
         self.turning = False
-        self.last_yaw = None
+        self.last_yaw = 0.0
         self.timer = self.create_timer(0.1, self.tf_update_wrapper)
     async def doing_exec(self):
+        await asyncio.sleep(1.0)
         for item in self.R2place1_exec_list:
             await self.doing_event.wait()
             self.doing_event.clear()
@@ -110,13 +112,17 @@ class DoingExec(Node):
         self.turning = False
         self.doing_event.set()
     def tf_update_wrapper(self):
-        asyncio.create_task(self.tf_update())
-    async def tf_update(self):#这一部分采用了轮询，可能会出现更新幅度频率不稳定的情况，以后再改
+        self.get_logger().info("timer tick")
+        #asyncio.create_task(self.tf_update())
+        self.loop.call_soon_threadsafe(self.tf_update)
+    
+    def tf_update(self):#这一部分采用了轮询，可能会出现更新幅度频率不稳定的情况，以后再改
+        self.get_logger().info("更新 TF")
         tf_msg = self.read_base_to_map_tf()
         if tf_msg is None:
             return 
-        if self.last_stamp == tf_msg.header.stamp:
-            return
+        # if self.last_stamp == tf_msg.header.stamp:
+        #     return
         self.last_stamp = tf_msg.header.stamp
         x = tf_msg.transform.translation.x
         y = tf_msg.transform.translation.y
@@ -124,6 +130,7 @@ class DoingExec(Node):
         if x == None or y == None or yaw == None:
             self.get_logger().warn(f"无效的 TF 值: x={x}, y={y}, yaw={yaw}")
             return
+        self.get_logger().info(f"当前位姿: x={x}, y={y}, yaw={yaw}")
         # 只在 move/turn运行时才推送
         if self.moving:
             self.new_pose_xy = (x, y)
@@ -146,29 +153,25 @@ class DoingExec(Node):
             tf_msg = self.tf_buffer.lookup_transform(
                 "map",
                 "base_link",
-                rclpy.time.Time()
+                Time(seconds=0)
             )
+            self.get_logger().info(f"获取 TF 成功: x={tf_msg.transform.translation.x}, y={tf_msg.transform.translation.y}, yaw={self.quaternion_to_yaw(tf_msg.transform.rotation)}")
             return tf_msg
-        except tf2_ros.TransformException:
+        except tf2_ros.TransformException as e:
+            self.get_logger().warn(f"获取 TF 失败: {e}")
             return None
 def main():
     rclpy.init()
-    node = DoingExec()
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
+    node = DoingExec(loop)   # 把 loop 传进去
+
     try:
-        # ROS spin 放后台线程
         spin_task = loop.run_in_executor(None, rclpy.spin, node)
-
-        # asyncio 主任务
         main_task = loop.create_task(node.doing_exec())
-
         loop.run_until_complete(main_task)
-
-    except KeyboardInterrupt:
-        pass
 
     finally:
         node.destroy_node()
