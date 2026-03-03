@@ -61,7 +61,7 @@ class SickGetNode(Node):
         # 7	    Confidence / Quality	测距置信度或内部质量参数
 
         distance = 1.0667 * floats[0] - 0.0533
-        self.get_logger().info(f"distance: {distance:.4f}")
+        # self.get_logger().info(f"distance: {distance:.4f}")
         msg = Float32()
 
         msg.data = distance
