@@ -14,7 +14,7 @@ from get_dispose_serial.myserial import AsyncSerial_t
 class SerialDisposeNode(Node):
     def __init__(self):
         super().__init__('serial_dispose_node')
-        self.declare_parameter('port', '/dev/tnt1')
+        self.declare_parameter('port', '/dev/ttyUSB0')
         self.declare_parameter('baudrate', 115200)
         self.serial = AsyncSerial_t(
             port=self.get_parameter('port').get_parameter_value().string_value,
