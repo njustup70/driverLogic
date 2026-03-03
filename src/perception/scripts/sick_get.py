@@ -10,7 +10,7 @@ FRAME_LEN = 20  # 帧长度
 class SickGetNode(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
-        self.declare_parameter('port', '/dev/ttyUSB0')
+        self.declare_parameter('port', '/dev/ch340')
         port_name = self.get_parameter('port').value
 
         self.get_logger().info(f'Node {node_name} 启动.')
