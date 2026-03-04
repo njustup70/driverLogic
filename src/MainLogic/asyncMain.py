@@ -11,6 +11,7 @@ async def async_main():
 # 检测是否到达目标坐标的异步函数,不涉及运动控制
 async def move_to(x, y, yaw):
     targetOdom = Odom(x, y, yaw)
+    #给电控发坐标指令
     while True:
         await asyncio.sleep(0.01)
         dx = targetOdom - chassicInstance.odom

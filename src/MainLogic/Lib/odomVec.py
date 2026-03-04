@@ -13,7 +13,6 @@ class Odom:
         # 内部yaw初始化
         self._yaw = 0.0
         self.yaw = yaw
-
     # 使用属性装修yaw,在任意地方处理yaw的范围,保持在[-pi,pi]之间
     @property
     def yaw(self):
@@ -36,6 +35,9 @@ class Odom:
         if isinstance(other, Odom):
             # 如果是另一个Odom对象，返回一个新的Odom对象，表示坐标差
             return Odom(self.x - other.x, self.y - other.y, self.yaw - other.yaw)
+            #只表示坐标差，不表示空间变换
+            #只表示坐标差，不表示空间变换
+            #只表示坐标差，不表示空间变换
         else:
             raise TypeError("Unsupported operand type(s) for -: 'Odom' and '{}'".format(type(other).__name__))
 
