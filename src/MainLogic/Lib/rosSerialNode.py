@@ -32,4 +32,6 @@ class SerialNode(Node):
             self.get_logger().error(f"Failed to parse JSON or send data: {e}")
     def write(self, data:bytes):
         self._serial.write(data)
+#声明类，不初始化，在Main.py中初始化
+#因为需要rclpy.init之后才能创建Node实例
 RosSerialNodeInstance:Optional[SerialNode]=None

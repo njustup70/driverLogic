@@ -22,6 +22,7 @@ def main():
     rclpy.init()
     # 注册异步任务
     asyncio.run_coroutine_threadsafe(asyncMain.async_main(), asyncioEventLoop)
+    #创建ROS2节点与多线程执行器
     executor = MultiThreadedExecutor()
     RosBridgeNodeInstance =rosBridgeNode(asyncioEventLoop)
     RosSerialNodeInstance = SerialNode()

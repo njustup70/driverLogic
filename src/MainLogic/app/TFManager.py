@@ -9,6 +9,8 @@ class TFManager:
 async def move_to(x, y, yaw):
     targetOdom = Odom(x, y, yaw)
     #给电控发坐标指令
+
+    #发送指令代码还没有
     while True:
         await asyncio.sleep(0.01)
         dx = targetOdom - TFManagerInstance.baseLinkOdom

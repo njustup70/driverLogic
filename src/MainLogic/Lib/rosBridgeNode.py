@@ -70,4 +70,6 @@ class rosBridgeNode(Node):
                 self.get_logger().warn(f"TF lookup failed: {e}")
                 self._tfOffline = True
             return
+#声明类，不初始化，在Main.py中初始化
+#因为需要rclpy.init之后才能创建Node实例
 RosBridgeNodeInstance: Optional[rosBridgeNode] = None
