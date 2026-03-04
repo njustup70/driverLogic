@@ -1,3 +1,5 @@
+from typing import Optional
+
 from rclpy.node import Node
 from Lib.mySerial import AsyncSerial_t
 from std_msgs.msg import String
@@ -30,4 +32,4 @@ class SerialNode(Node):
             self.get_logger().error(f"Failed to parse JSON or send data: {e}")
     def write(self, data:bytes):
         self._serial.write(data)
-    
+RosSerialNodeInstance:Optional[SerialNode]=None

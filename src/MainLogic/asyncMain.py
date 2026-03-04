@@ -3,19 +3,17 @@
 '''
 import asyncio
 from Lib.odomVec import Odom
-from data import chassicInstance
-import Main
+from Lib.rosBridgeNode import RosBridgeNodeInstance
+from app.TFManager import move_to
+import globalCallback as gcb 
 async def async_main():
+    #注册回调
+    assert RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
+    RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
+    #往下继续注册
+
+    #逻辑实例...,比如移动到某个坐标
     await move_to(1.0, 1.0, 0.5)
 
 # 检测是否到达目标坐标的异步函数,不涉及运动控制
-async def move_to(x, y, yaw):
-    targetOdom = Odom(x, y, yaw)
-    #给电控发坐标指令
-    while True:
-        await asyncio.sleep(0.01)
-        dx = targetOdom - chassicInstance.odom
-        # 距离小于1cm且角度误差小于0.05rad就认为到达目标了
-        if dx.dist < 0.01 and abs(dx.yaw) < 0.05:
-            print("Arrived at target!")
-            break
+
