@@ -10,7 +10,7 @@ class SerialNode(Node):
     def __init__(self):
         super().__init__('serial_node')
         self._serial=AsyncSerial_t('/dev/ttyUSB0', 115200)
-        self._serial.startListening()
+        self._serial.register_callback(self._serial_rx_callback)
         self._serial_pub = self.create_publisher(String, 'serial_rx', 10)
         self._serial_sub=self.create_subscription(String, 'serial_tx', self._serial_tx_callback, 10)
     def  _serial_rx_callback(self, bytes:bytes):

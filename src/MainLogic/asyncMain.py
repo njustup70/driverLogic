@@ -4,7 +4,7 @@
 import asyncio
 from Lib.odomVec import Odom
 from data import chassicInstance
-
+import Main
 async def async_main():
     await move_to(1.0, 1.0, 0.5)
 

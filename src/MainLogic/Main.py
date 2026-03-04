@@ -3,9 +3,11 @@
 '''
 import asyncio, threading
 import rclpy, rclpy.time
-from Lib.rosBridgeNode import MainNode 
+from rclpy.executors import MultiThreadedExecutor
+from Lib.rosBridgeNode import MainNode
+from Lib.rosSerialNode import SerialNode 
 import asyncMain
-
+from app.TFManager import TFManagerInstance
 # 重要全局变量
 asyncioEventLoop = asyncio.new_event_loop() 
 # User used get_event_loop() but usually new_event_loop() or get_running_loop() is safer in modern python, 
@@ -13,8 +15,8 @@ asyncioEventLoop = asyncio.new_event_loop()
 # Wait, original code: asyncio_event_loop = asyncio.get_event_loop(). 
 # I will use asyncio.get_event_loop() to maintain logic, just rename variable.
 asyncioEventLoop = asyncio.get_event_loop()
-mainNode = MainNode(asyncioEventLoop)
-
+mainNode:MainNode
+serialNode:SerialNode 
 def main():
     # 创建并启动 asyncio 的后台线程
     t = threading.Thread(target=asyncioEventLoop.run_forever, daemon=True)
@@ -22,9 +24,16 @@ def main():
     rclpy.init()
     # 注册异步任务
     asyncio.run_coroutine_threadsafe(asyncMain.async_main(), asyncioEventLoop)
+    executor = MultiThreadedExecutor()
+    mainNode = MainNode(asyncioEventLoop)
+    serialNode = SerialNode()
+
+    executor.add_node(mainNode)
+    executor.add_node(serialNode)
     try:
         # 3. 主线程被 ROS 2 占据，负责处理所有传感器/通信回调
-        rclpy.spin(mainNode)
+        # rclpy.spin(mainNode)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
