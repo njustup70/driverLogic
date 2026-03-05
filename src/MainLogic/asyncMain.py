@@ -14,6 +14,5 @@ async def async_main():
 
     #逻辑实例...,比如移动到某个坐标
     await move_to(1.0, 1.0, 0.5)
-    await see_maotou()
 # 检测是否到达目标坐标的异步函数,不涉及运动控制
 

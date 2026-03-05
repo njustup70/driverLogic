@@ -3,13 +3,15 @@
 '''
 import asyncio
 from Lib.odomVec import Odom
+from Lib.bytes import bytes
+from Lib.rosBridgeNode import rosBridgeNode
 class TFManager:
     def __init__(self):
         self.baseLinkOdom = Odom()
 async def move_to(x, y, yaw):
     targetOdom = Odom(x, y, yaw)
     #给电控发坐标指令
-
+    rosBridgeNode.writeBytes(b'0xA1' + bytes().list_turn_to_bytes([x, y, yaw]))
     #发送指令代码还没有
     while True:
         await asyncio.sleep(0.01)
