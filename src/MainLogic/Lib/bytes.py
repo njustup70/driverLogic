@@ -3,6 +3,7 @@
 '''
 
 import time
+import struct
 class DataFrame:
     def __init__(self, data: bytes,timestamp=None):
         self.data = data
@@ -14,7 +15,10 @@ class DataFrame:
             "data": self.data.hex(),
             "timestamp": self.timestamp
         }
-
+    def turn_to_bytes(self, data):
+        data_bytes = struct.pack("<" + "f"*len(data), *data)
+        data 
+        return data_bytes
     @classmethod
     def from_dict(cls, d:dict):
         # 反序列化时将 hex 字符串还原为 bytes
