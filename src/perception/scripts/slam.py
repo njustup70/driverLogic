@@ -323,12 +323,10 @@ class fusion_node_t(Node):
                 self.get_logger().warn("Sick buffer empty, skipping correction")
                 return
         
-            # 1. 真实 Y (Sick均值) - 这里的 real_y 
-            real_y = sum(self.sick_buffer) / len(self.sick_buffer)
-            self.get_logger().info(f"触发修正 - Sick目标真实Y: {real_y:.4f}m")
+            # 1. Sick均值sick_y 
+            sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
+            self.get_logger().info(f"触发修正 - Sick目标真实Y: {sick_y:.4f}m")
             
-            # 2. 获取 SLAM 原始定位 (camera_init -> base_link)
-            # 这部分数据是脱离 TF 修正的，是绝对的“幻觉”坐标
             tf_now = None
             for map_frame, base_frame in product(self.slam_odom, self.slam_base_link):
                 try:
@@ -345,33 +343,16 @@ class fusion_node_t(Node):
             slam_x = tf_now.transform.translation.x
             slam_y = tf_now.transform.translation.y
             
-            # 3. 计算角度修正 (yaw_correction)
-            # 逻辑：向量夹角法。
-            # SLAM 坐标向量 vs 真实坐标向量 (假设X是准的，Y是Sick的)
-            theta_real = math.atan2(real_y, slam_x)
-            theta_raw = math.atan2(slam_y, slam_x)
-            yaw_correction = theta_real - theta_raw
+            yaw_correction = math.atan2(slam_y - sick_y, slam_x)
 
             # 归一化角度
             if yaw_correction > math.pi: yaw_correction -= 2*math.pi
             elif yaw_correction < -math.pi: yaw_correction += 2*math.pi
+            # 修正角度打印
+            self.get_logger().info(f"角度修正: {math.degrees(yaw_correction):.4f}°")
             
-            # 4. [关键核心修正] 计算 Y 轴平移修正 (y_correction)
-            # 目的：我们不仅要转，还要平移，使得最终结果: map -> base_link 的 y 等于 real_y
-            # 几何推导：
-            # 旋转 static tf 后，SLAM 原始点 (slam_x, slam_y) 在 map 下的新 Y 坐标分量 (不含平移) 是：
-            # y_rotated = slam_x * sin(yaw) + slam_y * cos(yaw)
-            # 我们需要：y_rotated + translation_y = real_y
-            # 所以：translation_y = real_y - y_rotated
-            
-            y_rotated_component = slam_x * math.sin(yaw_correction) + slam_y * math.cos(yaw_correction)
-            y_translation_correction = real_y - y_rotated_component
-            
-            self.get_logger().info(f"修正分析: 原始Y={slam_y:.3f}, 旋转后Y分量={y_rotated_component:.3f}, 目标Y={real_y:.3f}")
-            self.get_logger().info(f"最终发布: Angle={math.degrees(yaw_correction):.4f}°, Y_Translation={y_translation_correction:.4f}m")
-            
-            # 同时发布角度和经过旋转补偿的 Y 轴平移
-            self.publish_sick_static_tf(yaw_correction, y_translation_correction)
+            # 发布角度和经过旋转补偿
+            self.publish_sick_static_tf(yaw_correction)
             
             self.sick_buffer.clear()
                 
