@@ -39,7 +39,7 @@ class rosBridgeNode(Node):
     def writeBytes(self, data: bytes):
         #给下位机发送数据
         dataFrame = DataFrame(data)
-        dataFrame.data = b'0xFA' + dataFrame.data
+        dataFrame.data = b'\xFA' + dataFrame.data
         json_str = json.dumps(dataFrame.to_dict())
         msg = String()
         msg.data = json_str
