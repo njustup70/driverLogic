@@ -15,7 +15,7 @@ class DataFrame:
             "data": self.data.hex(),
             "timestamp": self.timestamp
         }
-    def turn_to_bytes(self, data):
+    def list_turn_to_bytes(self, data):
         if isinstance(data, (list, tuple)):
             data_bytes = b""
             for i in data:
