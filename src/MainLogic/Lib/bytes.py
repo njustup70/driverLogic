@@ -16,9 +16,27 @@ class DataFrame:
             "timestamp": self.timestamp
         }
     def turn_to_bytes(self, data):
-        data_bytes = struct.pack("<" + "f"*len(data), *data)
-        data 
-        return data_bytes
+        if isinstance(data, (list, tuple)):
+            data_bytes = b""
+            for i in data:
+                data_bytes += self.turn_to_bytes(i)
+            return data_bytes
+        elif isinstance(data, (bool, int, float)):
+            return struct.pack("<B", int(data))
+    def turn_to_bytes(self, data):
+        if isinstance(data, bool):
+            data = struct.pack("<B", int(data))
+        # byte (0~255)
+        elif isinstance(data, int) and 0 <= data <= 255:
+            data = struct.pack("<B", data)
+        # int32
+        elif isinstance(data, int):
+            data = struct.pack("<i", data)
+        # float -> float32
+        elif isinstance(data, float):
+            data = struct.pack("<f", data)
+        else:
+            raise TypeError(f"类型错误: {type(data)}")
     @classmethod
     def from_dict(cls, d:dict):
         # 反序列化时将 hex 字符串还原为 bytes
