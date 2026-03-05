@@ -48,8 +48,8 @@ on:
   release:
     types: [published]
   status:
-  schedule:
-    - cron: '30 2 * * *'
+  # schedule:
+  #   - cron: '30 2 * * *'
 
 jobs:
   send-event:
