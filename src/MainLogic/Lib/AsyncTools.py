@@ -10,7 +10,7 @@ Async魔法部分,请勿修改
 var = AsyncVariable(Odom)
 var.x=1
 var.value=Odom(1,2,3) #整个重新复制需要调用value属性
-
+var.value.x =1 #修改属性后需要再赋值一次触发更新,var.value=var.value
 使用方法2:调用AsyncProperty,需要在类内定义属性
 class TFManager:
     baseLinkOdom = async_property(Odom)

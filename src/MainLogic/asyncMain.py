@@ -21,4 +21,4 @@ async def test():
         await asyncio.sleep(1)
         #这里的baseLinkOdom必须整个重新赋值，如果用baseLinkOdom.x=...是不会触发更新的
         TFManagerInstance.baseLinkOdom = Odom(TFManagerInstance.baseLinkOdom.x + 0.1, TFManagerInstance.baseLinkOdom.y, TFManagerInstance.baseLinkOdom.yaw)
-
+        # TFManagerInstance.baseLinkOdom.value.x+=0.1
