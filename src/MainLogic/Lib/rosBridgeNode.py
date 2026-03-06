@@ -2,7 +2,7 @@ from typing import Optional
 from rclpy.node import Node
 import asyncio, threading
 import rclpy, rclpy.time
-from std_msgs.msg import UInt8MultiArray
+from std_msgs.msg import UInt8MultiArray, String
 # 导入ros2坐标管理依赖
 from tf2_ros import TransformListener, Buffer
 # 导入驱动
@@ -23,6 +23,7 @@ class rosBridgeNode(Node):
         
         self._loop: asyncio.events.AbstractEventLoop 
         self._subPool = []
+        self._pubPool = []
         # 创建tf2坐标管理器
         self._tfBuffer = Buffer()
         self._tfListener = TransformListener(self._tfBuffer, self)
@@ -34,9 +35,9 @@ class rosBridgeNode(Node):
         assert isinstance(loop, asyncio.events.AbstractEventLoop), "传入的 loop 必须是 asyncio 的事件循环"
         self._loop = loop
 
-    def register_ros2_sub(self, topic_name, callback):
+    def register_ros2_sub(self, topic_name, callback, type=UInt8MultiArray):
         # 注册ros2话题回调
-        sub = self.create_subscription(UInt8MultiArray, topic_name, callback, 10)
+        sub = self.create_subscription(type, topic_name, callback, 10)
         self._subPool.append(sub)
 
     def register_serial_sub(self, callback):
@@ -72,6 +73,19 @@ class rosBridgeNode(Node):
                 self.get_logger().warn(f"TF lookup failed: {e}")
                 self._tfOffline = True
             return
+        
+    def register_ros2_pub(self, topic_name, msg_type):
+        # 注册ros2话题发布
+        pub = self.create_publisher(msg_type, topic_name, 10)
+        self._pubPool.append(pub)
+        
+    def publish_ros2(self, topic_name, msg):
+        # 发布ros2话题
+        for pub in self._pubPool:
+            if pub.topic_name == topic_name:
+                msg = msg if isinstance(msg, pub.msg_type) else pub.msg_type(data=msg)
+                pub.publish(msg)
+                break
 
 # 声明类，不初始化，在Main.py中初始化
 # 因为需要rclpy.init之后才能创建Node实例
