@@ -1,5 +1,4 @@
 from typing import Optional
-
 from rclpy.node import Node
 from Lib.mySerial import AsyncSerial_t
 from std_msgs.msg import String
@@ -34,4 +33,4 @@ class SerialNode(Node):
         self._serial.write(data)
 #声明类，不初始化，在Main.py中初始化
 #因为需要rclpy.init之后才能创建Node实例
-RosSerialNodeInstance:Optional[SerialNode]=None
+RosSerialNodeInstance:Optional[SerialNode]=SerialNode()

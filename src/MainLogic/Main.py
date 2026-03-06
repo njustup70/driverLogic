@@ -3,6 +3,8 @@
 '''
 import asyncio, threading
 import rclpy, rclpy.time
+#需要在最开始初始化ROS2,不然节点初始化会报错
+rclpy.init()
 from rclpy.executors import MultiThreadedExecutor
 import Lib.rosBridgeNode as ros_bridge_module
 import Lib.rosSerialNode as ros_serial_module
@@ -19,7 +21,7 @@ def main():
     # 创建并启动 asyncio 的后台线程
     t = threading.Thread(target=asyncioEventLoop.run_forever, daemon=True)
     t.start()
-    rclpy.init()
+    # rclpy.init()
     # 注册异步任务
     asyncio.run_coroutine_threadsafe(asyncMain.async_main(), asyncioEventLoop)
     #创建ROS2节点与多线程执行器
@@ -28,7 +30,8 @@ def main():
     '''原来的from Lib.rosBridgeNode import rosBridgeNode,RosBridgeNodeInstance'''
     '''是在本地命名空间里创建了RosBridgeNodeInstance,修改的是本地的RosBridgeNodeInstance,而不是全局的RosBridgeNodeInstance'''
     '''另外如果在本地命名空间创建全局变量要赋值的话,需要global关键字声明'''
-    ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode(asyncioEventLoop)
+    ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode()
+    ros_bridge_module.RosBridgeNodeInstance.register_event_loop(asyncioEventLoop)
     ros_serial_module.RosSerialNodeInstance = ros_serial_module.SerialNode()
 
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)

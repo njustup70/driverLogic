@@ -3,13 +3,13 @@
 '''
 import asyncio
 from Lib.odomVec import Odom
-from Lib.rosBridgeNode import RosBridgeNodeInstance
+import Lib.rosBridgeNode as ros_bridge_module
 from app.TFManager import move_to
 import globalCallback as gcb 
 async def async_main():
     #注册回调
-    assert RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
-    RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
+    assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
 
     #逻辑实例...,比如移动到某个坐标
