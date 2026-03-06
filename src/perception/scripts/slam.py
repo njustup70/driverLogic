@@ -287,8 +287,8 @@ class fusion_node_t(Node):
             dyaw += 2 * math.pi
 
         #根据雷达位置推车体中心位置
-        self.base_link_x=self.slam_x - self.r*math.cos(self.laser_angle + self.slam_yaw) +self.laser_to_base[1]
-        self.base_link_y=self.slam_y - self.r*math.sin(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
+        self.base_link_x=self.slam_x - self.r_base_link*math.cos(self.laser_angle_base_link + self.slam_yaw) +self.laser_to_base[1]
+        self.base_link_y=self.slam_y - self.r_base_link*math.sin(self.laser_angle_base_link + self.slam_yaw) -self.laser_to_base[0]
 
         self.x_diff= self.base_link_x-(odom_x*math.cos(dyaw)-odom_y*math.sin(dyaw)) 
         self.y_diff= self.base_link_y-(odom_x*math.sin(dyaw)+odom_y*math.cos(dyaw))
@@ -370,7 +370,7 @@ class fusion_node_t(Node):
                     return
                 #通过y 的误差算出来yaw 的偏移
                 x=tf_now.transform.translation.x
-                y= self.get_parameter('riqiang_y').value-self.get_parameter('slam_to_map').value[1]
+                y= self.get_parameter('riqiang_y').value-self.get_parameter('laser_to_map').value[1]
                 self.tf_yaw_diff= math.atan2(y,x)-math.atan2(tf_now.transform.translation.y, x)
                 print(f"slam 坐标系yaw 当前值{tf_now.transform.translation.y} 理论值{y}")
                 print(f"\033[95m日墙角度误差:{self.tf_yaw_diff}\033[0m")
