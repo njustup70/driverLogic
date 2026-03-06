@@ -19,6 +19,6 @@ async def test():
     #测试函数
     while True:
         await asyncio.sleep(1)
+        #这里的baseLinkOdom必须整个重新赋值，如果用baseLinkOdom.x=...是不会触发更新的
         TFManagerInstance.baseLinkOdom = Odom(TFManagerInstance.baseLinkOdom.x + 0.1, TFManagerInstance.baseLinkOdom.y, TFManagerInstance.baseLinkOdom.yaw)
-# 检测是否到达目标坐标的异步函数,不涉及运动控制
 
