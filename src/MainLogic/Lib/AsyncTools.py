@@ -5,6 +5,19 @@ Async魔法部分,请勿修改
 请勿修改
 目前只能通过在类内定义属性来达成最简单的使用
 '''
+'''
+使用方法1:调用AsyncVariable
+var = AsyncVariable(Odom)
+var.x=1
+var.value=Odom(1,2,3) #整个重新复制需要调用value属性
+
+使用方法2:调用AsyncProperty,需要在类内定义属性
+class TFManager:
+    baseLinkOdom = async_property(Odom)
+tfManagerInstance = TFManager()
+tfManagerInstance.baseLinkOdom = Odom(1,2,3) #直接赋值就行了,不需要调用value属性
+tfManagerInstance.baseLinkOdom.x=1 #支持局部更新触发
+'''
 import asyncio
 from typing import TypeVar, Generic, Optional, Generator, Any, Callable, cast, overload
 
@@ -17,7 +30,7 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
     继承 Generic[T] 后，IDE 就能追踪 await 之后返回的具体对象类型。
     """
     def __init__(self, value: T):
-        self._value: T= value
+        self._value: T = value
         self._event: Optional[asyncio.Event] = None
         #这里不一定在同一个线程里面,所以需要线程安全的事件循环访问
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -26,7 +39,9 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
         if self._event is None:
             self._event = asyncio.Event()
         return self._event
+        
     #只有整个重新赋值才会触发更新,修改value的属性不会触发更新,所以需要在外面修改完属性后再赋值一次,比如baseLink.value=baseLink.value
+    # （注：由于下方合并了原代理的 __setattr__ 魔法，现在直接修改属性也会自动触发更新了！）
     @property
     def value(self) -> T:
         return self._value
@@ -68,52 +83,27 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
         
         return self._value
 
-
-class AsyncValueProxy(Generic[T]):
-    """
-    对外暴露“像原对象一样可访问 + 可 await”的代理。
-    - obj.attr 访问底层 value 的属性
-    - await obj 等待下一次更新并返回最新 value
-    """
-
-    def __init__(self, async_var: AsyncVariable[T]):
-        object.__setattr__(self, "_async_var", async_var)
-    #如果注测baseLink=AsyncValueProxy(AsyncVariable(Odom))
-    #调用baseLink.value则触发下面的访问器
-    #如果调用baseLink.x则触发__getattr__,访问_async_var.value.x
-    @property
-    def value(self) -> T:
-        return self._async_var.value
-
-    @value.setter
-    def value(self, new_value: T):
-        self._async_var.value = new_value
-
-    def __await__(self) -> Generator[Any, None, T]:
-        return self._async_var.__await__()
+    # ==========================================
+    # 以下为原 AsyncValueProxy 吸收进来的代理魔法方法
+    # ==========================================
 
     def __getattr__(self, name: str):
-        return getattr(self._async_var.value, name)
+    #在找不到原生属性时才会调用__getattr__,所以这里直接访问底层对象的属性就行了,不需要担心死循环
+        return getattr(self._value, name)
 
-    def __setattr__(self, name: str, value):
-        if name == "_async_var":
-            object.__setattr__(self, name, value)
+    def __setattr__(self, name: str, value: Any):
+        #在设置属性时，如果是 AsyncVariable 自身的内部属性，就直接设置；否则修改底层对象的属性，并触发更新
+        # 放行 AsyncVariable 自身的内部属性
+        if name in ("_value", "_event", "_loop","value"):
+            super().__setattr__(name, value)
             return
-        current = self._async_var.value
+        # 修改底层对象的属性，并触发更新
+        current = self._value
         setattr(current, name, value)
-        self._async_var.value = current
-
-    def __getitem__(self, key):
-        return self._async_var.value[key]
-
-    def __setitem__(self, key, value):
-        current = self._async_var.value
-        current[key] = value
-        self._async_var.value = current
-
+        self.value = current 
+        
     def __repr__(self) -> str:
-        return repr(self._async_var.value)
-
+        return repr(self._value)
 
 class AsyncProperty(Generic[T]):
     """
@@ -125,11 +115,9 @@ class AsyncProperty(Generic[T]):
     def __init__(self, default_factory: Callable[[], T]):
         self._default_factory = default_factory
         self._storage_name = ""
-        self._proxy_name = ""
 
     def __set_name__(self, owner, name: str):
         self._storage_name = f"__async_property_{name}"
-        self._proxy_name = f"__async_property_proxy_{name}"
 
     def _ensure_var(self, instance) -> AsyncVariable[T]:
         async_var = cast(Optional[AsyncVariable[T]], getattr(instance, self._storage_name, None))
@@ -139,25 +127,19 @@ class AsyncProperty(Generic[T]):
             setattr(instance, self._storage_name, async_var)
         return async_var
 
-    def _ensure_proxy(self, instance) -> AsyncValueProxy[T]:
-        proxy = cast(Optional[AsyncValueProxy[T]], getattr(instance, self._proxy_name, None))
-        if proxy is None:
-            proxy = AsyncValueProxy(self._ensure_var(instance))
-            setattr(instance, self._proxy_name, proxy)
-        return proxy
-
     @overload
     def __get__(self, instance: None, owner: type) -> "AsyncProperty[T]":
         ...
 
     @overload
-    def __get__(self, instance: object, owner: type) -> AsyncValueProxy[T]:
+    def __get__(self, instance: object, owner: type) -> AsyncVariable[T]:
         ...
 
     def __get__(self, instance, owner) -> Any:
         if instance is None:
             return self
-        return self._ensure_proxy(instance)
+        # 直接返回 AsyncVariable，砍掉了中间的 proxy 层
+        return self._ensure_var(instance)
 
     def __set__(self, instance, value: T):
         self._ensure_var(instance).value = value
