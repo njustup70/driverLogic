@@ -19,6 +19,7 @@ class fusion_node_t(Node):
         self.map_frame = 'map'
         # SLAM修正坐标系起点
         self.slam_map_frame = 'slam_map'
+        self.lidar_frame = 'lidar'
         # 里程计坐标系
         self.declare_parameter('odom_frame','odom_wheel')
         # 机器人基坐标系
@@ -30,9 +31,9 @@ class fusion_node_t(Node):
         # ================== 话题名称与参数定义 ==================
         self.declare_parameter('odom_topic','/odom')
         # 雷达初始安装偏移
-        self.declare_parameter('laser_to_base', [0.0,0.0, 0.0])
+        self.declare_parameter('laser_to_base', [0.0,0.390, 0.0]) # 单位为米和弧度，格式为[x, y, yaw_deg]
         self.declare_parameter('riqiang_y', -0.10975)
-        self.declare_parameter('slam_to_map',[0.0,0.0,0.0])
+        self.declare_parameter('laser_to_map',[0.39,0.78,0.0])
         # sick话题/参数
         self.declare_parameter('sick_topic', '/sick_data')          # Sick话题名称
         self.declare_parameter('sick_buffer_size', 10)         # Sick数据缓存大小
@@ -43,7 +44,7 @@ class fusion_node_t(Node):
         self.odom_topic = self.get_parameter('odom_topic').value
         self.odom_frame = self.get_parameter('odom_frame').value
         self.base_frame = self.get_parameter('base_frame').value
-        self.slam_to_map = self.get_parameter('slam_to_map').value
+        self.laser_to_map = self.get_parameter('laser_to_map').value
         self.laser_to_base = self.get_parameter('laser_to_base').value
         self.slam_odom = self.get_parameter('slam_odom').value
         self.slam_base_link = self.get_parameter('slam_base_link').value
@@ -76,10 +77,12 @@ class fusion_node_t(Node):
 
         self.base_link_x=0.0
         self.base_link_y=0.0
-        # 雷达yaw角度安装偏移
-        self.r = math.sqrt(self.laser_to_base[0]**2 + self.laser_to_base[1]**2)
-        self.laser_angle = math.atan2(self.laser_to_base[1], self.laser_to_base[0])
-
+        # 雷达yaw角度安装相对车体中心的偏移
+        self.r_base_link = math.sqrt(self.laser_to_base[0]**2 + self.laser_to_base[1]**2)
+        self.laser_angle_base_link = math.atan2(self.laser_to_base[1], self.laser_to_base[0])
+        # 雷达yaw角度安装相对地图起点的偏移
+        self.r_map = math.sqrt(self.laser_to_map[0]**2 + self.laser_to_map[1]**2)
+        self.laser_angle_map = math.atan2(self.laser_to_map[1], self.laser_to_map[0])
         # 数据融合的时间戳匹配变量
         self.latest_slam_time = None
         self.latest_matched_odom = None
@@ -99,9 +102,10 @@ class fusion_node_t(Node):
             self.sick_callback,
             10
         )
+        self.tf_publish(self.map_frame, self.lidar_frame, self.laser_to_map[0], self.laser_to_map[1], self.laser_to_map[2])
 
-        print(f"激光雷达到base_link的距离:{self.r} 激光雷达到base_link的角度:{self.laser_angle}")
-
+        print(f"激光雷达到base_link的距离:{self.r_base_link} 激光雷达到base_link的角度:{self.laser_angle_base_link}")
+        print(f"激光雷达到地图起点的距离:{self.r_map} 激光雷达到地图起点的角度:{self.laser_angle_map}")
     # [修改] 增加 y_correction 参数，默认值为 0.0 以兼容其他调用
     def publish_sick_static_tf(self, yaw_correction, y_correction=0.0):
         """
@@ -109,7 +113,7 @@ class fusion_node_t(Node):
         """
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = self.map_frame        # map 
+        t.header.frame_id = self.lidar_frame        # map 
         t.child_frame_id = self.slam_map_frame    # slam_map 
         
         t.transform.translation.x = 0.0
@@ -283,8 +287,8 @@ class fusion_node_t(Node):
             dyaw += 2 * math.pi
 
         #根据雷达位置推车体中心位置
-        self.base_link_x=self.slam_x - self.r*math.sin(self.laser_angle + self.slam_yaw) +self.laser_to_base[1]
-        self.base_link_y=self.slam_y - self.r*math.cos(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
+        self.base_link_x=self.slam_x - self.r*math.cos(self.laser_angle + self.slam_yaw) +self.laser_to_base[1]
+        self.base_link_y=self.slam_y - self.r*math.sin(self.laser_angle + self.slam_yaw) -self.laser_to_base[0]
 
         self.x_diff= self.base_link_x-(odom_x*math.cos(dyaw)-odom_y*math.sin(dyaw)) 
         self.y_diff= self.base_link_y-(odom_x*math.sin(dyaw)+odom_y*math.cos(dyaw))
