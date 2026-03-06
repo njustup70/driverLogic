@@ -27,7 +27,7 @@ class fusion_node_t(Node):
         ## SLAM容器坐标系
         self.declare_parameter('slam_odom',['camera_init'])
         self.declare_parameter('slam_base_link',['body','aft_mapped'])
-
+        self.declare_parameter('odom_filter',False) # 是否需要里程计进行坐标融合
         # ================== 话题名称与参数定义 ==================
         self.declare_parameter('odom_topic','/odom')
         # 雷达初始安装偏移
@@ -52,7 +52,7 @@ class fusion_node_t(Node):
         self.sick_buffer_size = self.get_parameter('sick_buffer_size').value
         self.sick_lateral_offset = self.get_parameter('sick_lateral_offset').value
         self.debug = self.get_parameter('debug').value
-
+        self.odom_filter = self.get_parameter('odom_filter').value
         # ================== 重要成员变量 ==================
         self.sick_buffer = [] 
         self.tf_buffer = Buffer()
@@ -265,34 +265,50 @@ class fusion_node_t(Node):
         return best_match
 
     def fuse_callback(self):
+        if not self.odom_filter:
+            print('选择最新一次的里程计数据进行融合')
+            dyaw= self.slam_yaw - self.odom_yaw
+            if dyaw > math.pi:
+                dyaw -= 2 * math.pi
+            elif dyaw < -math.pi:
+                dyaw += 2 * math.pi
+
+            #根据雷达位置推车体中心位置
+            self.base_link_x=self.slam_x - self.r_base_link*math.cos(self.laser_angle_base_link + self.slam_yaw) +self.laser_to_base[1]
+            self.base_link_y=self.slam_y - self.r_base_link*math.sin(self.laser_angle_base_link + self.slam_yaw) -self.laser_to_base[0]
+
+            self.x_diff= self.base_link_x-(self.odom_x*math.cos(dyaw)-self.odom_y*math.sin(dyaw)) 
+            self.y_diff= self.base_link_y-(self.odom_x*math.sin(dyaw)+self.odom_y*math.cos(dyaw))
+            self.yaw_diff=dyaw  
         
-        if self.latest_slam_time is None:
-            return
-        
-        matched_odom = self.get_odom_by_time(self.latest_slam_time)
-        if matched_odom is None:
-            return
-        if(self.debug == True):
-            print(f'{self.latest_slam_time}')
-            print(f'{matched_odom}')
+        else:
+            if self.latest_slam_time is None:
+                return
             
-        odom_x = matched_odom['x']
-        odom_y = matched_odom['y']
-        odom_yaw = matched_odom['yaw']
+            matched_odom = self.get_odom_by_time(self.latest_slam_time)
+            if matched_odom is None:
+                return
+            if(self.debug == True):
+                print(f'{self.latest_slam_time}')
+                print(f'{matched_odom}')
+                
+            odom_x = matched_odom['x']
+            odom_y = matched_odom['y']
+            odom_yaw = matched_odom['yaw']
 
-        dyaw= self.slam_yaw - odom_yaw
-        if dyaw > math.pi:
-            dyaw -= 2 * math.pi
-        elif dyaw < -math.pi:
-            dyaw += 2 * math.pi
+            dyaw= self.slam_yaw - odom_yaw
+            if dyaw > math.pi:
+                dyaw -= 2 * math.pi
+            elif dyaw < -math.pi:
+                dyaw += 2 * math.pi
 
-        #根据雷达位置推车体中心位置
-        self.base_link_x=self.slam_x - self.r_base_link*math.cos(self.laser_angle_base_link + self.slam_yaw) +self.laser_to_base[1]
-        self.base_link_y=self.slam_y - self.r_base_link*math.sin(self.laser_angle_base_link + self.slam_yaw) -self.laser_to_base[0]
+            #根据雷达位置推车体中心位置
+            self.base_link_x=self.slam_x - self.r_base_link*math.cos(self.laser_angle_base_link + self.slam_yaw) +self.laser_to_base[1]
+            self.base_link_y=self.slam_y - self.r_base_link*math.sin(self.laser_angle_base_link + self.slam_yaw) -self.laser_to_base[0]
 
-        self.x_diff= self.base_link_x-(odom_x*math.cos(dyaw)-odom_y*math.sin(dyaw)) 
-        self.y_diff= self.base_link_y-(odom_x*math.sin(dyaw)+odom_y*math.cos(dyaw))
-        self.yaw_diff=dyaw    
+            self.x_diff= self.base_link_x-(odom_x*math.cos(dyaw)-odom_y*math.sin(dyaw)) 
+            self.y_diff= self.base_link_y-(odom_x*math.sin(dyaw)+odom_y*math.cos(dyaw))
+            self.yaw_diff=dyaw    
 
         
     def tf_publish(self,base_frame:str,child_frame:str,x,y,yaw):
