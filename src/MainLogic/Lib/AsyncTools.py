@@ -12,6 +12,7 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
     def __init__(self, value: T):
         self._value: T= value
         self._event: Optional[asyncio.Event] = None
+        #这里不一定在同一个线程里面,所以需要线程安全的事件循环访问
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     def _get_event(self) -> asyncio.Event:
@@ -38,6 +39,7 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
             self._loop.call_soon_threadsafe(self._notify)
 
     def _notify(self):
+        # 唤醒所有等待这个事件的协程
         if self._event:
             self._event.set()
             # 注意：clear 放在这会导致所有 await 者被唤醒
@@ -54,6 +56,7 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
                 self._loop = asyncio.get_running_loop()
             except RuntimeError:
                 pass
-            
+        ''' 等效于await self._get_event().wait()，但是这里是普通函数,所以不能直接await,需要yield from '''
         yield from self._get_event().wait().__await__()
+        
         return self._value
