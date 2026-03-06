@@ -4,8 +4,8 @@
 import asyncio, threading
 import rclpy, rclpy.time
 from rclpy.executors import MultiThreadedExecutor
-from Lib.rosBridgeNode import rosBridgeNode,RosBridgeNodeInstance
-from Lib.rosSerialNode import SerialNode ,RosSerialNodeInstance
+import Lib.rosBridgeNode as ros_bridge_module
+import Lib.rosSerialNode as ros_serial_module
 import asyncMain
 # 重要全局变量
 asyncioEventLoop = asyncio.new_event_loop() 
@@ -24,11 +24,15 @@ def main():
     asyncio.run_coroutine_threadsafe(asyncMain.async_main(), asyncioEventLoop)
     #创建ROS2节点与多线程执行器
     executor = MultiThreadedExecutor()
-    RosBridgeNodeInstance =rosBridgeNode(asyncioEventLoop)
-    RosSerialNodeInstance = SerialNode()
+    '''需要用命名空间来保证修改修改的是全局变量'''
+    '''原来的from Lib.rosBridgeNode import rosBridgeNode,RosBridgeNodeInstance'''
+    '''是在本地命名空间里创建了RosBridgeNodeInstance,修改的是本地的RosBridgeNodeInstance,而不是全局的RosBridgeNodeInstance'''
+    '''另外如果在本地命名空间创建全局变量要赋值的话,需要global关键字声明'''
+    ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode(asyncioEventLoop)
+    ros_serial_module.RosSerialNodeInstance = ros_serial_module.SerialNode()
 
-    executor.add_node(RosBridgeNodeInstance)
-    executor.add_node(RosSerialNodeInstance)
+    executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
+    executor.add_node(ros_serial_module.RosSerialNodeInstance)
     try:
         # 3. 主线程被 ROS 2 占据，负责处理所有传感器/通信回调
         # rclpy.spin(mainNode)
