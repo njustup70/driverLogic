@@ -3,11 +3,12 @@
 '''
 import asyncio
 from Lib.odomVec import Odom
-from Lib.bytes import DataFrame, turn_to_bytes
+from Lib.bytes import turn_to_bytes
 import Lib.rosBridgeNode as ros_bridge_module
+from Lib.AsyncTools import async_property
 class TFManager:
-    def __init__(self):
-        self.baseLinkOdom = Odom()
+    baseLinkOdom = async_property(Odom)
+
 async def move_to(x, y, yaw):
     targetOdom = Odom(x, y, yaw)
     #给电控发坐标指令
@@ -16,8 +17,9 @@ async def move_to(x, y, yaw):
     #rosBridgeNode.writeBytes(b'\xA1' + list_turn_to_bytes([x, y, yaw]))
     #发送指令代码还没有
     while True:
-        await asyncio.sleep(0.01)
-        dx = targetOdom - TFManagerInstance.baseLinkOdom
+        # 等待baseLinkOdom更新
+        current_odom = await TFManagerInstance.baseLinkOdom
+        dx = targetOdom - current_odom
         # 距离小于1cm且角度误差小于0.05rad就认为到达目标了
         if dx.dist < 0.01 and abs(dx.yaw) < 0.05:
             print("Arrived at target!")

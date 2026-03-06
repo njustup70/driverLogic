@@ -30,9 +30,9 @@ def main():
     '''原来的from Lib.rosBridgeNode import rosBridgeNode,RosBridgeNodeInstance'''
     '''是在本地命名空间里创建了RosBridgeNodeInstance,修改的是本地的RosBridgeNodeInstance,而不是全局的RosBridgeNodeInstance'''
     '''另外如果在本地命名空间创建全局变量要赋值的话,需要global关键字声明'''
-    ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode()
+    # ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode()
     ros_bridge_module.RosBridgeNodeInstance.register_event_loop(asyncioEventLoop)
-    ros_serial_module.RosSerialNodeInstance = ros_serial_module.SerialNode()
+    # ros_serial_module.RosSerialNodeInstance = ros_serial_module.SerialNode()
 
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
     executor.add_node(ros_serial_module.RosSerialNodeInstance)
