@@ -9,14 +9,13 @@
 例程:
 serial = AsyncSerial_t("COM2", 115200)
 serial.startListening(lambda data: serial.write(data))
-飞书文档🔗:https://tcnpd0yows2w.feishu.cn/wiki/Op9GwK7FSi5OEJk6JL4cukWInVz
 """
 import serial
 import asyncio
 import time
 import threading
 class AsyncSerial_t:
-    def __init__(self, port, baudrate,callback=None):
+    def __init__(self, port, baudrate):
         """ 初始化异步串口 """
         self.port = port
         self.baudrate = baudrate
@@ -25,11 +24,18 @@ class AsyncSerial_t:
         self._wait_time = 0.01
         self._raw_data = b''
         self._connect_lock = asyncio.Lock()
-        self._loop:asyncio.AbstractEventLoop
+        self._loop:asyncio.events.AbstractEventLoop
         self._thread=None
         self.last_len=0
         self.data_queue = asyncio.Queue()
-        self.startListening(callback)
+        #异步定义
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+        # 在后台循环里跑串口连接管理 和 读循环
+        asyncio.run_coroutine_threadsafe(self._connect_serial(), self._loop)
+        asyncio.run_coroutine_threadsafe(self.__read(), self._loop)
+        asyncio.run_coroutine_threadsafe(self.datahandle(), self._loop)
     async def _connect_serial(self):
         """尝试连接串口，如果失败则等待重试"""
         while True:
@@ -45,20 +51,12 @@ class AsyncSerial_t:
         if self._serial and self._serial.is_open:
             self._serial.close()
 
-    def startListening(self, callback=None, wait_time=0.0001) -> None:
+    def register_callback(self, callback=None, wait_time=0.0001) -> None:
         """开始监听串口数据,启动read协程"""
         self._wait_time = wait_time
         if callback:
             self._callback = callback
-        if self._loop is None:
-            self._loop = asyncio.new_event_loop()
-            self._thread = threading.Thread(target=self._run_loop, daemon=True)
-            self._thread.start()
-
-        # 在后台循环里跑串口连接管理 和 读循环
-        asyncio.run_coroutine_threadsafe(self._connect_serial(), self._loop)
-        asyncio.run_coroutine_threadsafe(self.__read(), self._loop)
-        asyncio.run_coroutine_threadsafe(self.datahandle(), self._loop)
+        
     async def __read(self):
         """异步读取串口数据并调用回调"""
         while True:
@@ -134,19 +132,24 @@ class AsyncSerial_t:
         """后台线程中运行事件循环"""
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
+    async def process_queue(self):
+        """示例消费者：在主协程里调用"""
+        while True:
+            frame = await self.data_queue.get()
+            print(f"[PROCESS] Got frame: {frame}")
 # 示例主函数
 async def main_async() -> None:
     # serial = AsyncSerial_t("/dev/COM2", 115200)
     serial = AsyncSerial_t("/dev/qinheng", 230400)
     # serial.startListening(lambda data: serial.write(data))
-    serial.startListening(lambda data: print(f"Received: {data.decode()}"))
+    serial.register_callback(lambda data: print(f"Received: {data.decode()}"))
     while True:
         data = await asyncio.to_thread(input, "Please input data: ")
         serial.write(data.encode())
         await asyncio.sleep(0.05)
 def main():
     serial = AsyncSerial_t("/dev/serial_qh", 230400)
-    serial.startListening(lambda data: print(f"hex: {data.hex()}"))
+    serial.register_callback(lambda data: print(f"hex: {data.hex()}"))
     while True:
         serial.write(b"Hello from AsyncSerial_t!\n")
         time.sleep(1)

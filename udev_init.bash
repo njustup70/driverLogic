@@ -1,5 +1,5 @@
 #!/bin/bash
-
+# 飞书文档🔗:https://tcnpd0yows2w.feishu.cn/wiki/E3o5wEuHnijR69k8f4EcxHmanXe
 # 获取脚本的绝对路径
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 sudo apt-get install v4l-utils
