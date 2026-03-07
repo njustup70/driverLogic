@@ -23,6 +23,7 @@ SpearBuildInstance = SpearBuild()
 def build_spear():
     msg = "spear_build"
     ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/update_exec_req', msg)
+    ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xA3')
 
 # QR识别
 class QRRecog:
