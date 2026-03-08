@@ -45,3 +45,5 @@ volumes:
       device: ./.. # 对应原 ./..（当前 Compose 所在目录的上一级）
       o: bind # 启用绑定模式，保证双向同步
     name: driverLogic_volume
+  command: >
+    bash -c "ros2 launch rc_bringup sick+logical.launch.py"
