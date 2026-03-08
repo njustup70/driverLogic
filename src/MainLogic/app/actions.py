@@ -35,6 +35,23 @@ def QR_recog():
     msg = "qr_recog"
     ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/update_exec_req', msg)
 
+
+# 小板位姿控制/结果
+class SmallBoardPose:
+    offset_mm = async_property(lambda: (0.0, 0.0))
+
+
+SmallBoardPoseInstance = SmallBoardPose()
+
+
+def start_small_board_pose():
+    ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/small_board_pose/command', 'spear')
+
+
+def stop_small_board_pose():
+    ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/small_board_pose/command', 'stop')
+
+
 def QR_recog_off():
     msg = "qr_recog_off"
     ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/update_exec_req', msg)

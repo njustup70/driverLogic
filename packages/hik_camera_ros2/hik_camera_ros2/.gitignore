@@ -1,0 +1,10 @@
+# Build artifacts
+build/
+install/
+log/
+__pycache__/
+# IDE files
+.vscode/
+*.swp
+*~
+*.user

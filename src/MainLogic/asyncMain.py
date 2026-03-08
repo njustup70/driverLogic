@@ -9,7 +9,7 @@ import globalCallback as gcb
 from app.TFManager import TFManagerInstance
 from Lib.AsyncTools import AsyncVariable
 from app.actions import take_spear_head, take_spear_head_off, serial_action_ok
-from std_msgs.msg import UInt8MultiArray, String
+from std_msgs.msg import Float32MultiArray, UInt8MultiArray, String
 from app.actions import build_spear, build_spear_off
 from app.actions import QR_recog, QR_recog_off, QRRecogInstance
 async def async_main():
@@ -19,8 +19,12 @@ async def async_main():
     #往下继续注册
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub(
+        '/small_board_pose/offset_mm', gcb.ros_small_board_offset_callback, type=Float32MultiArray
+    )
     #注册话题发布
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/small_board_pose/command', String)
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
     await move_to(1.0, 1.0, 0.5) # 矛头架
