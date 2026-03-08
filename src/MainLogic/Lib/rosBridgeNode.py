@@ -9,7 +9,7 @@ from tf2_ros import TransformListener, Buffer
 import app.TFManager as tf_manager_module
 # 导入Odom类
 from Lib.odomVec import Odom
-
+from Lib.bytes import turn_to_bytes
 class rosBridgeNode(Node):
     '''
     ros2耦合节点,从ros2话题获得数据,传给类或者队列函数，需要耦合TFManager管理坐标
@@ -65,9 +65,11 @@ class rosBridgeNode(Node):
             transform = self._tfBuffer.lookup_transform("map", "base_link", rclpy.time.Time())
             transTuple = (transform.transform.translation.x, transform.transform.translation.y, transform.transform.rotation.z)
             tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
+            self.writeBytes(b'\xA1' + turn_to_bytes(Odom(*transTuple)))
             if self._tfOffline:
                 self.get_logger().info("TF is back online!")
                 self._tfOffline = False
+
         except Exception as e:
             if not self._tfOffline:
                 self.get_logger().warn(f"TF lookup failed: {e}")
