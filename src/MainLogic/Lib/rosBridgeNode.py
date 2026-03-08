@@ -67,10 +67,10 @@ class rosBridgeNode(Node):
             transTuple = (transform.transform.translation.x, transform.transform.translation.y, transform.transform.rotation.z)
             tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
             transTuple_odom = Odom(*transTuple)
-            self.writeBytes(b'\xA1' + turn_to_bytes(transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw))
+            self.writeBytes(b'\xA1' + turn_to_bytes([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw]))
             pub_msg = String()
             pub_msg.data = json.dumps([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
-            self.publish_ros2('location', pub_msg)
+            self.publish_ros2('location', pub_msg) 
             if self._tfOffline:
                 self.get_logger().info("TF is back online!")
                 self._tfOffline = False
@@ -80,7 +80,6 @@ class rosBridgeNode(Node):
                 self.get_logger().warn(f"TF lookup failed: {e}")
                 self._tfOffline = True
             return
-        
     def register_ros2_pub(self, topic_name, msg_type):
         # 注册ros2话题发布
         pub = self.create_publisher(msg_type, topic_name, 10)
