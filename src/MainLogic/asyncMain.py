@@ -33,9 +33,11 @@ async def async_main():
     build_spear_off()
     await move_to(2.0, 2.0, 1.0) # QR通信点
     QR_recog()
-    area2_state = await QRRecogInstance.recog_qr_result # QR识别结果，即二区kfs状态
+    area2_state, _ = await asyncio.gather(
+        QRRecogInstance.recog_qr_result,    # QR识别结果，即二区kfs状态
+        move_to(0.0, 0.0, 0.0)              # 一区结束，回到原点
+    )
     QR_recog_off()
-    await move_to(0.0, 0.0, 0.0) # 一区结束
 
 async def test():
     #测试函数
