@@ -1,7 +1,7 @@
 '''
 全局回调函数串口接收回调和ros2话题回调
 '''
-from app.actions import SpearHeadInstance, SpearBuildInstance, QRRecogInstance
+from app.actions import serial_action_ok, QRRecogInstance
 
 
 def example_serial_callback(data: bytes):
@@ -15,8 +15,7 @@ def serial_action_return_callback(data: bytes):
         return_statu = data[3]
         if return_statu == 0x00:
             print("Action executed successfully!")
-            SpearHeadInstance.take_spearhead_ok.value = True
-            SpearBuildInstance.build_spear_ok.value = True
+            serial_action_ok.value = True
 
 STATUS_MAP = {"空": "00", "R1": "01", "R2": "10", "假": "11"}
 REVERSE_MAP = {v: k for k, v in STATUS_MAP.items()}

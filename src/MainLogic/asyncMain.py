@@ -7,11 +7,11 @@ import Lib.rosBridgeNode as ros_bridge_module
 from app.TFManager import move_to
 import globalCallback as gcb 
 from app.TFManager import TFManagerInstance
-from Lib.AsyncTools import async_variable
-from app.actions import take_spear_head, SpearHeadInstance
+from Lib.AsyncTools import AsyncVariable
+from app.actions import take_spear_head, take_spear_head_off, serial_action_ok
 from std_msgs.msg import UInt8MultiArray, String
-from app.actions import build_spear, SpearBuildInstance
-from app.actions import QR_recog, QRRecogInstance
+from app.actions import build_spear, build_spear_off
+from app.actions import QR_recog, QR_recog_off, QRRecogInstance
 async def async_main():
     #注册回调
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
@@ -25,13 +25,16 @@ async def async_main():
     #逻辑实例...,比如移动到某个坐标
     await move_to(1.0, 1.0, 0.5) # 矛头架
     take_spear_head()
-    await SpearHeadInstance.take_spearhead_ok
+    await serial_action_ok
+    take_spear_head_off()
     await move_to(0.0, 0.0, 0.0) # 矛对接点
     build_spear()
-    await SpearBuildInstance.build_spear_ok
+    await serial_action_ok
+    build_spear_off()
     await move_to(2.0, 2.0, 1.0) # QR通信点
     QR_recog()
     area2_state = await QRRecogInstance.recog_qr_result # QR识别结果，即二区kfs状态
+    QR_recog_off()
     await move_to(0.0, 0.0, 0.0) # 一区结束
 
 async def test():
