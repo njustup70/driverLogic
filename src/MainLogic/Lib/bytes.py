@@ -4,6 +4,7 @@
 
 import time
 import struct
+from Lib.odomVec import Odom
 from typing import Union, List, Tuple
 
 # 定义类型别名，增加可读性

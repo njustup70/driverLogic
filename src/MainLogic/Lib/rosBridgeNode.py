@@ -3,6 +3,7 @@ from rclpy.node import Node
 import asyncio, threading
 import rclpy, rclpy.time
 from std_msgs.msg import UInt8MultiArray, String
+import json
 # 导入ros2坐标管理依赖
 from tf2_ros import TransformListener, Buffer
 # 导入驱动
@@ -20,7 +21,7 @@ class rosBridgeNode(Node):
         # 话题订阅
         self._serial_tx_pub = self.create_publisher(UInt8MultiArray, 'serial_tx', 10)
         self._serial_rx_sub = self.create_subscription(UInt8MultiArray, 'serial_rx', self._serial_rx_callback, 10)
-        
+        self._location_pub = self.create_publisher(String, 'location', 10)
         self._loop: asyncio.events.AbstractEventLoop 
         self._subPool = []
         self._pubPool = []
@@ -65,7 +66,11 @@ class rosBridgeNode(Node):
             transform = self._tfBuffer.lookup_transform("map", "base_link", rclpy.time.Time())
             transTuple = (transform.transform.translation.x, transform.transform.translation.y, transform.transform.rotation.z)
             tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
-            self.writeBytes(b'\xA1' + turn_to_bytes(Odom(*transTuple)))
+            transTuple_odom = Odom(*transTuple)
+            self.writeBytes(b'\xA1' + turn_to_bytes(transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw))
+            pub_msg = String()
+            pub_msg.data = json.dumps([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
+            self.publish_ros2('location', pub_msg)
             if self._tfOffline:
                 self.get_logger().info("TF is back online!")
                 self._tfOffline = False
