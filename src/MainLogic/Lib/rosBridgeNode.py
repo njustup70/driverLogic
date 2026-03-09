@@ -47,9 +47,9 @@ class rosBridgeNode(Node):
 
     def writeBytes(self, data: bytes):
         # 给下位机发送数据，增加 \xFA 帧头，直接使用原始字节
+        self.get_logger().info(f"发送数据:  {data.hex()}")
         msg = UInt8MultiArray()
         msg.data = list(b'\xFA' + data)
-        self.get_logger().info(f"发送数据:  {msg.data.hex()}")
         self._serial_tx_pub.publish(msg)
 
     def _serial_rx_callback(self, msg: UInt8MultiArray):
@@ -68,7 +68,9 @@ class rosBridgeNode(Node):
             transTuple = (transform.transform.translation.x, transform.transform.translation.y, transform.transform.rotation.z)
             tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
             transTuple_odom = Odom(*transTuple)
-            self.writeBytes(b'\xA1' + turn_to_bytes([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw]))
+            send_tf = turn_to_bytes([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
+            #self.get_logger().info(f"发送数据:  {send_tf.hex()}")
+            self.writeBytes(b'\xA0' + send_tf)
             pub_msg = String()
             pub_msg.data = json.dumps([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
             self.publish_ros2('location', pub_msg) 
