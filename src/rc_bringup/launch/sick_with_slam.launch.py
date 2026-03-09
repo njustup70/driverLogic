@@ -17,9 +17,9 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument('use_simulation', default_value='true', description='是否启动机器人仿真节点'))
     ld.add_action(DeclareLaunchArgument('sick_port', default_value='/dev/ch340', description='Sick雷达的串口路径'))
     # use_simulation=true 时参数才影响
-    ld.add_action(DeclareLaunchArgument('enable_odom', default_value='false', description='仿真: 开启里程计'))
-    ld.add_action(DeclareLaunchArgument('enable_sick', default_value='false', description='仿真: 开启虚拟雷达'))
-    ld.add_action(DeclareLaunchArgument('enable_slam_tf', default_value='false', description='仿真: 开启虚拟SLAM TF'))
+    ld.add_action(DeclareLaunchArgument('enable_odom', default_value='true', description='仿真: 开启里程计'))
+    ld.add_action(DeclareLaunchArgument('enable_sick', default_value='true', description='仿真: 开启虚拟雷达'))
+    ld.add_action(DeclareLaunchArgument('enable_slam_tf', default_value='true', description='仿真: 开启虚拟SLAM TF'))
 
 
     sim_node = Node(

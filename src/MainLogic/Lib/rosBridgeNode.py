@@ -49,6 +49,7 @@ class rosBridgeNode(Node):
         # 给下位机发送数据，增加 \xFA 帧头，直接使用原始字节
         msg = UInt8MultiArray()
         msg.data = list(b'\xFA' + data)
+        self.get_logger().info(f"发送数据:  {msg.data.hex()}")
         self._serial_tx_pub.publish(msg)
 
     def _serial_rx_callback(self, msg: UInt8MultiArray):
