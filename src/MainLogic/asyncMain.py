@@ -12,6 +12,20 @@ from app.actions import take_spear_head, take_spear_head_off, serial_action_ok
 from std_msgs.msg import UInt8MultiArray, String
 from app.actions import build_spear, build_spear_off
 from app.actions import QR_recog, QR_recog_off, QRRecogInstance
+
+
+async def test_comm_ws_qr() -> None:
+    print("[comm_ws] start QR test")
+    QR_recog()
+    try:
+        result = await asyncio.wait_for(QRRecogInstance.recog_qr_result, timeout=15.0)
+        print(f"[comm_ws] OK, qr_detection_result={result}")
+    except asyncio.TimeoutError:
+        print("[comm_ws] timeout: no qr_detection_result within 15s")
+    finally:
+        QR_recog_off()
+
+
 async def async_main():
     #注册回调
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
@@ -22,6 +36,7 @@ async def async_main():
     #注册话题发布
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
     asyncio.create_task(test())
+    await test_comm_ws_qr()
     #逻辑实例...,比如移动到某个坐标
     await move_to(1.0, 1.0, 0.5) # 矛头架
     take_spear_head()
