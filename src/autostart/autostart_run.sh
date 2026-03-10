@@ -49,14 +49,11 @@ if not os.path.exists('$CONFIG_FILE'):
     log_error(f"配置文件不存在: $CONFIG_FILE")
     exit(1)
 
-log_hint(f"加载配置文件: $CONFIG_FILE")
-
 with open('$CONFIG_FILE', 'r') as f:
     config = yaml.safe_load(f)
 
 # 自动获取宿主机非 root 用户路径 (针对 /home/XXX/...)
 def get_real_home():
-    # 获取脚本所在绝对路径，如 /home/yutou/njustup70/...
     path_parts = os.path.abspath('$DIR').split('/')
     if len(path_parts) > 2 and path_parts[1] == 'home':
         return f"/home/{path_parts[2]}"
@@ -68,15 +65,94 @@ def expand_path(path):
     if not path: return path
     return path.replace('~', REAL_HOME)
 
-# 1. 检查总开关
-if not config.get('enabled', True):
-    log_info("⚠️ 自动启动已关闭 (enabled: false)，跳过执行。")
+# --- 配置日志文件 ---
+LOG_PATH = expand_path(config.get('log_file', 'autostart.log'))
+log_dir = os.path.dirname(LOG_PATH)
+if log_dir and not os.path.exists(log_dir):
+    os.makedirs(log_dir, exist_ok=True)
+
+def write_to_log(msg):
+    # 去掉颜色代码再写入文件
+    import re
+    clean_msg = re.sub(r'\033\[[0-9;]*m', '', msg)
+    with open(LOG_PATH, 'a') as lf:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        lf.write(f"[{timestamp}] {clean_msg}\n")
+
+log_hint(f"加载配置文件: $CONFIG_FILE")
+log_hint(f"日志将同步写入: {LOG_PATH}")
+
+def log_info(msg):
+    full_msg = f"{YELLOW}[Autostart] {msg}{RESET}"
+    print(full_msg)
+    write_to_log(msg)
+
+def log_success(msg):
+    full_msg = f"{GREEN}[Autostart] {msg}{RESET}"
+    print(full_msg)
+    write_to_log(msg)
+
+def log_error(msg):
+    full_msg = f"{RED}[Autostart] ❌ {msg}{RESET}"
+    print(full_msg)
+    write_to_log(f"❌ {msg}")
+
+def log_hint(msg):
+    full_msg = f"{BLUE}[Autostart] ℹ️ {msg}{RESET}"
+    print(full_msg)
+    write_to_log(f"ℹ️ {msg}")
+
+def run_cmd(cmd):
+    try:
+        # 将命令执行结果也捕获并记录到日志（可选，这里为了简洁只记录关键状态）
+        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        if result.stdout: write_to_log(f"CMD Output: {result.stdout.strip()}")
+        return True
+    except subprocess.CalledProcessError as e:
+        log_error(f"执行失败: {e}")
+        if e.stderr: write_to_log(f"CMD Error: {e.stderr.strip()}")
+        return False
+    except Exception as e:
+        log_error(f"发生未知错误: {e}")
+        return False
+
+# 获取命令行参数
+import sys
+FORCE_RUN = "--force" in sys.argv
+
+# 1. 路径预检 (无论是否开启自动启动，都执行预检，方便手动调试)
+containers = config.get('containers', [])
+log_hint(f"共发现 {len(containers)} 个待处理项，正在进行路径校验...")
+
+path_errors = 0
+for item in containers:
+    name = item.get('name', 'Unknown')
+    compose_dir = expand_path(item.get('compose_dir'))
+    
+    if compose_dir:
+        if os.path.exists(compose_dir):
+            log_success(f"✅ 路径检查通过 [{name}]: {compose_dir}")
+        else:
+            log_error(f"❌ 路径不存在 [{name}]: {compose_dir}")
+            path_errors += 1
+    else:
+        log_error(f"⚠️ 未配置路径 [{name}]")
+        path_errors += 1
+
+if path_errors > 0:
+    log_info(f"注意：共有 {path_errors} 个路径检查未通过。")
+
+# 2. 检查总开关
+if not config.get('enabled', True) and not FORCE_RUN:
+    print("")
+    log_info("⚠️ 自动启动已关闭 (enabled: false)。")
+    log_hint("提示: 若要强制启动容器，请手动运行: ./autostart_run.sh --force")
     exit(0)
 
-# 2. 遍历并启动容器
-containers = config.get('containers', [])
-log_hint(f"共发现 {len(containers)} 个待启动项。")
+if FORCE_RUN:
+    log_info("🚀 检测到 --force 参数，正在强制执行启动流程...")
 
+# 3. 遍历并启动容器
 for item in containers:
     name = item.get('name', 'Unknown')
     compose_dir = expand_path(item.get('compose_dir'))
