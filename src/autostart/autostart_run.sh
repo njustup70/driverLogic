@@ -7,6 +7,10 @@ cd "$DIR"
 
 CONFIG_FILE="$DIR/autostart.yaml"
 
+# 开启 lo 口的多播支持 (部分容器通信需要)
+echo "[Autostart] 正在开启 lo 口多播支持..."
+sudo ip link set lo multicast on
+
 # 使用 Python 解析 YAML 并带颜色输出
 python3 <<EOF
 import yaml
