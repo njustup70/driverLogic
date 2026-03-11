@@ -25,7 +25,7 @@ async def async_main():
 
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
-    await move_to(0.3, 0.3, 0.785) # 矛头架
+    await move_to(0.3, 0.3, 1.6) # 矛头架
     await asyncio.sleep(10) # 等待1秒，确保到位
     #await move_to(0.0, 0.0, 0.0)
     take_spear_head()
