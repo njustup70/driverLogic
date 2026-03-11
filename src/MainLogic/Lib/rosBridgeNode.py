@@ -1,6 +1,7 @@
 from typing import Optional
 from rclpy.node import Node
 import asyncio, threading
+import math
 import rclpy, rclpy.time
 from std_msgs.msg import UInt8MultiArray, String
 import json
@@ -65,7 +66,8 @@ class rosBridgeNode(Node):
         try:
             # 尝试获取从 "base_link" 到 "odom" 的坐标变换
             transform = self._tfBuffer.lookup_transform("map", "base_link", rclpy.time.Time())
-            transTuple = (transform.transform.translation.x, transform.transform.translation.y, transform.transform.rotation.z)
+            yaw = math.atan2(2 * (transform.transform.rotation.w * transform.transform.rotation.z + transform.transform.rotation.x * transform.transform.rotation.y), 1 - 2 * (transform.transform.rotation.z**2))
+            transTuple = (transform.transform.translation.x, transform.transform.translation.y, yaw)
             tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
             transTuple_odom = Odom(*transTuple)
             send_tf = turn_to_bytes([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])

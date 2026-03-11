@@ -8,13 +8,13 @@ def example_serial_callback(data: bytes):
     #示例函数
     #检查第一位 非常重要
     if data[0] != 0xAA:
-        print(f"Received serial data: {data}")
-
+        #print(f"Received serial data: {data}")
+        pass
 def serial_action_return_callback(data: bytes):
-    if data[0] == 0xFF and data[1] == 0xFF: # 后面根据帧头改
+    if data[0] == b'\xFF' and data[1] == b'\xFF': # 后面根据帧头改
         return_statu = data[3]
         if return_statu == 0x00:
-            print("Action executed successfully!")
+            #print("Action executed successfully!")
             serial_action_ok.value = True
 
 STATUS_MAP = {"空": "00", "R1": "01", "R2": "10", "假": "11"}

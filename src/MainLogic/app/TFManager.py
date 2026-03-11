@@ -17,6 +17,7 @@ async def move_to(x, y, yaw):
     #rosBridgeNode.writeBytes(b'\xA1' + list_turn_to_bytes([x, y, yaw]))
     #发送指令代码还没有
     while True:
+        ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
         # 等待baseLinkOdom更新
         current_odom = await TFManagerInstance.baseLinkOdom
         dx = targetOdom - current_odom

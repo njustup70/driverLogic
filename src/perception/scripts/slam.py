@@ -31,9 +31,11 @@ class fusion_node_t(Node):
         # ================== 话题名称与参数定义 ==================
         self.declare_parameter('odom_topic','/odom')
         # 雷达初始安装偏移
-        self.declare_parameter('laser_to_base', [0.0,0.390, 0.0]) # 单位为米和弧度，格式为[x, y, yaw_deg]
+        # self.declare_parameter('laser_to_base', [0.0,0.390, 0.0]) # 单位为米和弧度，格式为[x, y, yaw_deg]
+        self.declare_parameter('laser_to_base', [0.05,-0.45,0.0])
         self.declare_parameter('riqiang_y', -0.10975)
-        self.declare_parameter('laser_to_map',[0.39,0.78,0.0])
+        # self.declare_parameter('laser_to_map',[0.39,0.78,0.0])
+        self.declare_parameter('laser_to_map',[0.05,-0.45,0.0])
         # sick话题/参数
         self.declare_parameter('sick_topic', '/sick_data')          # Sick话题名称
         self.declare_parameter('sick_buffer_size', 10)         # Sick数据缓存大小

@@ -43,8 +43,8 @@ class SimAllInOne(Node):
         self.yaw = 0.0
         
         # 运动参数：模拟直线缓慢行驶
-        self.vx = 0.002    # 线速度 m/s
-        self.vy = 0.001    # 漂移速度 m/s
+        self.vx = 0.00    # 线速度 m/s
+        self.vy = 0.00   # 漂移速度 m/s
         self.v_yaw = 0.0   # 角速度
 
         # 定时器 50Hz

@@ -23,7 +23,9 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
-    await move_to(1.0, 1.0, 0.5) # 矛头架
+    await move_to(0.3, 0.3, 0.785) # 矛头架
+    await asyncio.sleep(10) # 等待1秒，确保到位
+    #await move_to(0.0, 0.0, 0.0)
     take_spear_head()
     await serial_action_ok
     take_spear_head_off()
