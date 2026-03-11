@@ -21,17 +21,19 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
     #注册话题发布
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
+
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
     await move_to(0.3, 0.3, 0.785) # 矛头架
     await asyncio.sleep(10) # 等待1秒，确保到位
     #await move_to(0.0, 0.0, 0.0)
     take_spear_head()
-    await serial_action_ok
+    await asyncio.wait_for(serial_action_ok,timeout=5.0)
     take_spear_head_off()
     await move_to(0.0, 0.0, 0.0) # 矛对接点
     build_spear()
-    await serial_action_ok
+    await asyncio.wait_for(serial_action_ok,timeout=5.0)
     build_spear_off()
     await move_to(2.0, 2.0, 1.0) # QR通信点
     QR_recog()

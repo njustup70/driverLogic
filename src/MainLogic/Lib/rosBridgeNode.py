@@ -22,7 +22,6 @@ class rosBridgeNode(Node):
         # 话题订阅
         self._serial_tx_pub = self.create_publisher(UInt8MultiArray, 'serial_tx', 10)
         self._serial_rx_sub = self.create_subscription(UInt8MultiArray, 'serial_rx', self._serial_rx_callback, 10)
-        self._location_pub = self.create_publisher(String, 'location', 10)
         self._loop: asyncio.events.AbstractEventLoop 
         self._subPool = []
         self._pubPool = []
@@ -66,7 +65,8 @@ class rosBridgeNode(Node):
         try:
             # 尝试获取从 "base_link" 到 "odom" 的坐标变换
             transform = self._tfBuffer.lookup_transform("map", "base_link", rclpy.time.Time())
-            yaw = math.atan2(2 * (transform.transform.rotation.w * transform.transform.rotation.z + transform.transform.rotation.x * transform.transform.rotation.y), 1 - 2 * (transform.transform.rotation.z**2))
+            w ,x, y, z = transform.transform.rotation.w, transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z
+            yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
             transTuple = (transform.transform.translation.x, transform.transform.translation.y, yaw)
             tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
             transTuple_odom = Odom(*transTuple)

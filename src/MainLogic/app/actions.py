@@ -13,6 +13,7 @@ serial_action_ok = async_property(bool)
 def take_spear_head():
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
     ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xA2')  # 发送取矛头指令
+    
 
 def take_spear_head_off():
     msg = "spear_build_off"
