@@ -1,7 +1,7 @@
 '''
 全局回调函数串口接收回调和ros2话题回调
 '''
-from app.actions import serial_action_ok, QRRecogInstance
+from app.actions import serial_action_finish, QRRecogInstance
 
 
 def example_serial_callback(data: bytes):
@@ -11,11 +11,10 @@ def example_serial_callback(data: bytes):
         #print(f"Received serial data: {data}")
         pass
 def serial_action_return_callback(data: bytes):
-    if data[0] == b'\xFF' and data[1] == b'\xFF': # 后面根据帧头改
-        return_statu = data[3]
-        if return_statu == 0x00:
-            #print("Action executed successfully!")
-            serial_action_ok.value = True
+    if data[1:3] == b'\xFF\xFF': # 后面根据帧头改
+        return_statu = data[3:4]
+        print(f"回调函数收到串口数据，状态码:{data.hex()}")
+        serial_action_finish.value = return_statu
 
 STATUS_MAP = {"空": "00", "R1": "01", "R2": "10", "假": "11"}
 REVERSE_MAP = {v: k for k, v in STATUS_MAP.items()}
