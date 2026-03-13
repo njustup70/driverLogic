@@ -8,9 +8,8 @@ from app.TFManager import move_to
 import globalCallback as gcb 
 from app.TFManager import TFManagerInstance
 from Lib.AsyncTools import AsyncVariable
-from app.actions import take_spear_head, take_spear_head_off, serial_action_ok
+from app.actions import take_spear_head , build_spear , QR
 from std_msgs.msg import UInt8MultiArray, String
-from app.actions import build_spear, build_spear_off
 from app.actions import QR_recog, QR_recog_off, QRRecogInstance
 async def async_main():
     #注册回调
@@ -19,23 +18,22 @@ async def async_main():
     #往下继续注册
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('spear_status', gcb.spear_callback, type=UInt8MultiArray)
     #注册话题发布
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
 
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
-    await move_to(0.3, 0.3, 1.6) # 矛头架
-    await asyncio.sleep(10) # 等待1秒，确保到位
-    
-    #await move_to(0.0, 0.0, 0.0)
+    await move_to(1.0, 1.0, 0.0) # 矛头位置
     take_spear_head()
-    await asyncio.wait_for(serial_action_ok,timeout=5.0)
-    take_spear_head_off()
     await move_to(0.0, 0.0, 0.0) # 矛对接点
     build_spear()
-    await asyncio.wait_for(serial_action_ok,timeout=5.0)
-    build_spear_off()
+    await move_to(1.0,1.0,1.0)
+    QR()
+    #await move_to(0.0, 0.0, 0.0)
+    take_spear_head()
+
     await move_to(2.0, 2.0, 1.0) # QR通信点
     QR_recog()
     area2_state, _ = await asyncio.gather(

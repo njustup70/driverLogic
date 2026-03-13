@@ -6,6 +6,7 @@ import asyncio
 import Lib.rosBridgeNode as ros_bridge_module
 from Lib.AsyncTools import async_property
 from std_msgs.msg import String
+from Lib.bytes import turn_to_bytes
 
 serial_action_finish = async_property(bytes)
 
@@ -24,20 +25,21 @@ def take_spear_head():
     ros_bridge_module.RosBridgeNodeInstance.writeBytes(action_type)  # 发送取矛头指令
     check_finish()
 
-
-def take_spear_head_off(): 
-    msg = "spear_build_off"
-    ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/update_exec_req', msg)
-
 # 矛头对接
+order_spear = async_property(float)
 def build_spear():
+    assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
+    action_type = b'\xA3'
     msg = "spear_build"
     ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/update_exec_req', msg)
-
-def build_spear_off():
-    msg = "spear_build_off"
+    while order_spear != [0, 1, 2]: # 等待order_spear更新到正确的状态
+        ros_bridge_module.RosBridgeNodeInstance.writeBytes(action_type + turn_to_bytes(order_spear))  # 发送对接指令，附带矛的状态
+    check_finish()
+def QR():
+    msg = "qr_recog"
     ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/update_exec_req', msg)
-
+    
+    
 # QR识别
 class QRRecog:
     recog_qr_result = async_property(str)
