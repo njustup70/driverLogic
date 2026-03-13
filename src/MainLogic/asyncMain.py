@@ -27,6 +27,7 @@ async def async_main():
     #逻辑实例...,比如移动到某个坐标
     await move_to(0.3, 0.3, 1.6) # 矛头架
     await asyncio.sleep(10) # 等待1秒，确保到位
+    
     #await move_to(0.0, 0.0, 0.0)
     take_spear_head()
     await asyncio.wait_for(serial_action_ok,timeout=5.0)

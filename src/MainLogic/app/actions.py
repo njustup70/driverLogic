@@ -8,16 +8,15 @@ from Lib.AsyncTools import async_property
 from std_msgs.msg import String
 
 serial_action_finish = async_property(bytes)
-action_type = b'\x00'
 
-async def check_finish():
-    time_counter = 0
-    while serial_action_finish == action_type:
+
+async def check_finish(action_type , timeout = 5):
+    start_time = asyncio.get_event_loop().time()
+    while serial_action_finish != action_type:
+        if asyncio.get_event_loop().time() - start_time > timeout:
+            raise TimeoutError(f"等待动作完成超时: {action_type}")
         await asyncio.sleep(0.01)  # 每100ms检查一次状态
-        time_counter += 1
-        if time_counter > 1000:  # 超时处理
-            print("Action timeout!")
-            break
+
 # 获取矛头
 def take_spear_head():
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
