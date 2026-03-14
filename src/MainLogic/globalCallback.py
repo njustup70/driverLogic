@@ -1,7 +1,7 @@
 '''
 全局回调函数串口接收回调和ros2话题回调
 '''
-from app.actions import serial_action_ok, QRRecogInstance
+from app.actions import serial_action_ok, QRRecogInstance, SmallBoardPoseInstance
 
 
 def example_serial_callback(data: bytes):
@@ -36,4 +36,13 @@ def ros_qr_callback(msg):
         QRRecogInstance.recog_qr_result.value = ", ".join(states)
         return
     except:
-        return 
+        return
+
+
+def ros_small_board_offset_callback(msg):
+    if len(msg.data) < 2:
+        return
+
+    left_mm = float(msg.data[0])
+    up_mm = float(msg.data[1])
+    SmallBoardPoseInstance.offset_mm = (left_mm, up_mm)
