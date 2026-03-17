@@ -29,7 +29,7 @@ class fusion_node_t(Node):
         self.declare_parameter('slam_base_link',['body','aft_mapped'])
         self.declare_parameter('odom_filter',True) # 是否需要里程计进行坐标融合
         # ================== 话题名称与参数定义 ==================
-        self.declare_parameter('odom_topic','/odom')
+        self.declare_parameter('odom_topic','/odom_data')
         # 雷达初始安装偏移
         self.declare_parameter('laser_to_base', [0.0,0.390, 0.0]) # 单位为米和弧度，格式为[x, y, yaw_deg]
         self.declare_parameter('riqiang_y', -0.10975)
