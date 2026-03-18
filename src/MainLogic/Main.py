@@ -1,13 +1,16 @@
 '''
 代码的总入口，负责创建ROS2节点，异步主函数，订阅话题，并将数据传递给异步任务。
 '''
-import asyncio, threading
-import multiprocessing, os, signal, time
+import argparse
+import asyncio
+import importlib
+import inspect
+import multiprocessing
+import os
+import threading
 import rclpy, rclpy.time
 from rclpy.executors import MultiThreadedExecutor
 import Lib.rosBridgeNode as ros_bridge_module
-import Lib.rosSerialNode as ros_serial_module
-import asyncMain
 
 # 设置多进程启动方法为 'spawn'，确保子进程完全独立，不共享 ROS2 上下文
 multiprocessing.set_start_method('spawn', force=True)
@@ -21,7 +24,27 @@ asyncioEventLoop = asyncio.new_event_loop()
 # I will use asyncio.get_event_loop() to maintain logic, just rename variable.
 asyncioEventLoop = asyncio.get_event_loop()
 
+
+def _load_async_entry(main_module: str, main_func: str):
+    """动态加载 MAIN 下的目标模块与协程函数。"""
+    module_name = f"MAIN.{main_module}"
+    module = importlib.import_module(module_name)
+    entry = getattr(module, main_func, None)
+    if entry is None:
+        raise AttributeError(f"{module_name} does not contain function '{main_func}'")
+    if not inspect.iscoroutinefunction(entry):
+        raise TypeError(f"{module_name}.{main_func} must be an async function")
+    return entry
+
+
 def main():
+    parser = argparse.ArgumentParser(description='MainLogic entry selector')
+    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'asyncMain'))
+    parser.add_argument('--main-func', default=os.getenv('MAIN_FUNC', 'async_main'))
+    args, _ = parser.parse_known_args()
+
+    entry_func = _load_async_entry(args.main_module, args.main_func)
+
     # 在主进程中初始化 ROS2
     rclpy.init()
     
@@ -30,7 +53,9 @@ def main():
     t.start()
     # rclpy.init()
     # 注册异步任务
-    asyncio.run_coroutine_threadsafe(asyncMain.async_main(), asyncioEventLoop)
+    asyncio.run_coroutine_threadsafe(entry_func(), asyncioEventLoop)
+    #改成紫色输出,字体大一点
+    print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
     #创建ROS2节点与多线程执行器
     executor = MultiThreadedExecutor()
     '''需要用命名空间来保证修改修改的是全局变量'''
@@ -40,7 +65,6 @@ def main():
     # ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode()
     ros_bridge_module.RosBridgeNodeInstance=ros_bridge_module.rosBridgeNode()
     ros_bridge_module.RosBridgeNodeInstance.register_event_loop(asyncioEventLoop)
-    # ros_serial_module.RosSerialNodeInstance = ros_serial_module.SerialNode()
     # 只把 bridge 节点加入主进程的 executor
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
 

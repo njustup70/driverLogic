@@ -12,8 +12,10 @@ from app.actions import QR_recog, QR_recog_off, QRRecogInstance
 import Lib.rosSerialNode as ros_serial_module
 from Lib.rosSerialNode import start_serial_process
 
-async def async_main(serial_port: str = '/dev/ttyACM0', baudrate: int = 115200):
+async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
+    serial_port = '/dev/ttyACM0'  # 可以根据需要修改串口路径
+    baudrate = 115200  # 可以根据需要修改波特率
     start_serial_process(serial_port=serial_port, baudrate=baudrate)
     #注册回调
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
