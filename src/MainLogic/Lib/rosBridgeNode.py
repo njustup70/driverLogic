@@ -6,7 +6,7 @@ import rclpy, rclpy.time
 from std_msgs.msg import UInt8MultiArray, String
 import json
 # 导入ros2坐标管理依赖
-from tf2_ros import TransformListener, Buffer
+from tf2_ros import TransformListener, Buffer, TransformBroadcaster, StaticTransformBroadcaster
 # 导入驱动
 import app.TFManager as tf_manager_module
 # 导入Odom类
@@ -28,6 +28,8 @@ class rosBridgeNode(Node):
         # 创建tf2坐标管理器
         self._tfBuffer = Buffer()
         self._tfListener = TransformListener(self._tfBuffer, self)
+        self._tfBroadcaster = TransformBroadcaster(self)
+        self._staticTfBroadcaster = StaticTransformBroadcaster(self)
         self.create_timer(0.01, self.tf_timer_callback)  # 定时器回调，频率为100Hz
         self._tfOffline = False
         self._serial_callbacks = []
@@ -65,11 +67,8 @@ class rosBridgeNode(Node):
         try:
             # 尝试获取从 "base_link" 到 "odom" 的坐标变换
             transform = self._tfBuffer.lookup_transform("map", "base_link", rclpy.time.Time())
-            w ,x, y, z = transform.transform.rotation.w, transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z
-            yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-            transTuple = (transform.transform.translation.x, transform.transform.translation.y, yaw)
-            tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
-            transTuple_odom = Odom(*transTuple)
+            transTuple_odom = Odom.from_transform_stamped(transform)
+            tf_manager_module.TFManagerInstance.baseLinkOdom = transTuple_odom
             send_tf = turn_to_bytes([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
             #self.get_logger().info(f"发送数据:  {send_tf.hex()}")
             self.writeBytes(b'\xA0' + send_tf)
@@ -85,6 +84,25 @@ class rosBridgeNode(Node):
                 self.get_logger().warn(f"TF lookup failed: {e}")
                 self._tfOffline = True
             return
+
+    def publish_dynamic_tf(self, parent_frame: str, child_frame: str, odom: Odom):
+        """发布动态坐标变换（会持续覆盖同名 child_frame 的最新值）。"""
+        tf_msg = odom.to_transform_stamped(
+            parent_frame=parent_frame,
+            child_frame=child_frame,
+            stamp=self.get_clock().now().to_msg(),
+        )
+        self._tfBroadcaster.sendTransform(tf_msg)
+
+    def publish_static_tf(self, parent_frame: str, child_frame: str, odom: Odom):
+        """发布静态坐标变换（通常只需在启动或参数更新时发布）。"""
+        tf_msg = odom.to_transform_stamped(
+            parent_frame=parent_frame,
+            child_frame=child_frame,
+            stamp=self.get_clock().now().to_msg(),
+        )
+        self._staticTfBroadcaster.sendTransform(tf_msg)
+
     def register_ros2_pub(self, topic_name, msg_type):
         # 注册ros2话题发布
         pub = self.create_publisher(msg_type, topic_name, 10)
