@@ -3,7 +3,7 @@
 '''
 from app.actions import order_spear, QRRecogInstance
 from Lib.CheckActions import serial_action_finish
-from app.TFManager import TFManagerInstance
+from app.climb_manager import ClimbManagerInstance
 
 
 # def example_serial_callback(data: bytes):
@@ -42,16 +42,16 @@ def climb_type_callback(data: bytes):
             # 从 data[2] 提取爬墙类型的 4 个二进制位（bit[0-3]）
             if len(data) > 2:
                 climb_type_byte = data[2]
-                TFManagerInstance.climb_type.value = [
+                ClimbManagerInstance.climb_type.value = [
                     bool(climb_type_byte & (1 << 0)),  # 比特 0：标志 1
                     bool(climb_type_byte & (1 << 1)),  # 比特 1：标志 2
                     bool(climb_type_byte & (1 << 2)),  # 比特 2：标志 3
                     bool(climb_type_byte & (1 << 3)),  # 比特 3：标志 4
                 ]
-                print(f"爬墙类型: [标志1={TFManagerInstance.climb_type.value[0]}, "
-                      f"标志2={TFManagerInstance.climb_type.value[1]}, "
-                      f"标志3={TFManagerInstance.climb_type.value[2]}, "
-                      f"标志4={TFManagerInstance.climb_type.value[3]}]")
+                print(f"爬墙类型: [标志1={ClimbManagerInstance.climb_type.value[0]}, "
+                        f"标志2={ClimbManagerInstance.climb_type.value[1]}, "
+                        f"标志3={ClimbManagerInstance.climb_type.value[2]}, "
+                        f"标志4={ClimbManagerInstance.climb_type.value[3]}]")
             
             # ===== 解析 climb_arm =====
             # 从 data[2] 和 data[3] 提取臂膀数据
@@ -67,7 +67,7 @@ def climb_type_callback(data: bytes):
                     front_leg = data[3] & 0x03           # data[3] 的 bit[0-1]：前腿
                     rear_leg = (data[3] >> 2) & 0x03     # data[3] 的 bit[2-3]：后腿
                 
-                TFManagerInstance.climb_arm.value = [front_leg, rear_leg]
+                ClimbManagerInstance.climb_arm.value = [front_leg, rear_leg]
                 print(f"臂膀状态: 前腿={front_leg}, 后腿={rear_leg}")
         except Exception as e:
             print(f"解析爬墙数据错误: {e}")

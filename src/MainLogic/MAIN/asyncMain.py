@@ -4,7 +4,8 @@
 import asyncio
 from Lib.odomVec import Odom
 import Lib.rosBridgeNode as ros_bridge_module
-from app.TFManager import move_to, climb
+from app.TFManager import move_to
+from app.climb_manager import climb
 import globalCallback as gcb 
 from app.TFManager import TFManagerInstance
 from std_msgs.msg import UInt8MultiArray, String
