@@ -9,10 +9,6 @@ async def async_main():
     serial_port = '/dev/ttyACM0'  # 与SICK数据板连接的串口
     baudrate = 115200  # 可以根据需要修改波特率
     start_serial_process(serial_port=serial_port, baudrate=baudrate)
-
-    while ros_bridge_module.RosBridgeNodeInstance is None:
-        await asyncio.sleep(0.05)
-
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/sick_data', Float32)
     # gcb.sick_serial_callback._publish = lambda distance: ros_bridge_module.RosBridgeNodeInstance.publish_ros2('/sick_data', distance)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_serial_callback)

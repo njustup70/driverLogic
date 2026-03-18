@@ -34,6 +34,8 @@ class SerialNode(Node):
 # 声明类的实例引用（暂不初始化）
 # ROS2 节点需要在 rclpy.init() 之后才能创建
 import rclpy
+
+
 def main(serial_port: str='/dev/ttyACM0', baudrate: int = 115200):
     # 当作为独立进程运行时，需要在子进程中初始化 ROS2
     rclpy.init()
@@ -46,9 +48,15 @@ def main(serial_port: str='/dev/ttyACM0', baudrate: int = 115200):
         node.get_logger().info('收到键盘中断信号，关闭节点...')
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
 import multiprocessing
+
 SerialProcess: multiprocessing.Process | None = None
+
+
 def start_serial_process(serial_port: str, baudrate: int) -> None:
     """Start rosSerialNode in a separate process without blocking the asyncio loop."""
     global SerialProcess
@@ -59,5 +67,6 @@ def start_serial_process(serial_port: str, baudrate: int) -> None:
         target=main,
         args=(serial_port, baudrate),
         name='ros_serial_process',
+        daemon=True,
     )
     SerialProcess.start()

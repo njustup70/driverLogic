@@ -39,7 +39,7 @@ def _load_async_entry(main_module: str, main_func: str):
 
 def main():
     parser = argparse.ArgumentParser(description='MainLogic entry selector')
-    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'asyncMain'))
+    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'slamMain'))
     parser.add_argument('--main-func', default=os.getenv('MAIN_FUNC', 'async_main'))
     args, _ = parser.parse_known_args()
 
@@ -51,11 +51,6 @@ def main():
     # 创建并启动 asyncio 的后台线程
     t = threading.Thread(target=asyncioEventLoop.run_forever, daemon=True)
     t.start()
-    # rclpy.init()
-    # 注册异步任务
-    asyncio.run_coroutine_threadsafe(entry_func(), asyncioEventLoop)
-    #改成紫色输出,字体大一点
-    print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
     #创建ROS2节点与多线程执行器
     executor = MultiThreadedExecutor()
     '''需要用命名空间来保证修改修改的是全局变量'''
@@ -67,6 +62,10 @@ def main():
     ros_bridge_module.RosBridgeNodeInstance.register_event_loop(asyncioEventLoop)
     # 只把 bridge 节点加入主进程的 executor
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
+
+    # 注册异步任务（确保 RosBridgeNodeInstance 已经初始化）
+    asyncio.run_coroutine_threadsafe(entry_func(), asyncioEventLoop)
+    print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
 
     try:
         # 3. 主线程被 ROS 2 占据，负责处理所有传感器/通信回调
@@ -85,7 +84,8 @@ def main():
             p.join(timeout=2)
             if p.is_alive(): p.kill() # Python 3.7+ 
             
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

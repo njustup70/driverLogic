@@ -19,7 +19,6 @@ class TFManager:
     #odom->base_link 位姿，由码盘输入更新
     wheelOdom = async_property(Odom)
     #slam_init->base_link 位姿，由 slam 直接测量得到，供 sick 修正使用
-    slamBaseOdom = async_property(Odom)
 
     def __init__(self):
         # 坐标系固定配置（不使用 ROS2 参数）
@@ -33,25 +32,28 @@ class TFManager:
         # [x, y, yaw_deg]
         self.laser_to_base = Odom(0.0, 0.390, 0.0)
         # map -> slam_init（默认对齐）
-        self.mapToSlamInit = Odom(0.0, 0.0, 0.0)
+        self.mapToBaseInit = Odom(0.250, 0.250, 0.0)
+        self._mapToSlamInit = Odom(0.0, 0.0, 0.0)
         # sick -> base_link
         self.sickToBaseLink = Odom(0.0, 0.390, 0.0)
         # slam_init -> odom
-        self.slamInitToOdom = Odom(0.0, 0.0, 0.0)
+        self._slamInitToOdom = Odom(0.0, 0.0, 0.0)
         # 控制标志
         self._tf_chain_registered = False
         self._has_slam_pose = False
-        self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
         # sick 修正缓存
         self.sick_lateral_offset = 0.0
         self.sick_buffer_size = 10
         self.sick_buffer: list[float] = []
-
     def register_tf_chain(self):
-        """初始化 TF 链并发布 map->slam_init 初始静态变换。"""
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
         assert self.rosBridge is not None, "RosBridgeNodeInstance is not initialized yet!"
-        self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self.mapToSlamInit)
+        #从map->TobaseLinkinit 推导出map->slam_init，并发布静态坐标
+        # 公式：map->slam_init = map->base_link @ base_link->slam_init
+        self._mapToSlamInit = self.mapToBaseInit@ self.laser_to_base.inverse()
+        # print(self._mapToSlamInit)
+        # print(self._mapToSlamInit@self.laser_to_base)
+        self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         self._tf_chain_registered = True
 
     def odom(self, x: float, y: float, yaw: float):
@@ -66,12 +68,12 @@ class TFManager:
         """使用 sick 缓存值修正 map->slam_init 的初始 yaw。"""
         if not self.sick_buffer or not self._has_slam_pose:
             return False
-        slam_pose = cast(Odom, self.slamBaseOdom)
+        sick_pose=cast(Odom,self.baseLinkOdom)@ self.sickToBaseLink
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
-        yaw_correction = math.atan2(slam_pose.y - sick_y, slam_pose.x)
-        self.mapToSlamInit = Odom(0.0, 0.0, yaw_correction)
+        yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
+        self._mapToSlamInit = Odom(0.0, 0.0, yaw_correction)
         if self.rosBridge is not None:
-            self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self.mapToSlamInit)
+            self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         self.sick_buffer.clear()
         return True
     def odom_10ms(self):
@@ -81,8 +83,7 @@ class TFManager:
         #odom->base_link
         wheel_pose = cast(Odom, self.wheelOdom)
         self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, wheel_pose)
-        map_to_odom = self.mapToSlamInit @ self.slamInitToOdom
-        fused_base = map_to_odom @ wheel_pose
+        fused_base  = self._mapToSlamInit @ self._slamInitToOdom@ wheel_pose
         self.baseLinkOdom = fused_base
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
     def slam_100ms(self):
@@ -101,11 +102,11 @@ class TFManager:
         slam_sensor_pose = Odom.from_transform_stamped(tf_msg)
         #slam_init->base_link=slam_init->laser @ laser->base
         slam_base_pose = slam_sensor_pose @ self.laser_to_base
-        self.slamBaseOdom = slam_base_pose
+        self._slamBaseOdom = slam_base_pose
         self._has_slam_pose = True
         wheel_pose = cast(Odom, self.wheelOdom)
         #slam_init->odom = slam_init->base_link @ base_link->odom
-        self.slamInitToOdom = slam_base_pose @ wheel_pose.inverse()
+        self._slamInitToOdom = slam_base_pose @ wheel_pose.inverse()
 
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新，每 100ms 执行一次 slam 更新。"""
