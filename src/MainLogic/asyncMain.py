@@ -7,11 +7,14 @@ import Lib.rosBridgeNode as ros_bridge_module
 from app.TFManager import move_to, climb
 import globalCallback as gcb 
 from app.TFManager import TFManagerInstance
-from Lib.AsyncTools import AsyncVariable
-from app.actions import take_spear_head , build_spear , QR
 from std_msgs.msg import UInt8MultiArray, String
 from app.actions import QR_recog, QR_recog_off, QRRecogInstance
-async def async_main():
+import Lib.rosSerialNode as ros_serial_module
+from Lib.rosSerialNode import start_serial_process
+
+async def async_main(serial_port: str = '/dev/ttyACM0', baudrate: int = 115200):
+    # 启动 rosSerialNode 进程（非阻塞）
+    start_serial_process(serial_port=serial_port, baudrate=baudrate)
     #注册回调
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)

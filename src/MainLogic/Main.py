@@ -41,15 +41,6 @@ def main():
     ros_bridge_module.RosBridgeNodeInstance=ros_bridge_module.rosBridgeNode()
     ros_bridge_module.RosBridgeNodeInstance.register_event_loop(asyncioEventLoop)
     # ros_serial_module.RosSerialNodeInstance = ros_serial_module.SerialNode()
-
-    # 将 rosSerialNode 当成独立进程运行
-    serial_proc = None
-    try:
-        serial_proc = multiprocessing.Process(target=ros_serial_module.main, name='ros_serial_process')
-        serial_proc.start()
-    except Exception as e:
-        print(f"Failed to start ros serial process: {e}")
-
     # 只把 bridge 节点加入主进程的 executor
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
 
@@ -60,20 +51,16 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        # 停止 asyncio 事件循环
+        # 1. 停止通信层
         asyncioEventLoop.call_soon_threadsafe(asyncioEventLoop.stop)
-        # 先停止 executor
         executor.shutdown()
-        # 优雅终止 ros serial 子进程（如果存在）
-        if serial_proc is not None and serial_proc.is_alive():
-            try:
-                serial_proc.terminate()
-                serial_proc.join(timeout=5)
-                if serial_proc.is_alive():
-                    # 强制杀死
-                    os.kill(serial_proc.pid, signal.SIGKILL)
-            except Exception as e:
-                print(f"Error terminating serial process: {e}")
+        
+        # 2. 简洁处理所有子进程
+        for p in multiprocessing.active_children():
+            p.terminate()
+            p.join(timeout=2)
+            if p.is_alive(): p.kill() # Python 3.7+ 
+            
         rclpy.shutdown()
 
 if __name__ == '__main__':
