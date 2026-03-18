@@ -1,9 +1,46 @@
 '''
 全局回调函数串口接收回调和ros2话题回调
 '''
+import struct
 from app.actions import order_spear, QRRecogInstance
 from Lib.CheckActions import serial_action_finish
 from app.climb_manager import ClimbManagerInstance
+
+
+def sick_serial_callback(data: bytes):
+    """解析SICK串口帧并发布 /sick_data"""
+    if not data:
+        return
+    frame_len = 20
+    if not hasattr(sick_serial_callback, "_buffer"):
+        sick_serial_callback._buffer = bytearray()
+
+    buffer = sick_serial_callback._buffer
+    buffer.extend(data)
+
+    if len(buffer) > 1024:
+        del buffer[:-frame_len]
+
+    while len(buffer) >= frame_len:
+        frame = bytes(buffer[:frame_len])
+
+        header = frame[0]
+        tail = frame[19]
+        calc_sum = sum(frame[1:19]) & 0xFF
+        if header != tail or calc_sum != tail:
+            buffer.pop(0)
+            continue
+
+        payload = frame[3:19]
+        try:
+            floats = struct.unpack('<4f', payload)
+            distance = 1.0667 * floats[0] - 0.0533
+            publish_fn = getattr(sick_serial_callback, '_publish', None)
+            if callable(publish_fn):
+                publish_fn(float(distance))
+        except Exception as e:
+            print(f"SICK解析错误: {e}")
+        del buffer[:frame_len]
 
 
 # def example_serial_callback(data: bytes):
