@@ -30,6 +30,9 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
 
+    TFManagerInstance.register_tf_chain()
+    asyncio.create_task(TFManagerInstance.tf_update_loop())
+
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
     await move_to(1.0,1.0,1.0)

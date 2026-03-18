@@ -1,17 +1,11 @@
-from typing import Optional
 from rclpy.node import Node
-import asyncio, threading
-import math
-import rclpy, rclpy.time
+import asyncio
 from std_msgs.msg import UInt8MultiArray, String
-import json
 # 导入ros2坐标管理依赖
 from tf2_ros import TransformListener, Buffer, TransformBroadcaster, StaticTransformBroadcaster
-# 导入驱动
-import app.TFManager as tf_manager_module
 # 导入Odom类
 from Lib.odomVec import Odom
-from Lib.bytes import turn_to_bytes
+
 class rosBridgeNode(Node):
     '''
     ros2耦合节点,从ros2话题获得数据,传给类或者队列函数，需要耦合TFManager管理坐标
@@ -30,8 +24,6 @@ class rosBridgeNode(Node):
         self._tfListener = TransformListener(self._tfBuffer, self)
         self._tfBroadcaster = TransformBroadcaster(self)
         self._staticTfBroadcaster = StaticTransformBroadcaster(self)
-        self.create_timer(0.01, self.tf_timer_callback)  # 定时器回调，频率为100Hz
-        self._tfOffline = False
         self._serial_callbacks = []
 
     def register_event_loop(self, loop: asyncio.events.AbstractEventLoop):
@@ -61,29 +53,6 @@ class rosBridgeNode(Node):
             data = bytes(msg.data)
             for callback in self._serial_callbacks:
                 callback(data)
-
-    def tf_timer_callback(self):
-        # 坐标变换原始数据回调
-        try:
-            # 尝试获取从 "base_link" 到 "odom" 的坐标变换
-            transform = self._tfBuffer.lookup_transform("map", "base_link", rclpy.time.Time())
-            transTuple_odom = Odom.from_transform_stamped(transform)
-            tf_manager_module.TFManagerInstance.baseLinkOdom = transTuple_odom
-            send_tf = turn_to_bytes([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
-            #self.get_logger().info(f"发送数据:  {send_tf.hex()}")
-            self.writeBytes(b'\xA0' + send_tf)
-            pub_msg = String()
-            pub_msg.data = json.dumps([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
-            self.publish_ros2('location', pub_msg) 
-            if self._tfOffline:
-                self.get_logger().info("TF is back online!")
-                self._tfOffline = False
-
-        except Exception as e:
-            if not self._tfOffline:
-                self.get_logger().warn(f"TF lookup failed: {e}")
-                self._tfOffline = True
-            return
 
     def publish_dynamic_tf(self, parent_frame: str, child_frame: str, odom: Odom):
         """发布动态坐标变换（会持续覆盖同名 child_frame 的最新值）。"""

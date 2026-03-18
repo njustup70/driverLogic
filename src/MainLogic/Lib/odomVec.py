@@ -75,6 +75,30 @@ class Odom:
         y_new = other.y + s * self.x + c * self.y
         return Odom(x_new, y_new, other.yaw + self.yaw)
 
+    def inverse(self) -> 'Odom':
+        """
+        返回当前位姿变换的逆变换。
+
+        用法示例:
+        1. 已知 A->B, 求 B->A: `b_to_a = a_to_b.inverse()`
+        2. 链式求解: `a_to_c = a_to_b @ b_to_c`
+        3. 已知 A->C 与 A->B, 求 B->C: `b_to_c = a_to_b.inverse() @ a_to_c`
+        """
+        c = math.cos(self.yaw)
+        s = math.sin(self.yaw)
+        return Odom(
+            -(c * self.x + s * self.y),
+            -(-s * self.x + c * self.y),
+            -self.yaw,
+        )
+
+    @staticmethod
+    def inv(transform: 'Odom') -> 'Odom':
+        """静态便捷调用：`Odom.inv(a_to_b)` 等价于 `a_to_b.inverse()`。"""
+        if not isinstance(transform, Odom):
+            raise TypeError("transform must be Odom")
+        return transform.inverse()
+
     @staticmethod
     def yaw_to_quaternion(yaw: float) -> Tuple[float, float, float, float]:
         """将二维 yaw 转换为 ROS 四元数 (x, y, z, w)。"""
