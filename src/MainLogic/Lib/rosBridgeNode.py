@@ -1,6 +1,7 @@
 from typing import Optional
 from rclpy.node import Node
 import asyncio, threading
+import math
 import rclpy, rclpy.time
 from std_msgs.msg import UInt8MultiArray, String
 import json
@@ -21,7 +22,6 @@ class rosBridgeNode(Node):
         # 话题订阅
         self._serial_tx_pub = self.create_publisher(UInt8MultiArray, 'serial_tx', 10)
         self._serial_rx_sub = self.create_subscription(UInt8MultiArray, 'serial_rx', self._serial_rx_callback, 10)
-        self._location_pub = self.create_publisher(String, 'location', 10)
         self._loop: asyncio.events.AbstractEventLoop 
         self._subPool = []
         self._pubPool = []
@@ -47,7 +47,7 @@ class rosBridgeNode(Node):
 
     def writeBytes(self, data: bytes):
         # 给下位机发送数据，增加 \xFA 帧头，直接使用原始字节
-        self.get_logger().info(f"发送数据:  {data.hex()}")
+        #self.get_logger().info(f"发送数据:  {data.hex()}")
         msg = UInt8MultiArray()
         msg.data = list(b'\xFA' + data)
         self._serial_tx_pub.publish(msg)
@@ -65,7 +65,9 @@ class rosBridgeNode(Node):
         try:
             # 尝试获取从 "base_link" 到 "odom" 的坐标变换
             transform = self._tfBuffer.lookup_transform("map", "base_link", rclpy.time.Time())
-            transTuple = (transform.transform.translation.x, transform.transform.translation.y, transform.transform.rotation.z)
+            w ,x, y, z = transform.transform.rotation.w, transform.transform.rotation.x, transform.transform.rotation.y, transform.transform.rotation.z
+            yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+            transTuple = (transform.transform.translation.x, transform.transform.translation.y, yaw)
             tf_manager_module.TFManagerInstance.baseLinkOdom = Odom(*transTuple)
             transTuple_odom = Odom(*transTuple)
             send_tf = turn_to_bytes([transTuple_odom.x, transTuple_odom.y, transTuple_odom.yaw])
@@ -98,4 +100,4 @@ class rosBridgeNode(Node):
 
 # 声明类，不初始化，在Main.py中初始化
 # 因为需要rclpy.init之后才能创建Node实例
-RosBridgeNodeInstance: rosBridgeNode = rosBridgeNode()
+RosBridgeNodeInstance: rosBridgeNode 

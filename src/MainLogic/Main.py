@@ -2,13 +2,17 @@
 代码的总入口，负责创建ROS2节点，异步主函数，订阅话题，并将数据传递给异步任务。
 '''
 import asyncio, threading
+import multiprocessing, os, signal, time
 import rclpy, rclpy.time
-#需要在最开始初始化ROS2,不然节点初始化会报错
-rclpy.init()
 from rclpy.executors import MultiThreadedExecutor
 import Lib.rosBridgeNode as ros_bridge_module
 import Lib.rosSerialNode as ros_serial_module
 import asyncMain
+
+# 设置多进程启动方法为 'spawn'，确保子进程完全独立，不共享 ROS2 上下文
+multiprocessing.set_start_method('spawn', force=True)
+
+# 注意：不要在全局作用域调用 rclpy.init()，因为主进程和子进程需要各自初始化
 # 重要全局变量
 asyncioEventLoop = asyncio.new_event_loop() 
 # User used get_event_loop() but usually new_event_loop() or get_running_loop() is safer in modern python, 
@@ -18,6 +22,9 @@ asyncioEventLoop = asyncio.new_event_loop()
 asyncioEventLoop = asyncio.get_event_loop()
 
 def main():
+    # 在主进程中初始化 ROS2
+    rclpy.init()
+    
     # 创建并启动 asyncio 的后台线程
     t = threading.Thread(target=asyncioEventLoop.run_forever, daemon=True)
     t.start()
@@ -31,11 +38,21 @@ def main():
     '''是在本地命名空间里创建了RosBridgeNodeInstance,修改的是本地的RosBridgeNodeInstance,而不是全局的RosBridgeNodeInstance'''
     '''另外如果在本地命名空间创建全局变量要赋值的话,需要global关键字声明'''
     # ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode()
+    ros_bridge_module.RosBridgeNodeInstance=ros_bridge_module.rosBridgeNode()
     ros_bridge_module.RosBridgeNodeInstance.register_event_loop(asyncioEventLoop)
     # ros_serial_module.RosSerialNodeInstance = ros_serial_module.SerialNode()
 
+    # 将 rosSerialNode 当成独立进程运行
+    serial_proc = None
+    try:
+        serial_proc = multiprocessing.Process(target=ros_serial_module.main, name='ros_serial_process')
+        serial_proc.start()
+    except Exception as e:
+        print(f"Failed to start ros serial process: {e}")
+
+    # 只把 bridge 节点加入主进程的 executor
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
-    executor.add_node(ros_serial_module.RosSerialNodeInstance)
+
     try:
         # 3. 主线程被 ROS 2 占据，负责处理所有传感器/通信回调
         # rclpy.spin(mainNode)
@@ -43,8 +60,20 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        # 停止 asyncio 事件循环
         asyncioEventLoop.call_soon_threadsafe(asyncioEventLoop.stop)
+        # 先停止 executor
         executor.shutdown()
+        # 优雅终止 ros serial 子进程（如果存在）
+        if serial_proc is not None and serial_proc.is_alive():
+            try:
+                serial_proc.terminate()
+                serial_proc.join(timeout=5)
+                if serial_proc.is_alive():
+                    # 强制杀死
+                    os.kill(serial_proc.pid, signal.SIGKILL)
+            except Exception as e:
+                print(f"Error terminating serial process: {e}")
         rclpy.shutdown()
 
 if __name__ == '__main__':

@@ -4,59 +4,36 @@
 import asyncio
 from Lib.odomVec import Odom
 import Lib.rosBridgeNode as ros_bridge_module
-from app.TFManager import move_to
+from app.TFManager import move_to, climb
 import globalCallback as gcb 
 from app.TFManager import TFManagerInstance
 from Lib.AsyncTools import AsyncVariable
-from app.actions import take_spear_head, take_spear_head_off, serial_action_ok
-from std_msgs.msg import Float32MultiArray, UInt8MultiArray, String
-from app.actions import build_spear, build_spear_off
+from app.actions import take_spear_head , build_spear , QR
+from std_msgs.msg import UInt8MultiArray, String
 from app.actions import QR_recog, QR_recog_off, QRRecogInstance
-
-
-async def test_comm_ws_qr() -> None:
-    print("[comm_ws] start QR test")
-    QR_recog()
-    try:
-        result = await asyncio.wait_for(QRRecogInstance.recog_qr_result, timeout=15.0)
-        print(f"[comm_ws] OK, qr_detection_result={result}")
-    except asyncio.TimeoutError:
-        print("[comm_ws] timeout: no qr_detection_result within 15s")
-    finally:
-        QR_recog_off()
-
-
 async def async_main():
     #注册回调
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
+    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
+    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
-    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub(
-        '/small_board_pose/offset_mm', gcb.ros_small_board_offset_callback, type=Float32MultiArray
-    )
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('spear_status', gcb.spear_callback, type=UInt8MultiArray)
     #注册话题发布
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
-    ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/small_board_pose/command', String)
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
+
     asyncio.create_task(test())
-    await test_comm_ws_qr()
     #逻辑实例...,比如移动到某个坐标
-    await move_to(1.0, 1.0, 0.5) # 矛头架
-    take_spear_head()
-    await serial_action_ok
-    take_spear_head_off()
-    await move_to(0.0, 0.0, 0.0) # 矛对接点
-    build_spear()
-    await serial_action_ok
-    build_spear_off()
-    await move_to(2.0, 2.0, 1.0) # QR通信点
-    QR_recog()
-    area2_state, _ = await asyncio.gather(
-        QRRecogInstance.recog_qr_result,    # QR识别结果，即二区kfs状态
-        move_to(0.0, 0.0, 0.0)              # 一区结束，回到原点
-    )
-    QR_recog_off()
+    await move_to(1.0,1.0,1.0)
+    await climb([0,1], [1,1])
+    # await move_to(2.0, 2.5, 1.6) # 矛头位置
+    # await move_to(0.5, 0.5, 0.0) # 原点
+    # await take_spear_head()
+    # await move_to(0.2, 0.2, 0.0) # 矛对接点
+    # await build_spear()
+    # await move_to(1.0,1.0,1.0)
 
 async def test():
     #测试函数

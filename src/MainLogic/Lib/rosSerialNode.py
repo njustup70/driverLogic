@@ -9,7 +9,7 @@ class SerialNode(Node):
     '''
     def __init__(self):
         super().__init__('serial_node')
-        self._serial=AsyncSerial_t('/dev/ttyUSB0', 115200)
+        self._serial=AsyncSerial_t('/dev/ttyACM0', 115200)
         self._serial.register_callback(self._serial_rx_callback)
         self._serial_pub = self.create_publisher(UInt8MultiArray, 'serial_rx', 10)
         self._serial_sub=self.create_subscription(UInt8MultiArray, 'serial_tx', self._serial_tx_callback, 10)
@@ -31,6 +31,17 @@ class SerialNode(Node):
     def write(self, data: bytes):
         self._serial.write(data)
 
-# 声明类，不初始化，在Main.py中初始化
-# 因为需要rclpy.init之后才能创建Node实例
-RosSerialNodeInstance: SerialNode = SerialNode()
+# 声明类的实例引用（暂不初始化）
+# ROS2 节点需要在 rclpy.init() 之后才能创建
+import rclpy
+def main():
+    # 当作为独立进程运行时，需要在子进程中初始化 ROS2
+    rclpy.init()
+    node = SerialNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('收到键盘中断信号，关闭节点...')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
