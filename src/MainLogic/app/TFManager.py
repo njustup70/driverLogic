@@ -17,7 +17,6 @@ class TFManager:
     #map->base_link 位姿，由 slam 融合计算得到，供上层异步逻辑使用
     baseLinkOdom = async_property(Odom)
     #odom->base_link 位姿，由码盘输入更新
-    wheelOdom = async_property(Odom)
     #slam_init->base_link 位姿，由 slam 直接测量得到，供 sick 修正使用
 
     def __init__(self):
@@ -28,9 +27,9 @@ class TFManager:
         self.base_frame = 'base_link'
         self.slam_odom_frame = 'camera_init'
         self.slam_base_frame = 'aft_mapped'
-        self.wheelOdom = Odom(0.0, 0.0, 0.0)  # 里程计原始数据，单位米和弧度
+        self._odomToBase = Odom(0.0, 0.0, 0.0)  # 里程计原始数据，单位米和弧度
         # [x, y, yaw_deg]
-        self.laser_to_base = Odom(0.0, 0.390, 0.0)
+        self.laser_to_base = Odom(0.0, -0.390, 0.0)
         # map -> slam_init（默认对齐）
         self.mapToBaseInit = Odom(0.250, 0.250, 0.0)
         self._mapToSlamInit = Odom(0.0, 0.0, 0.0)
@@ -38,6 +37,7 @@ class TFManager:
         self.sickToBaseLink = Odom(0.0, 0.390, 0.0)
         # slam_init -> odom
         self._slamInitToOdom = Odom(0.0, 0.0, 0.0)
+        self._mapToBase=Odom(0.0 ,0.0,0.0)
         # 控制标志
         self._tf_chain_registered = False
         self._has_slam_pose = False
@@ -58,7 +58,7 @@ class TFManager:
 
     def odom(self, x: float, y: float, yaw: float):
         """码盘数据入口：更新 odom->base_link。"""
-        self.wheelOdom = Odom(x, y, yaw)
+        self._odomToBase = Odom(x, y, yaw)
     def sick(self, sick_y: float):
         """SICK 数据入口：输入侧向测距值（单位米）。"""
         self.sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
@@ -68,7 +68,7 @@ class TFManager:
         """使用 sick 缓存值修正 map->slam_init 的初始 yaw。"""
         if not self.sick_buffer or not self._has_slam_pose:
             return False
-        sick_pose=cast(Odom,self.baseLinkOdom)@ self.sickToBaseLink
+        sick_pose=self._mapToBase@ self.sickToBaseLink
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
         yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
         self._mapToSlamInit = Odom(0.0, 0.0, yaw_correction)
@@ -81,9 +81,10 @@ class TFManager:
         if not self._tf_chain_registered or self.rosBridge is None:
             return
         #odom->base_link
-        wheel_pose = cast(Odom, self.wheelOdom)
+        wheel_pose = cast(Odom, self._odomToBase)
         self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, wheel_pose)
         fused_base  = self._mapToSlamInit @ self._slamInitToOdom@ wheel_pose
+        self.mapToBase=fused_base
         self.baseLinkOdom = fused_base
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
     def slam_100ms(self):
@@ -104,7 +105,7 @@ class TFManager:
         slam_base_pose = slam_sensor_pose @ self.laser_to_base
         self._slamBaseOdom = slam_base_pose
         self._has_slam_pose = True
-        wheel_pose = cast(Odom, self.wheelOdom)
+        wheel_pose = cast(Odom, self._odomToBase)
         #slam_init->odom = slam_init->base_link @ base_link->odom
         self._slamInitToOdom = slam_base_pose @ wheel_pose.inverse()
         self.rosBridge.publish_static_tf(self.slam_init_frame, self.odom_frame, self._slamInitToOdom)
@@ -116,8 +117,8 @@ class TFManager:
                 self.odom_10ms()
                 if tick_10ms % 10 == 0:
                     self.slam_100ms()
-            except Exception:
-                pass
+            except Exception as e:
+                print(e)
             tick_10ms = (tick_10ms + 1) % 10
             await asyncio.sleep(0.01)
 async def move_to(x, y, yaw):

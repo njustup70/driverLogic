@@ -41,6 +41,6 @@ def generate_launch_description():
     )
 
     ld.add_action(airy_launch)
-    ld.add_action(slam_main)
+    # ld.add_action(slam_main)
     ld.add_action(foxglove)
     return ld
