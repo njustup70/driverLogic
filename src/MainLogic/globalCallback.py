@@ -5,10 +5,11 @@ import struct
 from app.actions import order_spear, QRRecogInstance
 from Lib.CheckActions import serial_action_finish
 from app.climb_manager import ClimbManagerInstance
+from app.TFManager import TFManagerInstance
 
 
 def sick_serial_callback(data: bytes):
-    """解析SICK串口帧并发布 /sick_data"""
+    """解析SICK串口帧并直接写入TF管理入口。"""
     if not data:
         return
     frame_len = 20
@@ -26,8 +27,12 @@ def sick_serial_callback(data: bytes):
 
         header = frame[0]
         tail = frame[19]
+        if header != tail:
+            buffer.pop(0)
+            continue
+
         calc_sum = sum(frame[1:19]) & 0xFF
-        if header != tail or calc_sum != tail:
+        if calc_sum != tail:
             buffer.pop(0)
             continue
 
@@ -35,9 +40,7 @@ def sick_serial_callback(data: bytes):
         try:
             floats = struct.unpack('<4f', payload)
             distance = 1.0667 * floats[0] - 0.0533
-            publish_fn = getattr(sick_serial_callback, '_publish', None)
-            if callable(publish_fn):
-                publish_fn(float(distance))
+            TFManagerInstance.sick(float(distance))
         except Exception as e:
             print(f"SICK解析错误: {e}")
         del buffer[:frame_len]
