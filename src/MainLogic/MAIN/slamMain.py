@@ -12,7 +12,7 @@ async def async_main():
     while ros_bridge_module.RosBridgeNodeInstance is None:
         await asyncio.sleep(0.05)
 
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_serial_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_sensor_callback)
     TFManagerInstance.register_tf_chain()
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     while True:

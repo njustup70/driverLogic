@@ -7,43 +7,70 @@ from Lib.CheckActions import serial_action_finish
 from app.climb_manager import ClimbManagerInstance
 from app.TFManager import TFManagerInstance
 
-
-def sick_serial_callback(data: bytes):
-    """解析SICK串口帧并直接写入TF管理入口。"""
+def mcu_sensor_callback(data: bytes):
+    """下位机传感器串口回调：在单函数内完成 odom/sick 的检测与解包。"""
+    _ODOM_FRAME_PREFIX = b'\xFF\xAA'
+    _ODOM_FRAME_LEN = 14
+    _SICK_FRAME_LEN = 20
     if not data:
         return
-    frame_len = 20
-    if not hasattr(sick_serial_callback, "_buffer"):
-        sick_serial_callback._buffer = bytearray()
 
-    buffer = sick_serial_callback._buffer
+    if not hasattr(mcu_sensor_callback, "_buffer"):
+        mcu_sensor_callback._buffer = bytearray()
+
+    buffer = mcu_sensor_callback._buffer
     buffer.extend(data)
 
-    if len(buffer) > 1024:
-        del buffer[:-frame_len]
+    if len(buffer) > 4096:
+        del buffer[:-_SICK_FRAME_LEN]
 
-    while len(buffer) >= frame_len:
-        frame = bytes(buffer[:frame_len])
+    while buffer:
+        odom_valid = len(buffer) >= _ODOM_FRAME_LEN and bytes(buffer[:2]) == _ODOM_FRAME_PREFIX
+        sick_valid = False
+        if len(buffer) >= _SICK_FRAME_LEN:
+            sick_frame = bytes(buffer[:_SICK_FRAME_LEN])
+            sick_header = sick_frame[0]
+            sick_tail = sick_frame[19]
+            if sick_header == sick_tail:
+                sick_sum = sum(sick_frame[1:19]) & 0xFF
+                sick_valid = sick_sum == sick_tail
 
-        header = frame[0]
-        tail = frame[19]
-        if header != tail:
-            buffer.pop(0)
+        if odom_valid and not sick_valid:
+            try:
+                odom_payload = bytes(buffer[2:_ODOM_FRAME_LEN])
+                x, y, yaw = struct.unpack('<fff', odom_payload)
+                TFManagerInstance.odom(float(x), float(y), float(yaw))
+                del buffer[:_ODOM_FRAME_LEN]
+            except Exception as e:
+                print(f"ODOM解析错误: {e}")
+                buffer.pop(0)
             continue
 
-        calc_sum = sum(frame[1:19]) & 0xFF
-        if calc_sum != tail:
-            buffer.pop(0)
+        if sick_valid and not odom_valid:
+            try:
+                sick_payload = sick_frame[3:19]
+                sick_floats = struct.unpack('<4f', sick_payload)
+                distance = 1.0667 * sick_floats[0] - 0.0533
+                TFManagerInstance.sick(float(distance))
+                del buffer[:_SICK_FRAME_LEN]
+            except Exception as e:
+                print(f"SICK解析错误: {e}")
+                buffer.pop(0)
             continue
 
-        payload = frame[3:19]
-        try:
-            floats = struct.unpack('<4f', payload)
-            distance = 1.0667 * floats[0] - 0.0533
-            TFManagerInstance.sick(float(distance))
-        except Exception as e:
-            print(f"SICK解析错误: {e}")
-        del buffer[:frame_len]
+        if odom_valid and sick_valid:
+            print("帧类型歧义，清空缓冲")
+            buffer.clear()
+            break
+
+        # 可能是半包，等待后续补齐。
+        if bytes(buffer[:2]) == _ODOM_FRAME_PREFIX and len(buffer) < _ODOM_FRAME_LEN:
+            break
+        if len(buffer) < _SICK_FRAME_LEN:
+            break
+
+        # 校验均失败，丢 1 字节重同步。
+        buffer.pop(0)
 
 
 # def example_serial_callback(data: bytes):
