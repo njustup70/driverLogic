@@ -2,7 +2,7 @@
 简单动作
 """
 
-from MainLogic.Lib import rosBridgeNode as ros_bridge_module
+from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.Lib.AsyncTools import async_property
 from MainLogic.Lib.bytes import turn_to_bytes
 from MainLogic.Lib.CheckActions import check_finish

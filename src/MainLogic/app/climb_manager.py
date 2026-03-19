@@ -1,9 +1,9 @@
 import asyncio
 import math
 
-from MainLogic.Lib import rosBridgeNode as ros_bridge_module
+from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.Lib.AsyncTools import async_property
-from MainLogic.app.TFManager import TFManagerInstance, move_to
+from MainLogic.core.tf_manager import TFManagerInstance, move_to
 
 
 class ClimbManager:

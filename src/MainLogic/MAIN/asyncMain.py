@@ -3,12 +3,12 @@
 '''
 import asyncio
 from MainLogic.Lib.odomVec import Odom
-from MainLogic.Lib import rosBridgeNode as ros_bridge_module
-from MainLogic.app.TFManager import move_to, TFManagerInstance
+from MainLogic.core import ros_bridge_node as ros_bridge_module
+from MainLogic.core.tf_manager import move_to, TFManagerInstance
 from MainLogic.app.climb_manager import climb
 from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
-from MainLogic.Lib.rosSerialNode import start_serial_process
+from MainLogic.core.serial_node import start_serial_process
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）

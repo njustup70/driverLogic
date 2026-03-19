@@ -4,7 +4,7 @@
 import struct
 from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
-from MainLogic.app.TFManager import TFManagerInstance
+from MainLogic.core.tf_manager import TFManagerInstance
 
 def mcu_sensor_callback(data: bytes):
     """下位机传感器串口回调：在单函数内完成 odom/sick 的检测与解包。"""

@@ -1,8 +1,8 @@
 from MainLogic import globalCallback as gcb
-from MainLogic.Lib import rosBridgeNode as ros_bridge_module
-from MainLogic.Lib.rosSerialNode import start_serial_process
+from MainLogic.core import ros_bridge_node as ros_bridge_module
+from MainLogic.core.serial_node import start_serial_process
 import asyncio
-from MainLogic.app.TFManager import TFManagerInstance
+from MainLogic.core.tf_manager import TFManagerInstance
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
     serial_port = '/dev/ttyACM0'  # 与SICK数据板连接的串口
