@@ -2,12 +2,10 @@
 简单动作
 """
 
-import asyncio
-import Lib.rosBridgeNode as ros_bridge_module
-from Lib.AsyncTools import async_property
-from std_msgs.msg import String
-from Lib.bytes import turn_to_bytes
-from Lib.CheckActions import check_finish
+from MainLogic.Lib import rosBridgeNode as ros_bridge_module
+from MainLogic.Lib.AsyncTools import async_property
+from MainLogic.Lib.bytes import turn_to_bytes
+from MainLogic.Lib.CheckActions import check_finish
 
 # 获取矛头
 async def take_spear_head():

@@ -4,7 +4,7 @@ from std_msgs.msg import UInt8MultiArray, String
 # 导入ros2坐标管理依赖
 from tf2_ros import TransformListener, Buffer, TransformBroadcaster, StaticTransformBroadcaster
 # 导入Odom类
-from Lib.odomVec import Odom
+from MainLogic.Lib.odomVec import Odom
 
 class rosBridgeNode(Node):
     '''

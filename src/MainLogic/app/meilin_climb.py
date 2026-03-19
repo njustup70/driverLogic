@@ -2,15 +2,10 @@
 简单动作
 """
 
-import asyncio
-import Lib.rosBridgeNode as ros_bridge_module
-from Lib.AsyncTools import async_property
-from std_msgs.msg import String
-from Lib.bytes import turn_to_bytes
-from Lib.CheckActions import check_finish
-from app.TFManager import move_to
-
-from Lib.odomVec import Odom
+from MainLogic.Lib import rosBridgeNode as ros_bridge_module
+from MainLogic.Lib.AsyncTools import async_property
+from MainLogic.Lib.bytes import turn_to_bytes
+from MainLogic.Lib.CheckActions import check_finish
 
 
 serial_action_finish = async_property(bytes)

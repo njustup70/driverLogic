@@ -27,6 +27,8 @@ services:
     image: elainasuki/rc2026:driverLogic
     container_name: driverLogic_container_dev
     <<: *common
+    environment:
+      - PYTHONPATH=/home/Elaina/ros2_ws/src:$PYTHONPATH
     volumes:
       - driverLogic_volume:/home/Elaina/ros2_ws
       - /var/run/docker.sock:/var/run/docker.sock

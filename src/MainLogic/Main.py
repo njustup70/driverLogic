@@ -8,9 +8,9 @@ import inspect
 import multiprocessing
 import os
 import threading
-import rclpy, rclpy.time
+import rclpy
 from rclpy.executors import MultiThreadedExecutor
-import Lib.rosBridgeNode as ros_bridge_module
+from MainLogic.Lib import rosBridgeNode as ros_bridge_module
 
 # 设置多进程启动方法为 'spawn'，确保子进程完全独立，不共享 ROS2 上下文
 multiprocessing.set_start_method('spawn', force=True)
@@ -27,7 +27,7 @@ asyncioEventLoop = asyncio.get_event_loop()
 
 def _load_async_entry(main_module: str, main_func: str):
     """动态加载 MAIN 下的目标模块与协程函数。"""
-    module_name = f"MAIN.{main_module}"
+    module_name = f"MainLogic.MAIN.{main_module}"
     module = importlib.import_module(module_name)
     entry = getattr(module, main_func, None)
     if entry is None:
@@ -54,7 +54,7 @@ def main():
     #创建ROS2节点与多线程执行器
     executor = MultiThreadedExecutor()
     '''需要用命名空间来保证修改修改的是全局变量'''
-    '''原来的from Lib.rosBridgeNode import rosBridgeNode,RosBridgeNodeInstance'''
+    '''原来的from MainLogic.Lib.rosBridgeNode import rosBridgeNode,RosBridgeNodeInstance'''
     '''是在本地命名空间里创建了RosBridgeNodeInstance,修改的是本地的RosBridgeNodeInstance,而不是全局的RosBridgeNodeInstance'''
     '''另外如果在本地命名空间创建全局变量要赋值的话,需要global关键字声明'''
     # ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode()

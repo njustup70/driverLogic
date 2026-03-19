@@ -7,10 +7,10 @@ from typing import cast
 
 import rclpy.time
 
-from Lib.odomVec import Odom
-from Lib.bytes import turn_to_bytes
-import Lib.rosBridgeNode as ros_bridge_module
-from Lib.AsyncTools import async_property
+from MainLogic.Lib.odomVec import Odom
+from MainLogic.Lib.bytes import turn_to_bytes
+from MainLogic.Lib import rosBridgeNode as ros_bridge_module
+from MainLogic.Lib.AsyncTools import async_property
 
 
 class TFManager:

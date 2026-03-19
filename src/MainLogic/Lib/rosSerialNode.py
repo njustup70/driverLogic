@@ -1,6 +1,6 @@
 from typing import Optional
 from rclpy.node import Node
-from Lib.mySerial import AsyncSerial_t
+from MainLogic.Lib.mySerial import AsyncSerial_t
 from std_msgs.msg import UInt8MultiArray
 
 class SerialNode(Node):

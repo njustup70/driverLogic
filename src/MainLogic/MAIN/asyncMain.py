@@ -2,16 +2,13 @@
 异步主逻辑和其他函数
 '''
 import asyncio
-from Lib.odomVec import Odom
-import Lib.rosBridgeNode as ros_bridge_module
-from app.TFManager import move_to
-from app.climb_manager import climb
-import globalCallback as gcb 
-from app.TFManager import TFManagerInstance
+from MainLogic.Lib.odomVec import Odom
+from MainLogic.Lib import rosBridgeNode as ros_bridge_module
+from MainLogic.app.TFManager import move_to, TFManagerInstance
+from MainLogic.app.climb_manager import climb
+from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
-from app.actions import QR_recog, QR_recog_off, QRRecogInstance
-import Lib.rosSerialNode as ros_serial_module
-from Lib.rosSerialNode import start_serial_process
+from MainLogic.Lib.rosSerialNode import start_serial_process
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）

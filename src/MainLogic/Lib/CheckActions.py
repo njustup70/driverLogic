@@ -1,6 +1,5 @@
 import asyncio
-import Lib.rosBridgeNode as ros_bridge_module
-from Lib.AsyncTools import async_property
+from MainLogic.Lib.AsyncTools import async_property
 
 
 serial_action_finish = async_property(bytes)
