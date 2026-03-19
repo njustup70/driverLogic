@@ -46,8 +46,12 @@ class TFManager:
         self.sick_buffer_size = 10
         self.sick_buffer: list[float] = []
 
-    def register_tf_chain(self):
+    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,laser2Base: Odom):
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
+        assert sick2Base is not None and map2BaseInit is not None and laser2Base is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
+        self.laser_to_base = laser2Base
+        self.mapToBaseInit = map2BaseInit
+        self.sickToBaseLink = sick2Base
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
@@ -117,6 +121,7 @@ class TFManager:
         """统一更新任务：10ms 执行 odom 更新，每 100ms 执行一次 slam 更新。"""
         tick_10ms = 0
         while True:
+            assert self._tf_chain_registered, 'TF chain is not registered yet!'
             try:
                 self.odom_10ms()
                 if tick_10ms % 10 == 0:
