@@ -9,6 +9,9 @@ class rosBridgeNode(Node):
     """ROS2 bridge node for serial and TF related communication."""
 
     def __init__(self):
+        # 注意：这里不启动 rosSerialNode 的功能，而是提供一个接口让外部启动并注册回调
+        print('Initializing RosBridgeNode...')
+    def init(self):
         super().__init__('main_node')
         print('MainNode initialized')
         self._serial_tx_pub = self.create_publisher(UInt8MultiArray, 'serial_tx', 10)
@@ -21,7 +24,6 @@ class rosBridgeNode(Node):
         self._tfBroadcaster = TransformBroadcaster(self)
         self._staticTfBroadcaster = StaticTransformBroadcaster(self)
         self._serial_callbacks = []
-
     def register_event_loop(self, loop: asyncio.events.AbstractEventLoop):
         assert isinstance(loop, asyncio.events.AbstractEventLoop), '传入的 loop 必须是 asyncio 的事件循环'
         self._loop = loop
@@ -72,4 +74,4 @@ class rosBridgeNode(Node):
                 break
 
 
-RosBridgeNodeInstance: rosBridgeNode
+RosBridgeNodeInstance: rosBridgeNode=rosBridgeNode()

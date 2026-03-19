@@ -58,7 +58,7 @@ def main():
     '''是在本地命名空间里创建了RosBridgeNodeInstance,修改的是本地的RosBridgeNodeInstance,而不是全局的RosBridgeNodeInstance'''
     '''另外如果在本地命名空间创建全局变量要赋值的话,需要global关键字声明'''
     # ros_bridge_module.RosBridgeNodeInstance = ros_bridge_module.rosBridgeNode()
-    ros_bridge_module.RosBridgeNodeInstance=ros_bridge_module.rosBridgeNode()
+    ros_bridge_module.RosBridgeNodeInstance.init()
     ros_bridge_module.RosBridgeNodeInstance.register_event_loop(asyncioEventLoop)
     # 只把 bridge 节点加入主进程的 executor
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
