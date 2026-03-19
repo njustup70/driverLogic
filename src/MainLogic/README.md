@@ -33,6 +33,7 @@ export PYTHONPATH=/home/Elaina/ros2_ws/src:$PYTHONPATH
 
 - `core/ros_bridge_node.py`: main ROS2 bridge node, topic bridge, TF publish helpers.
 - `core/serial_node.py`: ROS2 serial bridge process entry and node wrapper.
+- `core/my_serial.py`: low-level async serial implementation.
 - `core/tf_manager.py`: shared TF fusion manager and move helper.
 
 ## Lib Responsibilities
@@ -40,7 +41,6 @@ export PYTHONPATH=/home/Elaina/ros2_ws/src:$PYTHONPATH
 - `Lib/AsyncTools.py`: async helper primitives (for example `async_property`).
 - `Lib/odomVec.py`: odometry pose math and transform helpers.
 - `Lib/bytes.py`: bytes serialization utilities for controller payloads.
-- `Lib/mySerial.py`: serial communication wrapper.
 - `Lib/rosSerialNode.py`: compatibility shim that forwards to `MainLogic.core.serial_node`.
 - `Lib/rosBridgeNode.py`: compatibility shim that forwards to `MainLogic.core.ros_bridge_node`.
 - `Lib/CheckActions.py`: action completion wait/check helpers.
