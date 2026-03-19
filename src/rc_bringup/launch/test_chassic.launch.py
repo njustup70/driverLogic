@@ -8,7 +8,7 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-
+from launch.actions import TimerAction
 
 def generate_launch_description():
     ld = LaunchDescription()
@@ -39,8 +39,24 @@ def generate_launch_description():
         output='screen',
         emulate_tty=False,
     )
-
+    ros_bag_node=  Node(
+                    # condition=IfCondition(LaunchConfiguration('use_rosbag_record')),
+                    package='python_pkg',
+                    executable='rosbag_record',
+                    name='rosbag_record',
+                    output='screen',
+                    emulate_tty=True,
+                    parameters=[
+                        # {'topic_blacklist':LaunchConfiguration("topic_blacklist")}
+                        {'topic_blacklist':['*/compressed*','/livox/lidar','livox/imu']}
+                    ]
+                )
+    ros_bag_action=TimerAction(
+        period=5.0,  # Delay in seconds
+        actions=[ros_bag_node]
+    )
     ld.add_action(airy_launch)
-    # ld.add_action(slam_main)
+    ld.add_action(slam_main)
     ld.add_action(foxglove)
+    ld.add_action(ros_bag_action)
     return ld
