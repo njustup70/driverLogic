@@ -7,6 +7,13 @@ from MainLogic.Lib.AsyncTools import async_property
 from MainLogic.Lib.bytes import turn_to_bytes
 from MainLogic.Lib.CheckActions import check_finish
 
+
+serial_action_finish = async_property(bytes)
+
+
+
+    
+
 # 获取矛头
 async def take_spear_head():
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
