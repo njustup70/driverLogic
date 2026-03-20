@@ -90,7 +90,7 @@ class TFManager:
         wheel_pose = cast(Odom, self._odomToBase)
         self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, wheel_pose)
         fused_base = self._mapToSlamInit @ self._slamInitToOdom @ wheel_pose
-        self.mapToBase = fused_base
+        self._mapToBase = fused_base
         self.baseLinkOdom = fused_base
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
 
