@@ -3,6 +3,9 @@
 # 是否开启自动启动服务 (true: 开启, false: 关闭)
 enabled: false
 
+# 是否独立开启 Sunshine 自启 (true: 开启, false: 关闭)
+sunshine_enabled: true
+
 # 全局日志文件路径
 log_file: "~/njustup70/driverLogic/src/autostart/autostart.log"
 
@@ -14,4 +17,3 @@ containers:
 
   - name: "voxel_slam_ros2"
     compose_dir: "~/njustup70/Voxel-SLAM/.devcontainer"
-

@@ -75,6 +75,10 @@ log_dir = os.path.dirname(LOG_PATH)
 if log_dir and not os.path.exists(log_dir):
     os.makedirs(log_dir, exist_ok=True)
 
+# 每次运行脚本时，先清空（覆盖）历史日志
+with open(LOG_PATH, 'w') as lf:
+    pass
+
 def write_to_log(msg):
     # 去掉颜色代码再写入文件
     import re
@@ -146,38 +150,52 @@ for item in containers:
 if path_errors > 0:
     log_info(f"注意：共有 {path_errors} 个路径检查未通过。")
 
-# 2. 检查总开关
-if not config.get('enabled', True) and not FORCE_RUN:
+# 2 & 3. 检查容器开关并遍历启动容器
+if config.get('enabled', True) or FORCE_RUN:
+    if FORCE_RUN:
+        log_info("🚀 检测到 --force 参数，正在强制执行启动流程...")
+
+    for item in containers:
+        name = item.get('name', 'Unknown')
+        compose_dir = expand_path(item.get('compose_dir'))
+
+        print(f"\n{GREEN}========================================{RESET}")
+        log_info(f"正在拉起项目: {name}")
+        print(f"{GREEN}========================================{RESET}")
+        
+        # 优先启动 Compose 目录
+        if compose_dir and os.path.exists(compose_dir):
+            log_hint(f"工作目录: {compose_dir}")
+            log_info(f"正在执行 Docker Compose...")
+            if run_cmd(f"cd {compose_dir} && docker compose up -d"):
+                log_success(f"{name} 启动指令已完成。")
+        else:
+            log_error(f"找不到路径: {compose_dir}")
+            log_hint(f"尝试通过名称直接启动容器: {name}")
+            if run_cmd(f"docker start {name}"):
+                log_success(f"容器 {name} 已拉起。")
+        
+        time.sleep(1)
+else:
     print("")
-    log_info("⚠️ 自动启动已关闭 (enabled: false)。")
+    log_info("⚠️ 容器自动启动已关闭 (enabled: false)。已跳过容器拉起。")
     log_hint("提示: 若要强制启动容器，请手动运行: ./autostart_run.sh --force")
-    exit(0)
 
-if FORCE_RUN:
-    log_info("🚀 检测到 --force 参数，正在强制执行启动流程...")
-
-# 3. 遍历并启动容器
-for item in containers:
-    name = item.get('name', 'Unknown')
-    compose_dir = expand_path(item.get('compose_dir'))
-
+# 4. 独立拉起 Sunshine 进程
+sunshine_enabled = config.get('sunshine_enabled', False)
+if sunshine_enabled or FORCE_RUN:
     print(f"\n{GREEN}========================================{RESET}")
-    log_info(f"正在拉起项目: {name}")
+    log_info("正在拉起项目: Sunshine")
     print(f"{GREEN}========================================{RESET}")
-    
-    # 优先启动 Compose 目录
-    if compose_dir and os.path.exists(compose_dir):
-        log_hint(f"工作目录: {compose_dir}")
-        log_info(f"正在执行 Docker Compose...")
-        if run_cmd(f"cd {compose_dir} && docker compose up -d"):
-            log_success(f"{name} 启动指令已完成。")
-    else:
-        log_error(f"找不到路径: {compose_dir}")
-        log_hint(f"尝试通过名称直接启动容器: {name}")
-        if run_cmd(f"docker start {name}"):
-            log_success(f"容器 {name} 已拉起。")
-    
-    time.sleep(1)
+    try:
+        # 使用 Popen 将 sunshine 放入后台运行，避免阻塞主脚本的退出
+        subprocess.Popen("nohup sunshine > /tmp/autostart_sunshine.log 2>&1 &", shell=True)
+        log_success("Sunshine 启动指令已完成 (后台运行)。")
+    except Exception as e:
+        log_error(f"Sunshine 启动报错: {e}")
+else:
+    print("")
+    log_hint("Sunshine 自动启动配置为关闭 (sunshine_enabled: false)，已跳过。")
 
 print("")
 log_success("✅ 所有启动流程已完成。")
