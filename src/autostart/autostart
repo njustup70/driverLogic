@@ -1,0 +1,265 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:          ROBOCON autostart
+# Author:           Nagisa 2964793117@qq.com
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Description:       Auto-launch ROS2 driver and LIO-SAM containers with Docker Compose
+### END INIT INFO
+
+# 配置文件路径
+LOG_FILE="/home/up70/ros2_ws/src/autostart/startlog.log"
+LOCK_FILE="/home/up70/ros2_ws/src/autostart/startlog.lock"
+
+# 项目目录定义
+VOXEL_SLAM_DIR="/home/up70/slam_docker/VoxelSlam/.devcontainer"
+LIO_SAM_DIR="/home/up70/slam_docker/lio_sam/.devcontainer"
+POINT_LIO_DIR="/home/up70/slam_docker/point_lio/.devcontainer"
+ros2_ws_DIR="/home/up70/ros2_ws/.devcontainer"
+
+init_log() {
+    mkdir -p "$(dirname "$LOG_FILE")"
+    touch "$LOG_FILE"
+    # 使用当前用户（推荐）
+    chown $(id -u):$(id -g) "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
+}
+
+# 日志记录函数
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
+}
+
+# 清理现有容器
+clean_containers() {
+    log "🧹 清理现有容器..."
+    docker rm -f ros2driver-container lio_sam_container voxel_slam_container point_lio_container 2>/dev/null >> "${LOG_FILE}" 2>&1
+    if [ $? -eq 0 ]; then
+        log "✅ 容器已成功移除"
+    else
+        log "⚠️  没有找到要移除的容器或发生错误"
+    fi
+}
+
+# 启动LIO-SAM容器
+start_lio_sam() {
+    log "🚀 启动LIO-SAM容器..."
+    pushd "${LIO_SAM_DIR}" >/dev/null || { log "❌ 无法进入目录: ${LIO_SAM_DIR}"; return 1; }
+    
+    # 后台启动容器并记录日志
+    docker compose up -d >> "${LOG_FILE}" 2>&1
+    
+    # 等待容器启动（最长30秒）
+    local timeout=30
+    while (( timeout-- > 0 )); do
+        if docker ps --filter "name=lio_sam_container" --format "{{.Status}}" | grep -q "Up"; then
+            log "✅ LIO-SAM容器已启动"
+            LIO_CONTAINER_ID=$(docker ps -qf "name=lio_sam_container")
+            log "📌 容器ID: ${LIO_CONTAINER_ID}"
+            popd >/dev/null
+            return 0
+        fi
+        sleep 1
+    done
+    
+    log "❌ LIO-SAM容器启动超时，查看日志: docker compose logs"
+    docker compose logs >> "${LOG_FILE}" 2>&1
+    popd >/dev/null
+    return 1
+}
+
+# 启动Point LIO容器
+start_point_lio() {
+    log "🚀 启动Point LIO容器..."
+    pushd "${POINT_LIO_DIR}" >/dev/null || { log "❌ 无法进入目录: ${POINT_LIO_DIR}"; return 1; }
+    # 后台启动容器并记录日志
+    docker compose up -d >> "${LOG_FILE}" 2>&1
+    # 等待容器启动（最长30秒）
+    local timeout=30
+    while (( timeout-- > 0 )); do
+        if docker ps --filter "name=point_lio_container" --format "{{.Status}}" | grep -q "Up"; then
+            log "✅ Point LIO容器已启动"
+            POINT_LIO_CONTAINER_ID=$(docker ps -qf "name=point_lio_container")
+            log "📌 容器ID: ${POINT_LIO_CONTAINER_ID}"
+            popd >/dev/null
+            return 0
+        fi
+        sleep 1
+    done
+    log "❌ Point LIO容器启动超时，查看日志: docker compose logs"
+    docker compose logs >> "${LOG_FILE}" 2>&1
+    popd >/dev/null
+    return 1
+}
+
+# 启动VoxelSlam容器
+start_voxel_slam() {
+    log "🚀 启动VoxelSlam容器..."
+    pushd "${VOXEL_SLAM_DIR}" >/dev/null || { log "❌ 无法进入目录: ${VOXEL_SLAM_DIR}"; return 1; }
+    
+    # 后台启动容器并记录日志
+    docker compose -f ./loc.yaml up -d >> "${LOG_FILE}" 2>&1
+    # docker compose up -d >> "${LOG_FILE}" 2>&1
+
+    # 等待容器启动（最长30秒）
+    local timeout=30
+    while (( timeout-- > 0 )); do
+        if docker ps --filter "name=voxel_slam_container" --format "{{.Status}}" | grep -q "Up"; then
+            log "✅ VoxelSlam容器已启动"
+            VOXEL_CONTAINER_ID=$(docker ps -qf "name=voxel_slam_container")
+            log "📌 容器ID: ${VOXEL_CONTAINER_ID}"
+            popd >/dev/null
+            return 0
+        fi
+        sleep 1
+    done
+    
+    log "❌ VoxelSlam容器启动超时，查看日志: docker compose logs"
+    docker compose logs >> "${LOG_FILE}" 2>&1
+    popd >/dev/null
+    return 1
+}
+
+
+# 启动ROS2 Driver容器
+start_ros2_ws() {
+    log "🚀 启动ROS2 Driver容器..."
+    pushd "${ros2_ws_DIR}" >/dev/null || { log "❌ 无法进入目录: ${ros2_ws_DIR}"; return 1; }
+    
+    # 后台启动容器并记录日志
+    docker compose up -d >> "${LOG_FILE}" 2>&1
+    
+    # 等待容器启动（最长30秒）
+    local timeout=30
+    while (( timeout-- > 0 )); do
+        if docker ps --filter "name=ros2driver-container" --format "{{.Status}}" | grep -q "Up"; then
+            log "✅ ROS2 Driver容器已启动"
+            ROS2_CONTAINER_ID=$(docker ps -qf "name=ros2driver-container")
+            log "📌 容器ID: ${ROS2_CONTAINER_ID}"
+            popd >/dev/null
+            return 0
+        fi
+        sleep 1
+    done
+    
+    log "❌ ROS2 Driver容器启动超时，查看日志: docker compose logs"
+    docker compose logs >> "${LOG_FILE}" 2>&1
+    popd >/dev/null
+    return 1
+}
+
+# 启动ROS2应用
+start_ros2_launch() {
+    log "⏳ 验证ROS2 Driver容器状态..."
+    
+    # 等待容器完全就绪（检查ros2命令是否可用）
+    local timeout=20
+    while (( timeout-- > 0 )); do
+        if docker exec ros2driver-container fish -c "command -v ros2" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+    
+    if (( timeout <= 0 )); then
+        log "❌ ROS2 Driver容器未就绪，ros2命令不可用"
+        return 1
+    fi
+
+    # 清理可能存在的旧ROS2应用进程
+    log "🧹 清理可能存在的旧ROS2应用进程..."
+    docker exec ros2driver-container fish -c "pkill -f 'ros2 launch rc_bringup yangyang.launch.py'" 2>/dev/null
+    sleep 1  # 确保进程完全终止
+    
+    log "🚀 执行: ros2 launch rc_bringup yangyang.launch.py"
+    docker exec -d ros2driver-container fish -c "ros2 launch rc_bringup yangyang.launch.py > /tmp/ros2_launch.log 2>&1"
+        
+    # 验证应用是否启动
+    sleep 3  # 等待进程启动
+    if docker exec ros2driver-container pgrep -f "ros2 launch rc_bringup yangyang.launch.py" >/dev/null; then
+        log "✅ ROS2应用已启动 (PID: $(docker exec ros2driver-container pgrep -f 'ros2 launch rc_bringup yangyang.launch.py'))"
+        log "📋 应用日志位置: /tmp/ros2_launch.log"
+    else
+        log "❌ ROS2应用启动失败，查看日志: docker exec ros2driver-container cat /tmp/ros2_launch.log"
+        return 1
+    fi
+}
+
+start() {
+    init_log
+    log "🔒 创建锁文件: $$ > ${LOCK_FILE}"
+    echo $$ > "${LOCK_FILE}"
+    
+    clean_containers
+    start_ros2_ws || return 1
+    sleep 5 
+    start_ros2_launch || return 1
+    sleep 6
+    # start_lio_sam 
+    # start_point_lio 
+    start_voxel_slam 
+    log "✅ 所有服务已启动完成"
+}
+
+
+# 停止服务
+stop() {
+    log "🛑 停止所有服务..."
+    clean_containers
+    
+    # 停止docker compose服务
+    pushd "${LIO_SAM_DIR}" >/dev/null && docker compose down
+    popd >/dev/null
+    pushd "${ros2_ws_DIR}" >/dev/null && docker compose down
+    popd >/dev/null
+    pushd "${VOXEL_SLAM_DIR}" >/dev/null && docker compose down
+    popd >/dev/null
+    pushd "${POINT_LIO_DIR}" >/dev/null && docker compose down
+    popd >/dev/null
+    
+    log "🔓 移除锁文件"
+    [ -f "${LOCK_FILE}" ] && rm -f "${LOCK_FILE}"
+    log "✅ 所有服务已停止"
+}
+
+# 服务状态检查
+status() {
+    if [ -f "${LOCK_FILE}" ]; then
+        log "✅ 服务正在运行 (PID: $(cat "${LOCK_FILE}"))"
+        # 检查容器状态
+        docker ps --filter "name=ros2driver-container" | grep -q "Up" && \
+            log "  - ROS2 Driver容器: 运行中" || log "  - ROS2 Driver容器: 未运行"
+        docker ps --filter "name=lio_sam_container" | grep -q "Up" && \
+            log "  - LIO-SAM容器: 运行中" || log "  - LIO-SAM容器: 未运行"
+        docker ps --filter "name=voxel_slam_container" | grep -q "Up" && \
+            log "  - VoxelSlam容器: 运行中" || log "  - VoxelSlam容器: 未运行"
+        docker ps --filter "name=point_lio_container" | grep -q "Up" && \
+            log "  - Point LIO容器: 运行中" || log "  - Point LIO容器: 未运行"
+    else
+        log "❌ 服务未运行"
+    fi
+}
+
+# 主控制逻辑
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        sleep 2
+        start
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
