@@ -1,49 +1,45 @@
 name: driver
-x-common:
-  # 定义别名，用于引用
-  &common
-  environment:
-    - DISPLAY=${DISPLAY}
-    - NVIDIA_VISIBLE_DEVICES=all
-    - NVIDIA_DRIVER_CAPABILITIES=all
-    - OMP_WAIT_POLICY=passive
-    - TERM=xterm-256color
-    - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp # 使用CycloneDDS就取消注释此行
-    - ROS_LOCALHOST_ONLY=1
-  volumes:
-    - /tmp/.X11-unix:/tmp/.X11-unix
+
+# 1. 定义公共环境变量 (Map 格式)
+x-common-env: &common_env
+  DISPLAY: ${DISPLAY}
+  NVIDIA_VISIBLE_DEVICES: all
+  NVIDIA_DRIVER_CAPABILITIES: all
+  OMP_WAIT_POLICY: passive
+  TERM: xterm-256color
+  RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+  ROS_LOCALHOST_ONLY: 1
+
+# 2. 定义公共配置
+x-common: &common
   tty: true
   network_mode: host
-  pid: "host" # 添加 pid 命名空间共享
-  ipc: "host" # 添加 ipc 命名空间共享    
+  pid: "host"
+  ipc: "host"
   privileged: true
   user: "Elaina"
   stdin_open: true
+
 services:
   driverLogic-service:
-    # build:
-    #   context: ..
-    #   dockerfile: .devcontainer/Dockerfile
     image: elainasuki/rc2026:driverLogic
     container_name: driverLogic_container_dev
     <<: *common
     environment:
-      - PYTHONPATH=/home/Elaina/ros2_ws/src:$PYTHONPATH
+      <<: *common_env  # 这里会把公共变量展开到这一层
+      PYTHONPATH: /home/Elaina/ros2_ws/src:$$PYTHONPATH # 注意：使用 $$ 避免 Compose 报错
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
       - driverLogic_volume:/home/Elaina/ros2_ws
       - /var/run/docker.sock:/var/run/docker.sock
       - /dev:/dev
-    working_dir: "/home/Elaina/ros2_ws" # 指定默认工作目录
-    # ros-noetic:
-    #   <<: *common
-    #   image: elainasuki/ros:ros-noetic-full
-    #   container_name: ros-noetic-master
-    #   entrypoint: [ "/bin/bash", "-c", "source /opt/ros/noetic/setup.bash && roscore" ]
+    working_dir: "/home/Elaina/ros2_ws"
+
 volumes:
   driverLogic_volume:
     driver: local
     driver_opts:
-      type: none # 表示直接绑定本地目录
-      device: ./.. # 对应原 ./..（当前 Compose 所在目录的上一级）
-      o: bind # 启用绑定模式，保证双向同步
+      type: none
+      device: ./..
+      o: bind
     name: driverLogic_volume
