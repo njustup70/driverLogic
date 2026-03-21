@@ -6,11 +6,17 @@ from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core.tf_manager import TFManagerInstance
 
-def mcu_sensor_callback(data: bytes):
-    """下位机传感器串口回调：单帧输入模式，完成 odom/sick 的检测与解包。"""
+def mcu_transmit_callback(data: bytes):
+    """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
+    # odom数据帧：
     _ODOM_FRAME_PREFIX = b'\xFF\xAA'
     _ODOM_FRAME_LEN = 14
+    # sick数据帧：
     _SICK_FRAME_LEN = 20
+    # slam correct纠正帧：
+    _CORRECT_FRAME_PREFIX = b'\xFF\xB2'
+    _CORRECT_FRAME_LEN = 4
+    
     if not data:
         return
 
@@ -22,10 +28,21 @@ def mcu_sensor_callback(data: bytes):
         sick_tail = data[19]
         sick_valid = sick_header == sick_tail and ((sum(data[1:19]) & 0xFF) == sick_tail)
 
-    if not odom_valid and not sick_valid:
-        return
+    correct_valid = False
+    if len(data) == _CORRECT_FRAME_LEN:
+        # 帧格式：FF B2 [checksum] FF
+        # checksum = 0xB2 (frame type)
+        correct_header = data[:2] == _CORRECT_FRAME_PREFIX
+        correct_checksum = data[2] == 0xB2
+        correct_tail = data[3] == 0xFF
+        correct_valid = correct_header and correct_checksum and correct_tail
 
-    if odom_valid and sick_valid:
+    # 检查帧类型互斥性
+    frame_count = sum([odom_valid, sick_valid, correct_valid])
+    if frame_count == 0:
+        return
+    
+    if frame_count > 1:
         print("帧类型歧义，丢弃该帧")
         return
 
@@ -38,6 +55,10 @@ def mcu_sensor_callback(data: bytes):
             print(f"ODOM解析错误: {e}")
         return
 
+    if correct_valid:
+        serial_correct_callback(data)
+        return
+
     try:
         sick_payload = data[3:19]
         sick_floats = struct.unpack('<4f', sick_payload)
@@ -45,6 +66,23 @@ def mcu_sensor_callback(data: bytes):
         TFManagerInstance.sick(float(distance))
     except Exception as e:
         print(f"SICK解析错误: {e}")
+
+
+def serial_correct_callback(data: bytes):
+    """
+    correct纠正指令核心处理函数
+    帧格式：FF B2 [checksum=0xB2] FF (4 字节)
+    """
+    try:
+        result = TFManagerInstance.apply_sick_initial_yaw_correction()
+        if result:
+            print("✓ SLAM correct 纠正指令已触发，SICK yaw 纠正成功")
+        else:
+            print("✗ SLAM correct 纠正指令触发失败：SICK 缓存为空或纠正失败")
+        return result
+    except Exception as e:
+        print(f"✗ SLAM correct 纠正指令处理错误: {e}")
+        return False
 
 
 # def example_serial_callback(data: bytes):

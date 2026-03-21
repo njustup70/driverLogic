@@ -334,9 +334,17 @@ class fusion_node_t(Node):
             return
         
     def robot_state_callback(self, msg: String):
-        """功能描述：ros2的订阅者的回调函数,接收到消息的时候进行解析，有三个状态，支持'纠正'指令（用Sick数据），'日墙'就去计算slam的坐标系和真实坐标系的一个yaw角的偏差，'reset_slam就认为yaw没有偏差'"""
         """
-            参数声明：
+        ROS2 robot_state 订阅回调函数
+        
+        处理三类指令：
+        1. 'correct'：使用 SICK 数据进行 SLAM 纠正（支持 JSON 格式）
+        2. 'riqiang'：日墙纠正（从 SLAM TF 计算 yaw 偏差）
+        3. 'reset_slam'：重置 SLAM（角度偏差清零）
+        
+        ⚠️ 注意：生产环境已迁移至串口二进制帧协议（globalCallback.py）
+            串口帧格式：ODOM(FF AA)、SICK(20字节)、CORRECT(FF B2 B2 FF)
+            此 ROS 接口保留用于测试和兼容性，最终使用串口帧直接触发 TFManager 纠正逻辑
         """
         data = json.loads(msg.data)
         
