@@ -1,67 +1,77 @@
-# 定义公共配置（x-开头的扩展字段，可被复用）
-x-common:
-  # 定义别名，用于引用
-  &common
-  environment:
-    - DISPLAY=${DISPLAY}
-    - NVIDIA_VISIBLE_DEVICES=all
-    - NVIDIA_DRIVER_CAPABILITIES=all
-    - OMP_WAIT_POLICY=passive
-    - TERM=xterm-256color
-    - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp # 使用CycloneDDS就取消注释此行
-    - ROS_LOCALHOST_ONLY=1
-  volumes:
-    - /tmp/.X11-unix:/tmp/.X11-unix
+name: driver
+
+x-common-env: &common_env
+  DISPLAY: ${DISPLAY}
+  NVIDIA_VISIBLE_DEVICES: all
+  NVIDIA_DRIVER_CAPABILITIES: all
+  OMP_WAIT_POLICY: passive
+  TERM: xterm-256color
+  RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+  ROS_LOCALHOST_ONLY: 1
+
+x-common: &common
   tty: true
   network_mode: host
-  pid: "host" # 添加 pid 命名空间共享
-  ipc: "host" # 添加 ipc 命名空间共享    
+  pid: "host"
+  ipc: "host"
   privileged: true
+  user: "Elaina"
   stdin_open: true
+
 services:
   driverLogic_service:
-    <<: *common # 引用公共配置
     image: elainasuki/rc2026:driverLogic
     container_name: driverLogic_runtime
+    <<: *common
+    environment:
+      <<: *common_env
+      PYTHONPATH: /home/Elaina/ros2_ws/src:$$PYTHONPATH
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
       - driverLogic_volume:/home/Elaina/ros2_ws
       - /var/run/docker.sock:/var/run/docker.sock
       - /dev:/dev
-    user: "Elaina"
-    working_dir: "/home/Elaina/ros2_ws" # 指定默认工作目录
-    entrypoint: [ "/bin/bash", "-i", "-c", " source ~/.bashrc && ros2 launch rc_bringup driver_with_utils.launch.py" ]
-    # entrypoint: [ "/bin/bash" ]
+    working_dir: "/home/Elaina/ros2_ws"
+    entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch rc_bringup driver_with_utils.launch.py"]
+
   voxel_service:
-    <<: *common # 引用公共配置
     image: elainasuki/rc2026:voxel_slam
     container_name: voxel_slam_runtime
+    <<: *common
+    environment:
+      <<: *common_env
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
       - voxel_map:/home/Elaina/map
       - voxel_volume:/home/Elaina/slam/
-    user: "Elaina"
-    working_dir: "/home/Elaina/slam/VoxelSlam" # 指定默认工作目录
-    entrypoint: [ "/bin/bash", "-i", "-c", "/home/Elaina/slam/docker_start.sh && source ~/.bashrc && roslaunch my_voxel mid360.launch rviz:=false" ]
-    # 依赖关系，确保 driver_service 先启动
+    working_dir: "/home/Elaina/slam/VoxelSlam"
+    entrypoint: ["/bin/bash", "-i", "-c", "/home/Elaina/slam/docker_start.sh && source ~/.bashrc && roslaunch my_voxel mid360.launch rviz:=false"]
     depends_on:
       driverLogic_service:
-        condition: service_started # 条件：driver_service 启动完成（Compose v2.19+ 支持）
+        condition: service_started
+
   ros2yolo-service:
-    <<: *common # 引用公共配置
     image: elainasuki/rc2026:ros2yolo
     container_name: ros2yolo_runtime
+    <<: *common
+    environment:
+      <<: *common_env
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
       - ros2yolo_volume:/home/Elaina/yolo
-      #- /dev:/dev
-    user: "Elaina"
-    working_dir: "/home/Elaina/yolo" # 指定默认工作目录
-    entrypoint: [ "/bin/bash", "-i", "-c", " source ~/.bashrc && ros2 launch yolov5_ros2 yolov5_launch.py" ]
-    # 依赖关系，确保 driver_service 先启动
+    working_dir: "/home/Elaina/yolo"
+    entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch yolov5_ros2 yolov5_launch.py"]
     depends_on:
       driverLogic_service:
-        condition: service_started # 条件：driver_service 启动完成（Compose v2.19+ 支持）
+        condition: service_started
+
 volumes:
   driverLogic_volume:
-    external: true
+    driver: local
+    driver_opts:
+      type: none
+      device: ..
+      o: bind
     name: driverLogic_volume
   voxel_volume:
     external: true
@@ -72,5 +82,3 @@ volumes:
   ros2yolo_volume:
     external: true
     name: ros2yolo_volume
-
-
