@@ -45,6 +45,10 @@ class TFManager:
         self.sick_lateral_offset = 0.0
         self.sick_buffer_size = 10
         self.sick_buffer: list[float] = []
+        # 含sick修正的 map->slam_init 位姿中间变量，其中包含了地图原点到车体中心偏移
+        self._mapToSlamInitNominal = Odom(0.0, 0.0, 0.0)
+        # 存储了sick修正增量的变量，用于连续修正时的撤销与更新逻辑
+        self._sickYawCorrection = 0.0
 
     def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,laser2Base: Odom):
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
@@ -55,7 +59,9 @@ class TFManager:
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
-        self._mapToSlamInit = self.mapToBaseInit @ self.laser_to_base.inverse()
+        self._mapToSlamInitNominal = self.mapToBaseInit @ self.laser_to_base.inverse()
+        self._mapToSlamInit = self._mapToSlamInitNominal
+        self._sickYawCorrection = 0.0
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         self._tf_chain_registered = True
 
@@ -70,13 +76,29 @@ class TFManager:
             self.sick_buffer.pop(0)
 
     def apply_sick_initial_yaw_correction(self) -> bool:
-        """使用 sick 缓存值修正 map->slam_init 的初始 yaw。"""
+        """使用 sick 缓存值修正 map->slam_init 的初始 yaw（增量更新，可撤销前次修正）。"""
         if not self.sick_buffer or not self._has_slam_pose:
             return False
-        sick_pose = self._mapToBase @ self.sickToBaseLink
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
-        yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
-        self._mapToSlamInit = Odom(0.0, 0.0, yaw_correction)
+
+        # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
+        base_without_prev = Odom(
+            self._mapToBase.x,
+            self._mapToBase.y,
+            self._mapToBase.yaw - self._sickYawCorrection,
+        )
+        sick_pose = base_without_prev @ self.sickToBaseLink
+        new_yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
+
+        # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
+        nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
+        self._mapToSlamInit = Odom(
+            self._mapToSlamInit.x,
+            self._mapToSlamInit.y,
+            nominal_yaw + new_yaw_correction,
+        )
+        self._sickYawCorrection = new_yaw_correction
+
         if self.rosBridge is not None:
             self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         self.sick_buffer.clear()
