@@ -51,6 +51,7 @@ def mcu_transmit_callback(data: bytes):
             odom_payload = data[2:14]
             x, y, yaw = struct.unpack('<fff', odom_payload)
             TFManagerInstance.odom(float(x), float(y), float(yaw))
+            print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
@@ -64,6 +65,7 @@ def mcu_transmit_callback(data: bytes):
         sick_floats = struct.unpack('<4f', sick_payload)
         distance = 1.0667 * sick_floats[0] - 0.0533
         TFManagerInstance.sick(float(distance))
+        print(f"SICK数据解析成功: distance={distance:.3f} m")
     except Exception as e:
         print(f"SICK解析错误: {e}")
 
