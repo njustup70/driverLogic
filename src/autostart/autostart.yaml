@@ -1,7 +1,7 @@
 # === ROS 2 自动化启动参数配置 ===
 
 # 是否开启自动启动服务 (true: 开启, false: 关闭)
-enabled: false
+enabled: true
 
 # 是否独立开启 Sunshine 自启 (true: 开启, false: 关闭)
 sunshine_enabled: true
