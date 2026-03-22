@@ -26,7 +26,7 @@ def generate_launch_description():
         cmd=[
             'bash',
             '-c',
-            'python3 ~/ros2_ws/src/MainLogic/Main.py --main-module slamMain --main-func async_main',
+            'python3 ~/ros2_ws/src/MainLogic/Main.py --main-module testMain --main-func async_main',
         ],
         output='screen',
         emulate_tty=True,

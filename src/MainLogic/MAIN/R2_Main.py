@@ -19,6 +19,14 @@ async def async_main():
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
+    sick2Base=Odom(0.0, -0.340, 0.0)
+    map2BaseInit=Odom(0.390, 0.390, 0.0)
+    laser2Base=Odom(0.0, 0.390, 0.0)
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
+    asyncio.create_task(TFManagerInstance.tf_update_loop())
+    while True:
+        await asyncio.sleep(1)
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
@@ -30,7 +38,6 @@ async def async_main():
     TFManagerInstance.register_tf_chain()
     asyncio.create_task(TFManagerInstance.tf_update_loop())
 
-    asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
     await move_to(1.0,1.0,1.0)
     await climb([0,1], [1,1])

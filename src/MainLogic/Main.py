@@ -39,7 +39,7 @@ def _load_async_entry(main_module: str, main_func: str):
 
 def main():
     parser = argparse.ArgumentParser(description='MainLogic entry selector')
-    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'slamMain'))
+    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'testMain'))
     parser.add_argument('--main-func', default=os.getenv('MAIN_FUNC', 'async_main'))
     args, _ = parser.parse_known_args()
 
@@ -65,7 +65,8 @@ def main():
 
     # 注册异步任务（确保 RosBridgeNodeInstance 已经初始化）
     asyncio.run_coroutine_threadsafe(entry_func(), asyncioEventLoop)
-    print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
+    for i in range(5):
+        print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
 
     try:
         # 3. 主线程被 ROS 2 占据，负责处理所有传感器/通信回调
