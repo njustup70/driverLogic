@@ -7,7 +7,7 @@ x-common-env: &common_env
   NVIDIA_DRIVER_CAPABILITIES: all
   OMP_WAIT_POLICY: passive
   TERM: xterm-256color
-  RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+  RMW_IMPLEMENTATION: rmw_zenoh_cpp
   ROS_LOCALHOST_ONLY: 1
 
 # 2. 定义公共配置
@@ -26,7 +26,7 @@ services:
     container_name: driverLogic_container_dev
     <<: *common
     environment:
-      <<: *common_env  # 这里会把公共变量展开到这一层
+      <<: *common_env # 这里会把公共变量展开到这一层
       PYTHONPATH: /home/Elaina/ros2_ws/src:$$PYTHONPATH # 注意：使用 $$ 避免 Compose 报错
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
@@ -34,7 +34,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /dev:/dev
     working_dir: "/home/Elaina/ros2_ws"
-
+    entrypoint: [ "/bin/bash", "-i", "-c", "ros2 run rmw_zenoh_cpp rmw_zenohd" ]
 volumes:
   driverLogic_volume:
     driver: local
