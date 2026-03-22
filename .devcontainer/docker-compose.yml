@@ -34,7 +34,18 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /dev:/dev
     working_dir: "/home/Elaina/ros2_ws"
-    entrypoint: [ "/bin/bash", "-i", "-c", "ros2 run rmw_zenoh_cpp rmw_zenohd" ]
+    entrypoint:
+      - /bin/bash
+      - -i
+      - -c
+      - |
+        if pgrep -x 'rmw_zenohd' >/dev/null; then
+          echo '[zenoh] rmw_zenohd already running'
+          exec sleep infinity
+        else
+          echo '[zenoh] starting rmw_zenohd...'
+          exec ros2 run rmw_zenoh_cpp rmw_zenohd
+        fi
 volumes:
   driverLogic_volume:
     driver: local
