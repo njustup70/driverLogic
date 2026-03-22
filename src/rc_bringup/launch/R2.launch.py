@@ -36,8 +36,8 @@ def generate_launch_description():
         package='foxglove_bridge',
         executable='foxglove_bridge',
         name='foxglove_bridge',
-        output='screen',
         emulate_tty=False,
+        arguments=['--ros-args', '--log-level', 'FATAL'],
     )
     ros_bag_node=  Node(
                     # condition=IfCondition(LaunchConfiguration('use_rosbag_record')),
