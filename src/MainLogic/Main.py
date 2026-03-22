@@ -65,7 +65,8 @@ def main():
 
     # 注册异步任务（确保 RosBridgeNodeInstance 已经初始化）
     asyncio.run_coroutine_threadsafe(entry_func(), asyncioEventLoop)
-    print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
+    for i in range(5):
+        print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
 
     try:
         # 3. 主线程被 ROS 2 占据，负责处理所有传感器/通信回调
