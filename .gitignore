@@ -16,4 +16,5 @@ metadata.yaml
 *.log
 *.lock
 rosbag2_*/
+package/
 .claude/settings.local.json

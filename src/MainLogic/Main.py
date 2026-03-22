@@ -39,7 +39,7 @@ def _load_async_entry(main_module: str, main_func: str):
 
 def main():
     parser = argparse.ArgumentParser(description='MainLogic entry selector')
-    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'testMain'))
+    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'R1_Main'))
     parser.add_argument('--main-func', default=os.getenv('MAIN_FUNC', 'async_main'))
     args, _ = parser.parse_known_args()
 

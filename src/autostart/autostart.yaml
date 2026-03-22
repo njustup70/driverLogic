@@ -1,19 +1,19 @@
 # === ROS 2 自动化启动参数配置 ===
 
 # 是否开启自动启动服务 (true: 开启, false: 关闭)
-enabled: false
+enabled: true
 
 # 是否独立开启 Sunshine 自启 (true: 开启, false: 关闭)
 sunshine_enabled: true
 
 # 全局日志文件路径
-log_file: "~/njustup70/driverLogic/src/autostart/autostart.log"
+log_file: "~/driverLogic/src/autostart/autostart.log"
 
 # 待启动的 Docker Compose 项目路径
 # 只要项目配置了 command/entrypoint，执行 up -d 就会自动启动业务
 containers:
   - name: "driverLogic_container_dev"
-    compose_dir: "~/njustup70/driverLogic/.devcontainer"
+    compose_dir: "~/driverLogic/.devcontainer"
 
   - name: "voxel_slam_ros2"
-    compose_dir: "~/njustup70/Voxel-SLAM/.devcontainer"
+    compose_dir: "~/Voxel-SLAM/.devcontainer"
