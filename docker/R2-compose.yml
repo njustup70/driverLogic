@@ -6,7 +6,7 @@ x-common-env: &common_env
   NVIDIA_DRIVER_CAPABILITIES: all
   OMP_WAIT_POLICY: passive
   TERM: xterm-256color
-  RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+  RMW_IMPLEMENTATION: rmw_zenoh_cpp
   ROS_LOCALHOST_ONLY: 1
 
 x-common: &common
@@ -22,6 +22,7 @@ services:
   driverLogic_service:
     image: elainasuki/rc2026:driverLogic
     container_name: driverLogic_runtime
+    restart: always
     <<: *common
     environment:
       <<: *common_env
@@ -33,10 +34,16 @@ services:
       - /dev:/dev
     working_dir: "/home/Elaina/ros2_ws"
     entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch rc_bringup R2.launch.py"]
-
+  zenoh_service:
+    image: elainasuki/rc2026:driverLogic
+    container_name: zenoh_runtime
+    restart: always
+    <<: *common
+    entrypoint: ["/bin/bash","-i","-c","ros2 run rmw_zenoh_cpp rmw_zenohd"]
   voxel_service:
     image: elainasuki/rc2026:voxel_slam_ros2
     container_name: voxel_slam_ros2_runtime
+    restart: always
     <<: *common
     environment:
       <<: *common_env
