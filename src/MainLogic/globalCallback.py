@@ -51,7 +51,7 @@ def mcu_transmit_callback(data: bytes):
             odom_payload = data[2:14]
             x, y, yaw = struct.unpack('<fff', odom_payload)
             TFManagerInstance.odom(float(x), float(y), float(yaw))
-            print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
+            # print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
