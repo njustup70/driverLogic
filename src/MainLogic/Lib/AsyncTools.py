@@ -63,9 +63,10 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
 
     def _notify(self):
         # 唤醒所有等待这个事件的协程
-        event = self._get_event()
-        event.clear()  # ✅ 修复：先清除（复位）
-        event.set()    # ✅ 修复：再设置（唤醒等待者）
+        if self._event:
+            self._event.set()
+            # 注意：clear 放在这会导致所有 await 者被唤醒
+            self._event.clear()
 
     # 2. 关键：明确标注返回类型为 T
     def __await__(self) -> Generator[Any, None, T]:
