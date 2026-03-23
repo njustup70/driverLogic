@@ -38,6 +38,7 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
     def _get_event(self) -> asyncio.Event:
         if self._event is None:
             self._event = asyncio.Event()
+            self._event.set()  # ✅ 修复：初值设置事件，避免首次 await 无限阻塞
         return self._event
         
     #只有整个重新赋值才会触发更新,修改value的属性不会触发更新,所以需要在外面修改完属性后再赋值一次,比如baseLink.value=baseLink.value
@@ -62,10 +63,9 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
 
     def _notify(self):
         # 唤醒所有等待这个事件的协程
-        if self._event:
-            self._event.set()
-            # 注意：clear 放在这会导致所有 await 者被唤醒
-            self._event.clear()
+        event = self._get_event()
+        event.clear()  # ✅ 修复：先清除（复位）
+        event.set()    # ✅ 修复：再设置（唤醒等待者）
 
     # 2. 关键：明确标注返回类型为 T
     def __await__(self) -> Generator[Any, None, T]:

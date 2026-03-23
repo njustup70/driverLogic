@@ -116,7 +116,7 @@ def climb_type_callback(data: bytes):
     - 0x00 = 0b00000000 → 腿部低位为 0，所以腿部状态均为 0
     """
     if data[0:2] == b'\xFF\xB1':
-        print(f"回调函数收到串口数据:{data.hex()}")
+        #print(f"回调函数收到串口数据:{data.hex()}")
         
         try:
             # ===== 解析 climb_type =====

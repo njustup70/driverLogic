@@ -7,8 +7,9 @@ from MainLogic.core.tf_manager import TFManagerInstance, move_to
 
 
 class ClimbManager:
-    climb_type = async_property(list[bool])
-    climb_arm = async_property(list[int])
+    # ✅ 修复：初值设置为具体的列表而非类型构造函数
+    climb_type = async_property(lambda: [False, False, False, False])
+    climb_arm = async_property(lambda: [0, 0])  # 0=缩回, 1=调整中, 2=到位
 
     meilin_place = [0.0, 0.0]
     meilin_distance = [1.2, -1.2]
@@ -70,7 +71,8 @@ class ClimbManager:
             max_retries = 200
             for _ in range(max_retries):
                 current_type = await ClimbManagerInstance.climb_type
-                if current_type[0] is True:
+                # ✅ 修复：添加安全检查，确保列表非空且[0]为True
+                if current_type and len(current_type) > 0 and current_type[0] is True:
                     print("\u2713 标志位1已激活")
                     break
                 ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB0')
@@ -99,7 +101,8 @@ class ClimbManager:
             max_retries = 200
             for _ in range(max_retries):
                 current_type = await ClimbManagerInstance.climb_type
-                if current_type[0] and current_type[1] and current_type[2]:
+                # ✅ 修复：添加安全检查
+                if current_type and len(current_type) >= 3 and current_type[0] and current_type[1] and current_type[2]:
                     print("\u2713 标志位1,2,3已激活")
                     break
                 ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB0')
@@ -123,7 +126,8 @@ class ClimbManager:
             max_retries = 200
             for _ in range(max_retries):
                 current_type = await ClimbManagerInstance.climb_type
-                if all(current_type):
+                # ✅ 修复：添加安全检查
+                if current_type and len(current_type) >= 4 and all(current_type):
                     print("\u2713 标志位1,2,3,4已全部激活")
                     break
                 ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB0')
