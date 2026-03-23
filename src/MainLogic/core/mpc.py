@@ -310,6 +310,7 @@ async def mpc_loop():
             x = np.array(current_odom.as_array()).reshape((3, 1))
             u = MPCPathFollowerInstance.update(x)
             print(f"MPC output control: {u}")
+            
             #发布控制指令
         else:
             print("Waiting for odometry data...")
