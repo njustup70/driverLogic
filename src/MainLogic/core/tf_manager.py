@@ -7,6 +7,7 @@ import math
 from typing import cast
 
 import rclpy.time
+from geometry_msgs.msg import Vector3Stamped
 
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.Lib.bytes import turn_to_bytes
@@ -63,6 +64,8 @@ class TFManager:
         self._mapToSlamInit = self._mapToSlamInitNominal
         self._sickYawCorrection = 0.0
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
+        # 注册 Vector3Stamped 发布者
+        self.rosBridge.register_ros2_pub('base_link_odom', Vector3Stamped)
         self._tf_chain_registered = True
 
     def odom(self, x: float, y: float, yaw: float):
@@ -115,6 +118,14 @@ class TFManager:
         self._mapToBase = fused_base
         self.baseLinkOdom = fused_base
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
+        # 发布 Vector3Stamped 话题
+        odom_msg = Vector3Stamped()
+        odom_msg.header.stamp = self.rosBridge.get_clock().now().to_msg()
+        odom_msg.header.frame_id = self.map_frame
+        odom_msg.vector.x = fused_base.x
+        odom_msg.vector.y = fused_base.y
+        odom_msg.vector.z = fused_base.yaw
+        self.rosBridge.publish_ros2('base_link_odom', odom_msg)
 
     def slam_100ms(self):
         """100ms 更新：读取 SLAM TF 并更新 slam_init->odom。"""
