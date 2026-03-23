@@ -301,3 +301,15 @@ class MPCPathFollower:
         loop = asyncio.get_event_loop()
         u= await loop.run_in_executor(self.pool, self.update, x)
         return u
+MPCPathFollowerInstance = MPCPathFollower(dt=0.1, type='omni')
+def mpc_loop():
+    from MainLogic.core.tf_manager import TFManagerInstance
+    while True:
+        current_odom = TFManagerInstance.baseLinkOdom
+        if current_odom is not None:
+            x = np.array(current_odom.as_array()).reshape((3, 1))
+            u = MPCPathFollowerInstance.update(x)
+            print(f"MPC output control: {u}")
+            #发布控制指令
+        else:
+            print("Waiting for odometry data...")

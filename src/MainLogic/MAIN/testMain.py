@@ -4,6 +4,7 @@ from MainLogic.core.serial_node import start_serial_process
 import asyncio
 from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.Lib.odomVec import Odom
+import MainLogic.core.mpc as mpc
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
     serial_port = '/dev/ttyUSB0'  # 与SICK数据板连接的串口
@@ -19,6 +20,7 @@ async def async_main():
     laser2Base=Odom(0.0, 0.390, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
+    asyncio.create_task(mpc.mpc_loop())
     while True:
         #阻塞，无任务
         await asyncio.sleep(1)

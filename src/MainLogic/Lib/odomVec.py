@@ -3,6 +3,7 @@
 '''
 import math
 from typing import Tuple
+import numpy as np
 
 class Odom:
     '''
@@ -28,6 +29,10 @@ class Odom:
 
     def as_tuple(self) -> Tuple[float, float, float]:
         return (self.x, self.y, self.yaw)
+
+    def as_array(self) -> np.ndarray:
+        """将 Odom 转换为 numpy 数组 [x, y, yaw]。"""
+        return np.array([self.x, self.y, self.yaw])
 
     @property
     def dist(self):
