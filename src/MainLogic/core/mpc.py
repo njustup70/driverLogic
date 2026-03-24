@@ -241,6 +241,22 @@ class MPCPathFollower:
         from concurrent.futures import ThreadPoolExecutor
         self.pool= ThreadPoolExecutor(max_workers=1)
 
+    def get_predicted_trajectory(self):
+        """
+        获取当前最优解的预测轨迹
+        返回形状为 (n_horizon+1, 3) 的数组: [x, y, theta]
+        """
+        # 注意：只有在 make_step 执行后，mpc.opt_x_num 才会更新
+        # 我们从计算好的优化变量中提取状态分量 (_x)
+        # do-mpc 的 opt_x_num 包含了所有预测步的状态和输入
+        try:
+            # 提取预测的状态序列
+            # x_num 的形状通常是 (n_horizon + 1, n_states)
+            pred_x = self.mpc.opt_x_num['_x']
+            return np.array(pred_x) 
+        except Exception as e:
+            return None
+
     def set_path(self,target_points: np.ndarray,target_yaw: float, ref_speed=None):
         self.is_following_path = True
         #传入的target_points是一个二维数组，形状为 (N, 2)，每行是一个路径点的 (x, y) 坐标
@@ -272,16 +288,22 @@ class MPCPathFollower:
     @time_print(10)
     def update(self,x):
         assert isinstance(x, np.ndarray) and x.shape == (3, 1)
-        '''根据当前状态 x 计算控制输入'''
         self._step_count += 1
         if self._step_count % self._history_reset_interval == 0:
             self.mpc.reset_history()
 
         self._update_prediction_reference(x)
         u = self.mpc.make_step(x)
-        #u是二维数组，形状为 (3, 1)，我们需要将其转换为一维数组
+        
+        # --- 新增：获取预测轨迹并发送到 Foxglove ---
         if self.enable_foxglove_stream:
-            foxgloveTools.foxgloveViusalInstance.send(u.flatten(), topic="/mpc/control_input")
+            pred_traj = self.get_predicted_trajectory()
+            if pred_traj is not None:
+                # 发送控制量
+                foxgloveTools.foxgloveViusalInstance.send(u.flatten(), topic="/mpc/control_input")
+                # 发送预测轨迹 (通常需要转换成 Foxglove 支持的 LineStrip 或 Points 格式)
+                # 这里假设你的 foxgloveTools 支持发送 numpy 数组或你自定义了转换
+                foxgloveTools.foxgloveViusalInstance.send(pred_traj, topic="/mpc/predict_traj")
 
         # swerve 输出 [v, alpha, vw]，对外统一成 [vx_body, vy_body, vw]
         if self.drive_type == 'swerve':
