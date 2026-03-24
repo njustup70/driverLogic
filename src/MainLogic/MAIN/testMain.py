@@ -3,6 +3,7 @@ from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
 import asyncio
 from MainLogic.core.tf_manager import TFManagerInstance
+import MainLogic.core.observer as observer_module
 from MainLogic.Lib.odomVec import Odom
 import MainLogic.core.mpc as mpc
 from geometry_msgs.msg import Twist
@@ -22,6 +23,7 @@ async def async_main():
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     asyncio.create_task(mpc.mpc_loop())
+    asyncio.create_task(observer_module.observer_update())
     import numpy as np
     # path=np.array([[1.0, 1.0]])
     # mpc.MPCPathFollowerInstance.set_target_point(10.0, 10.0, 0.5)
