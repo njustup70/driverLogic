@@ -15,6 +15,9 @@ from MainLogic.Lib.AsyncTools import async_property
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 
 
+BASE_LINK_ODOM_TOPIC = '/state/base_link_odom'
+
+
 class TFManager:
     # map->base_link 位姿，由 slam 融合计算得到，供上层异步逻辑使用
     baseLinkOdom = async_property(Odom)
@@ -65,7 +68,7 @@ class TFManager:
         self._sickYawCorrection = 0.0
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         # 注册 Vector3Stamped 发布者
-        self.rosBridge.register_ros2_pub('base_link_odom', Vector3Stamped)
+        self.rosBridge.register_ros2_pub(BASE_LINK_ODOM_TOPIC, Vector3Stamped)
         self._tf_chain_registered = True
 
     def odom(self, x: float, y: float, yaw: float):
@@ -125,7 +128,7 @@ class TFManager:
         odom_msg.vector.x = fused_base.x
         odom_msg.vector.y = fused_base.y
         odom_msg.vector.z = fused_base.yaw
-        self.rosBridge.publish_ros2('/base_link_odom', odom_msg)
+        self.rosBridge.publish_ros2(BASE_LINK_ODOM_TOPIC, odom_msg)
 
     def slam_100ms(self):
         """100ms 更新：读取 SLAM TF 并更新 slam_init->odom。"""

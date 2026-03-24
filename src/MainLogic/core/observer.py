@@ -1,5 +1,7 @@
 import numpy as np
 from MainLogic.Lib.decorder import time_print
+from MainLogic.core import ros_bridge_node as ros_bridge_module
+from geometry_msgs.msg import Vector3Stamped
 class PoseVelocityObserver:
     """使用简化卡尔曼滤波器, 由位姿估计车体系速度 [vx_body, vy_body, yaw_rate]。"""
 
@@ -225,15 +227,34 @@ ObserveInstance = PoseVelocityObserver(
     reset_threshold_yaw=0.8,
 )
 import asyncio
+STATE_KALMAN_OBSERVATION_TOPIC = '/state/velocity_observation'
+
+
 async def observer_update():
     from MainLogic.core.tf_manager import TFManagerInstance
     from MainLogic.Lib.odomVec import Odom
     from typing import cast
     import time
+    state_pub_registered = False
     while True:
         # 这里的输入数据需要替换为实际的位姿测量和时间戳    
         current_time = time.time()
         current_odom:Odom=cast (Odom,TFManagerInstance.baseLinkOdom)
         velocity = ObserveInstance.update(current_odom.x, current_odom.y, current_odom.yaw, stamp_sec=current_time)
         print("Estimated velocity:", velocity)
+
+        ros_bridge = ros_bridge_module.RosBridgeNodeInstance
+        if ros_bridge is not None:
+            if not state_pub_registered:
+                ros_bridge.register_ros2_pub(STATE_KALMAN_OBSERVATION_TOPIC, Vector3Stamped)
+                state_pub_registered = True
+
+            state_msg = Vector3Stamped()
+            state_msg.header.stamp = ros_bridge.get_clock().now().to_msg()
+            state_msg.header.frame_id = 'base_link'
+            state_msg.vector.x = float(velocity[0])
+            state_msg.vector.y = float(velocity[1])
+            state_msg.vector.z = float(velocity[2])
+            ros_bridge.publish_ros2(STATE_KALMAN_OBSERVATION_TOPIC, state_msg)
+
         await asyncio.sleep(0.01)  # 模拟异步更新间隔

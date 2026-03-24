@@ -11,7 +11,7 @@ import asyncio
 from MainLogic.core.linear import SplinePlanner
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 import MainLogic.Lib.foxgloveTools as foxgloveTools
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Vector3Stamped
 '''
 位置闭环mpc,不会追踪路径点。
 '''
@@ -305,10 +305,14 @@ class MPCPathFollower:
         u= await loop.run_in_executor(self.pool, self.update, x)
         return u
 MPCPathFollowerInstance = MPCPathFollower(dt=0.1, type='omni')
+STATE_MPC_CONTROL_TOPIC = '/state/mpc_control'
+
+
 async def mpc_loop():
     from MainLogic.core.tf_manager import TFManagerInstance
     # 控制帧类型: A2 + [vx, vy, vw] float32
     serial_cmd_prefix = b'\xBB'
+    state_pub_registered = False
     while True:                   
         current_odom = TFManagerInstance.baseLinkOdom
         if current_odom is not None:
@@ -318,6 +322,18 @@ async def mpc_loop():
 
             ros_bridge = ros_bridge_module.RosBridgeNodeInstance
             if ros_bridge is not None:
+                if not state_pub_registered:
+                    ros_bridge.register_ros2_pub(STATE_MPC_CONTROL_TOPIC, Vector3Stamped)
+                    state_pub_registered = True
+
+                state_msg = Vector3Stamped()
+                state_msg.header.stamp = ros_bridge.get_clock().now().to_msg()
+                state_msg.header.frame_id = 'base_link'
+                state_msg.vector.x = float(u[0])
+                state_msg.vector.y = float(u[1])
+                state_msg.vector.z = float(u[2])
+                ros_bridge.publish_ros2(STATE_MPC_CONTROL_TOPIC, state_msg)
+
                 # 发布 ROS2 cmd_vel
                 cmd_msg = Twist()
                 cmd_msg.linear.x = float(u[0])
