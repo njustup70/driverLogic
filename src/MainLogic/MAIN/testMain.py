@@ -16,7 +16,6 @@ async def async_main():
         await asyncio.sleep(0.05)
 
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('cmd_vel', Twist)
     sick2Base=Odom(0.0, -0.340, 0.0)
     map2BaseInit=Odom(0.390, 0.390, 0.0)
     laser2Base=Odom(0.0, 0.390, 0.0)

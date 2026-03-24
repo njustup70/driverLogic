@@ -323,7 +323,7 @@ async def mpc_loop():
                 cmd_msg.linear.x = float(u[0])
                 cmd_msg.linear.y = float(u[1])
                 cmd_msg.angular.z = float(u[2])
-                ros_bridge.publish_ros2('cmd_vel', cmd_msg)
+                
 
                 # 同步发送到下位机串口
                 ros_bridge.writeBytes(serial_cmd_prefix + turn_to_bytes([float(u[0]), float(u[1]), float(u[2])]))

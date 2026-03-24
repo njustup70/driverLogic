@@ -125,7 +125,7 @@ class TFManager:
         odom_msg.vector.x = fused_base.x
         odom_msg.vector.y = fused_base.y
         odom_msg.vector.z = fused_base.yaw
-        self.rosBridge.publish_ros2('base_link_odom', odom_msg)
+        self.rosBridge.publish_ros2('/base_link_odom', odom_msg)
 
     def slam_100ms(self):
         """100ms 更新：读取 SLAM TF 并更新 slam_init->odom。"""
