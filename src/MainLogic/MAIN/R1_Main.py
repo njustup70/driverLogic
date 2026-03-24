@@ -13,7 +13,7 @@ async def async_main():
     while ros_bridge_module.RosBridgeNodeInstance is None:
         await asyncio.sleep(0.05)
 
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_sensor_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
     sick2Base=Odom(0.0, 0.390, 0.0) # sick底盘
     map2BaseInit=Odom(0.250, 0.250, 0.0) # 地图起点
     laser2Base=Odom(0.0725, 0.3976, 0.0) # 雷达底盘

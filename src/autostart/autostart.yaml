@@ -1,10 +1,10 @@
 # === ROS 2 自动化启动参数配置 ===
 
 # 是否开启自动启动服务 (true: 开启, false: 关闭)
-enabled: true
+enabled: false
 
 # 是否独立开启 Sunshine 自启 (true: 开启, false: 关闭)
-sunshine_enabled: true
+sunshine_enabled: false
 
 # 全局日志文件路径
 log_file: "~/driverLogic/src/autostart/autostart.log"
