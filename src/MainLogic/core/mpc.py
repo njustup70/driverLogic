@@ -308,8 +308,8 @@ MPCPathFollowerInstance = MPCPathFollower(dt=0.1, type='omni')
 async def mpc_loop():
     from MainLogic.core.tf_manager import TFManagerInstance
     # 控制帧类型: A2 + [vx, vy, vw] float32
-    serial_cmd_prefix = b'\xA0'
-    while True:
+    serial_cmd_prefix = b'\xBB'
+    while True:                   
         current_odom = TFManagerInstance.baseLinkOdom
         if current_odom is not None:
             x = np.array(current_odom.as_array()).reshape((3, 1))
@@ -323,7 +323,7 @@ async def mpc_loop():
                 cmd_msg.linear.x = float(u[0])
                 cmd_msg.linear.y = float(u[1])
                 cmd_msg.angular.z = float(u[2])
-                
+                 
 
                 # 同步发送到下位机串口
                 ros_bridge.writeBytes(serial_cmd_prefix + turn_to_bytes([float(u[0]), float(u[1]), float(u[2])]))
