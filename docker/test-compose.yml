@@ -62,7 +62,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - voxel_ros2_volume:/home/Elaina/ros2_ws
     working_dir: "/home/Elaina/slam/VoxelSlam"
-    entrypoint: ["/bin/bash", "-i", "-c", "source ~/ros2_ws/install/setup.bash && ros2 launch voxel_slam vxlm_mid360.launch.py"]
+    entrypoint: ["/bin/bash", "-i", "-c", "source ~/ros2_ws/install/setup.bash && ros2 launch voxel_slam vxlm_mid360.launch.py rviz:=false"] 
 volumes:
   driverLogic_volume:
     external: true

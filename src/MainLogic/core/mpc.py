@@ -6,9 +6,12 @@ import casadi
 from casadi import vertcat, cos, sin
 import numpy as np
 from MainLogic.Lib.decorder import time_print
+from MainLogic.Lib.bytes import turn_to_bytes
 import asyncio
 from MainLogic.core.linear import SplinePlanner
+from MainLogic.core import ros_bridge_node as ros_bridge_module
 import MainLogic.Lib.foxgloveTools as foxgloveTools
+from geometry_msgs.msg import Twist
 '''
 位置闭环mpc,不会追踪路径点。
 '''
@@ -185,8 +188,8 @@ class MPCPathFollower:
             )
 
             rterm = np.array([50.0, 50.0, 50.0])
-            lower_u = np.array([[-3.0], [-3.0], [-2.0]])
-            upper_u = np.array([[3.0], [3.0], [2.0]])
+            lower_u = np.array([[-0.5], [-0.5], [-1.0]])
+            upper_u = np.array([[0.5], [0.5], [1.0]])
             set_up_settings = {
                 'n_horizon': self.n_horizon,
                 't_step': self.dt,
@@ -304,14 +307,26 @@ class MPCPathFollower:
 MPCPathFollowerInstance = MPCPathFollower(dt=0.1, type='omni')
 async def mpc_loop():
     from MainLogic.core.tf_manager import TFManagerInstance
+    # 控制帧类型: A2 + [vx, vy, vw] float32
+    serial_cmd_prefix = b'\xA0'
     while True:
         current_odom = TFManagerInstance.baseLinkOdom
         if current_odom is not None:
             x = np.array(current_odom.as_array()).reshape((3, 1))
             u = MPCPathFollowerInstance.update(x)
             print(f"MPC output control: {u}")
-            
-            #发布控制指令
+
+            ros_bridge = ros_bridge_module.RosBridgeNodeInstance
+            if ros_bridge is not None:
+                # 发布 ROS2 cmd_vel
+                cmd_msg = Twist()
+                cmd_msg.linear.x = float(u[0])
+                cmd_msg.linear.y = float(u[1])
+                cmd_msg.angular.z = float(u[2])
+                ros_bridge.publish_ros2('cmd_vel', cmd_msg)
+
+                # 同步发送到下位机串口
+                ros_bridge.writeBytes(serial_cmd_prefix + turn_to_bytes([float(u[0]), float(u[1]), float(u[2])]))
         else:
             print("Waiting for odometry data...")
         await asyncio.sleep(0.01)
