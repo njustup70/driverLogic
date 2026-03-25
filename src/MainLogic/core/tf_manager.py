@@ -109,6 +109,7 @@ class TFManager:
     def odom_10ms(self):
         """10ms 更新：发布 odom/base, map/odom, 计算 map/base 并下发到下位机。"""
         if not self._tf_chain_registered or self.rosBridge is None:
+            print(f"[DEBUG] odom_10ms skip: _tf_chain_registered={self._tf_chain_registered}, rosBridge={self.rosBridge is not None}")
             return
         # odom->base_link
         wheel_pose = cast(Odom, self._odomToBase)
@@ -116,7 +117,7 @@ class TFManager:
         fused_base = self._mapToSlamInit @ self._slamInitToOdom @ wheel_pose
         self._mapToBase = fused_base
         self.baseLinkOdom.value = fused_base
-        
+        print(f"is:{fused_base.x}")
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
 
     def slam_100ms(self):
@@ -164,16 +165,16 @@ async def move_to(x, y, yaw):
     TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
     while True:
         TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
-        print("发送移动指令")
+        # print("发送移动指令")
         # 等待 baseLinkOdom 更新
         current_odom = await TFManagerInstance.baseLinkOdom
-        print("位置更新完成")
+        # print("位置更新完成")
         dx = targetOdom - current_odom
         # 距离小于1cm且角度误差小于0.05rad就认为到达目标
         if dx.dist < 0.01 and abs(dx.yaw) < 0.05:
             print('Arrived at target!')
             break
-        # await asyncio.sleep(0.01)
+        await asyncio.sleep(0.01)
 
 
 TFManagerInstance = TFManager()

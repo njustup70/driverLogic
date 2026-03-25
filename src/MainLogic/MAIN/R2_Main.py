@@ -27,12 +27,8 @@ async def async_main():
     laser2Base=Odom(0.0, 0.390, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
-    await move_to(2.5,4.2,0.0)
-    # await climb([0,1], [1,1])
-    while True:
-        # await move_to(2.5,4.2,0.0)
-        await asyncio.sleep(1)
-    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
+    
+    # 注册其他回调和话题
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('spear_status', gcb.spear_callback, type=UInt8MultiArray)
@@ -40,12 +36,10 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
 
-    TFManagerInstance.register_tf_chain()
-    asyncio.create_task(TFManagerInstance.tf_update_loop())
-
     #逻辑实例...,比如移动到某个坐标
-    await move_to(1.0,1.0,1.0)
-    await climb([0,1], [1,1])
+    await move_to(2.5, 4.2, 0.0)
+    # await move_to(1.0, 1.0, 1.0)
+    # await climb([0,1], [1,1])
     # await move_to(2.0, 2.5, 1.6) # 矛头位置
     # await move_to(0.5, 0.5, 0.0) # 原点
     # await take_spear_head()
