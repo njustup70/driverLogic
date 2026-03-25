@@ -11,7 +11,7 @@ class ClimbManager:
     climb_type = async_property(lambda: [False, False, False, False])
     climb_arm = async_property(lambda: [0, 0])  # 0=缩回, 1=调整中, 2=到位
 
-    meilin_place = [0.0, 0.0]
+    meilin_place = [2.5, 4.2]
     meilin_distance = [1.2, -1.2]
     meilin_height = [[0, 0, 0], [1, 2, 3], [2, 3, 2], [1, 2, 3], [2, 1, 2], [0, 0, 0]]
 

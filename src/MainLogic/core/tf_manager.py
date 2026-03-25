@@ -164,6 +164,7 @@ async def move_to(x, y, yaw):
     TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
     while True:
         TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
+        print("发送移动指令")
         # 等待 baseLinkOdom 更新
         current_odom = await TFManagerInstance.baseLinkOdom
         print("位置更新完成")

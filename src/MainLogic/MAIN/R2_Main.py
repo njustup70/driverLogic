@@ -12,7 +12,7 @@ from MainLogic.core.serial_node import start_serial_process
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
-    serial_port = '/dev/ttyACM0'  # 可以根据需要修改串口路径
+    serial_port = '/dev/ttyUSB0'  # 可以根据需要修改串口路径
     baudrate = 115200  # 可以根据需要修改波特率
     start_serial_process(serial_port=serial_port, baudrate=baudrate)
     #注册回调
@@ -22,13 +22,15 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
     sick2Base=Odom(0.0, -0.340, 0.0)
-    map2BaseInit=Odom(0.390, 0.390, 0.0)
+    map2BaseInit=Odom(0.39, 0.39, 0.0)
+    #map2BaseInit=Odom(0.390, 0.390, 0.0)
     laser2Base=Odom(0.0, 0.390, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
-    await move_to(1.0,1.0,1.0)
-    await climb([0,1], [1,1])
+    await move_to(2.5,4.2,0.0)
+    # await climb([0,1], [1,1])
     while True:
+        # await move_to(2.5,4.2,0.0)
         await asyncio.sleep(1)
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
