@@ -10,15 +10,17 @@ import rclpy.time
 
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.Lib.bytes import turn_to_bytes
-from MainLogic.Lib.AsyncTools import async_property
+from MainLogic.Lib.AsyncTools import AsyncVariable
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 
 
 class TFManager:
     # map->base_link 位姿，由 slam 融合计算得到，供上层异步逻辑使用
-    baseLinkOdom = async_property(Odom)
+    
 
     def __init__(self):
+        self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
+        self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
         # 坐标系固定配置（不使用 ROS2 参数）
         self.map_frame = 'map'
         self.slam_init_frame = 'slam_init'
@@ -113,7 +115,8 @@ class TFManager:
         self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, wheel_pose)
         fused_base = self._mapToSlamInit @ self._slamInitToOdom @ wheel_pose
         self._mapToBase = fused_base
-        self.baseLinkOdom = fused_base
+        self.baseLinkOdom.value = fused_base
+        
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
 
     def slam_100ms(self):
@@ -162,13 +165,14 @@ async def move_to(x, y, yaw):
     while True:
         TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
         # 等待 baseLinkOdom 更新
-        current_odom = cast(Odom, TFManagerInstance.baseLinkOdom)
+        current_odom = await TFManagerInstance.baseLinkOdom
+        print("位置更新完成")
         dx = targetOdom - current_odom
         # 距离小于1cm且角度误差小于0.05rad就认为到达目标
         if dx.dist < 0.01 and abs(dx.yaw) < 0.05:
             print('Arrived at target!')
             break
-        await asyncio.sleep(0.01)
+        # await asyncio.sleep(0.01)
 
 
 TFManagerInstance = TFManager()

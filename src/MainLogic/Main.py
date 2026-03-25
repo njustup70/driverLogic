@@ -8,6 +8,7 @@ import inspect
 import multiprocessing
 import os
 import threading
+import traceback
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from MainLogic.core import ros_bridge_node as ros_bridge_module
@@ -37,6 +38,15 @@ def _load_async_entry(main_module: str, main_func: str):
     return entry
 
 
+def _report_async_future_result(fut):
+    """打印后台协程失败堆栈，避免静默退出。"""
+    try:
+        fut.result()
+    except Exception as e:
+        print(f"[Main] async entry crashed: {e!r}")
+        traceback.print_exc()
+
+
 def main():
     parser = argparse.ArgumentParser(description='MainLogic entry selector')
     parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'testMain'))
@@ -64,7 +74,8 @@ def main():
     executor.add_node(ros_bridge_module.RosBridgeNodeInstance)
 
     # 注册异步任务（确保 RosBridgeNodeInstance 已经初始化）
-    asyncio.run_coroutine_threadsafe(entry_func(), asyncioEventLoop)
+    main_future = asyncio.run_coroutine_threadsafe(entry_func(), asyncioEventLoop)
+    main_future.add_done_callback(_report_async_future_result)
     for i in range(5):
         print(f"\033[95m[Main] running MAIN.{args.main_module}.{args.main_func}\033[0m")
 
