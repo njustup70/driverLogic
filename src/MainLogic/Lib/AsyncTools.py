@@ -34,12 +34,6 @@ class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
         self._event: asyncio.Event = asyncio.Event()
         #这里不一定在同一个线程里面,所以需要线程安全的事件循环访问
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-
-    def _get_event(self) -> asyncio.Event:
-        if self._event is None:
-            self._event = asyncio.Event()
-        return self._event
-        
     #只有整个重新赋值才会触发更新,修改value的属性不会触发更新,所以需要在外面修改完属性后再赋值一次,比如baseLink.value=baseLink.value
     # （注：由于下方合并了原代理的 __setattr__ 魔法，现在直接修改属性也会自动触发更新了！）
     @property
