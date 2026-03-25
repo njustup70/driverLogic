@@ -22,7 +22,7 @@ services:
   zenoh_service:
     image: elainasuki/rc2026:driverLogic
     container_name: zenoh_runtime
-    restart: no
+    restart: always
     <<: *common
     entrypoint:
       - /bin/bash
@@ -39,7 +39,7 @@ services:
   driverLogic_service:
     image: elainasuki/rc2026:driverLogic
     container_name: driverLogic_runtime
-    restart: no
+    restart: always
     <<: *common
     environment:
       <<: *common_env
@@ -54,7 +54,7 @@ services:
   voxel_service:
     image: elainasuki/rc2026:voxel_slam_ros2
     container_name: voxel_slam_ros2_runtime
-    restart: no
+    restart: always
     <<: *common
     environment:
       <<: *common_env
