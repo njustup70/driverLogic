@@ -5,6 +5,8 @@ SCRIPT_DIR=$(dirname "$(realpath "$0")")
 sudo apt-get install v4l-utils
 #煞笔盲文挤占ch340
 sudo apt-get remove brltty 
+#先remove自己的udev规则，避免冲突
+sudo rm -f /etc/udev/rules.d/my_dev.rules
 
 # 进入脚本同目录下的 librealsense 目录
 cd "$SCRIPT_DIR/packages/librealsense"
@@ -15,10 +17,6 @@ echo "当前目录: $(pwd)"
 cd "$SCRIPT_DIR/packages/orbbecSDK/misc/scripts"
 echo "当前目录: $(pwd)"
 sudo ./install_udev_rules.sh
-
-# 安装 wheel_imu 规则
-cd "$SCRIPT_DIR/packages/wheel_imu/fdilink_ahrs_ROS2"
-echo "当前目录: $(pwd)"
 # sudo ./wheeltec_udev.sh
 #增加对轮趣imu (fdilink_arhs)的支持
 echo  'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60",ATTRS{serial}=="0003", MODE:="0777", GROUP:="dialout", SYMLINK+="wheeltec_FDI_IMU_GNSS"' >/etc/udev/rules.d/my_dev.rules
@@ -55,7 +53,11 @@ echo 'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
     MODE:="0777", GROUP:="dialout", SYMLINK+="ch040_imu"' >> /etc/udev/rules.d/my_dev.rules
     
 echo 'KERNEL=="ttyACM*", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="6666", MODE:="0777", GROUP:="dialout", SYMLINK+="serial_sick"' >> /etc/udev/rules.d/my_dev.rules
-
+#增加对hik_camera的支持
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="2bdf", ATTRS{idProduct}=="0001", MODE="0777", SYMLINK+="hik_camera"' >> /etc/udev/rules.d/my_dev.rules
 service udev reload
 sleep 2
 service udev restart
+#archlinux系统需要执行以下命令来重新加载 udev 规则并重启 udev 服务：
+sudo systemctl daemon-reload      # 重新加载 systemd 管理配置
+sudo systemctl restart systemd-udevd
