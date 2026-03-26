@@ -4,7 +4,9 @@ import math
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.Lib.AsyncTools import async_property
 from MainLogic.core.tf_manager import TFManagerInstance, move_to
-
+from MainLogic.Lib.odomVec import Odom
+from MainLogic.Lib.bytes import turn_to_bytes
+from MainLogic.core.tf_manager import TFManager
 
 class ClimbManager:
     # ✅ 修复：初值设置为具体的列表而非类型构造函数
@@ -22,7 +24,10 @@ class ClimbManager:
         front_bits = height_to_bits.get(front_height, "00")
         rear_bits = height_to_bits.get(rear_height, "00")
         return int(rear_bits + front_bits, 2)
-
+    def _climb_forward(self):
+        ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xBB' + turn_to_bytes([0.6, 0.0, 0.0]))
+    def _climb_stop(self):
+        ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xBB' + turn_to_bytes([0.0, 0.0, 0.0]))
     async def climb(self, this_post: list, next_post: list):
         """梅林爬墙控制主流程。"""
         this_place = [
@@ -75,9 +80,9 @@ class ClimbManager:
                 if current_type and len(current_type) > 0 and current_type[0] is True:
                     print("\u2713 标志位1已激活")
                     break
-                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB0')
+                self._climb_forward()
                 await asyncio.sleep(0.05)
-
+            self._climb_stop()
             leg_code_stage2 = self._get_leg_encoding(0, target_leg_height)
             print(f"步骤5: 前腿调至0，后腿保持{target_leg_height} -> 发送 FA B1 {leg_code_stage2:02X}")
             ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB1' + bytes([leg_code_stage2]))
@@ -105,9 +110,9 @@ class ClimbManager:
                 if current_type and len(current_type) >= 3 and current_type[0] and current_type[1] and current_type[2]:
                     print("\u2713 标志位1,2,3已激活")
                     break
-                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB0')
+                self._climb_forward()
                 await asyncio.sleep(0.05)
-
+            self._climb_stop()
             leg_code_stage3 = self._get_leg_encoding(0, 0)
             print(f"步骤8: 前后腿均调至0 -> 发送 FA B1 {leg_code_stage3:02X}")
             ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB1' + bytes([leg_code_stage3]))
@@ -130,9 +135,8 @@ class ClimbManager:
                 if current_type and len(current_type) >= 4 and all(current_type):
                     print("\u2713 标志位1,2,3,4已全部激活")
                     break
-                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB0')
                 await asyncio.sleep(0.05)
-
+            await move_to(next_place[0], next_place[1], -math.atan2(target_dir[1], target_dir[0]))
             print("\u2713 爬墙流程完成！")
 
 
