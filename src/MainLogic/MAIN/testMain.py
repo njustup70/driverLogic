@@ -2,7 +2,7 @@ from MainLogic import globalCallback as gcb
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
 import asyncio
-from MainLogic.core.tf_manager import TFManagerInstance
+from MainLogic.core.tf_manager import TFManagerInstance,move_to
 from MainLogic.Lib.odomVec import Odom
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
@@ -19,7 +19,13 @@ async def async_main():
     laser2Base=Odom(0.0, 0.390, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
+    asyncio.create_task(test())
+    await move_to(1.0,1.0,1.0)
     while True:
         #阻塞，无任务
         await asyncio.sleep(1)
+async def test():
+    while True:
+        await TFManagerInstance.baseLinkOdom
+        print(f"baseLinkOdom updated: {TFManagerInstance.baseLinkOdom.value}")
         
