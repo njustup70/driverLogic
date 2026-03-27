@@ -28,8 +28,7 @@ class ClimbManager:
         ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xBB' + turn_to_bytes([0.6, 0.0, 0.0]))
     def _climb_stop(self):
         ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xBB' + turn_to_bytes([0.0, 0.0, 0.0]))
-    async def climb(self, this_post: list, next_post: list):
-        """梅林爬墙控制主流程。"""
+    def climb_find_grid(self, this_post: list, next_post: list):
         this_place = [
             this_post[0] * self.meilin_distance[0] + self.meilin_place[0],
             this_post[1] * self.meilin_distance[1] + self.meilin_place[1],
@@ -41,7 +40,6 @@ class ClimbManager:
             self.meilin_height[next_post[0]][next_post[1]],
         ]
         climb_height = this_place[2] - next_place[2]
-
         if abs(climb_height) not in [1, 2]:
             print(f"error:错误的攀爬要求, climb_height={climb_height}")
             return
@@ -50,98 +48,117 @@ class ClimbManager:
         if abs(target_dir[0] + target_dir[1]) != 1:
             print(f"error:错误的梅林目标要求, target_dir={target_dir}")
             return
-
-        assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
-
-        # await move_to(this_place[0], this_place[1], math.atan2(target_dir[1], target_dir[0]))
-        await move_to(this_place[0], this_place[1], 0.0) # 先不调整朝向，等爬上去再说
-        print("\u2713 移动到起始位置完成，准备爬墙...")
-        target_leg_height = 200 if climb_height == 1 else 400
-        print(f"步骤1: 计算目标腿部高度 {target_leg_height}，准备发送指令...")
-        if climb_height > 0:
-            print(f"\u2713 目标是向上爬，腿部高度设置为 {target_leg_height}")
-            leg_code_stage1 = self._get_leg_encoding(target_leg_height, target_leg_height)
-            print(f"步骤2: 设置前后腿均为{target_leg_height} -> 发送 FA B1 {leg_code_stage1:02X}")
-            ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB1' + bytes([leg_code_stage1]))
-            await asyncio.sleep(0.1)
-
-            print("步骤3: 等待腿部到位...")
-            max_retries = 100
-            for _ in range(max_retries):
-                current_arm = await ClimbManagerInstance.climb_arm
-                if current_arm[0] == 2 and current_arm[1] == 2:
-                    print(f"\u2713 腿部到位 [前腿={current_arm[0]}, 后腿={current_arm[1]}]")
-                    break
-                await asyncio.sleep(0.05)
-
-            print("步骤4: 发送B0直到标志位1激活...")
-            max_retries = 200
-            for _ in range(max_retries):
-                current_type = await ClimbManagerInstance.climb_type
-                # ✅ 修复：添加安全检查，确保列表非空且[0]为True
-                if current_type and len(current_type) > 0 and current_type[0] is True:
-                    print("\u2713 标志位1已激活")
-                    break
-                self._climb_forward()
-                await asyncio.sleep(0.05)
-            self._climb_stop()
-            leg_code_stage2 = self._get_leg_encoding(0, target_leg_height)
-            print(f"步骤5: 前腿调至0，后腿保持{target_leg_height} -> 发送 FA B1 {leg_code_stage2:02X}")
-            ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB1' + bytes([leg_code_stage2]))
-            await asyncio.sleep(0.1)
-
-            print("步骤6: 等待腿部调整完成...")
-            max_retries = 100
-            for _ in range(max_retries):
-                current_arm = await ClimbManagerInstance.climb_arm
-                if current_arm[0] != 1 and current_arm[1] != 1:
-                    print(f"\u2713 腿部调整完成 [前腿={current_arm[0]}, 后腿={current_arm[1]}]")
-                    break
-                await asyncio.sleep(0.05)
-
-            current_odom = await TFManagerInstance.baseLinkOdom
-            target_yaw = -math.atan2(target_dir[1], target_dir[0])
-            print(f"步骤6b: 重新校准朝向到 {target_yaw:.2f} rad")
-            # await move_to(current_odom.x, current_odom.y, target_yaw)
-
-            print("步骤7: 发送B0直到标志位1,2,3全部激活...")
-            max_retries = 200
-            for _ in range(max_retries):
-                current_type = await ClimbManagerInstance.climb_type
-                # ✅ 修复：添加安全检查
-                if current_type and len(current_type) >= 3 and current_type[0] and current_type[1] and current_type[2]:
-                    print("\u2713 标志位1,2,3已激活")
-                    break
-                self._climb_forward()
-                await asyncio.sleep(0.05)
-            self._climb_stop()
-            leg_code_stage3 = self._get_leg_encoding(0, 0)
-            print(f"步骤8: 前后腿均调至0 -> 发送 FA B1 {leg_code_stage3:02X}")
-            ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB1' + bytes([leg_code_stage3]))
-            await asyncio.sleep(0.1)
-
-            print("步骤9: 等待腿部调整完成...")
-            max_retries = 100
-            for _ in range(max_retries):
-                current_arm = await ClimbManagerInstance.climb_arm
-                if current_arm[0] != 1 and current_arm[1] != 1:
-                    print(f"\u2713 腿部调整完成 [前腿={current_arm[0]}, 后腿={current_arm[1]}]")
-                    break
-                await asyncio.sleep(0.05)
-
-            print("步骤10: 发送B0直到标志位1,2,3,4全部激活...")
-            max_retries = 200
-            for _ in range(max_retries):
-                current_type = await ClimbManagerInstance.climb_type
-                # ✅ 修复：添加安全检查
-                if current_type and len(current_type) >= 4 and all(current_type):
-                    print("\u2713 标志位1,2,3,4已全部激活")
-                    break
-                await asyncio.sleep(0.05)
-            # await move_to(this_place[0], this_place[1], math.atan2(target_dir[1], target_dir[0]))
-            await move_to(next_place[0], next_place[1],0.0)
-            print("\u2713 爬墙流程完成！")
-
+        return [this_place[0], this_place[1], next_place[0], next_place[1], climb_height*200]
+    def climb_armup(self, height, front_back):
+        if height == 0:#回收
+            print("双腿回收")
+            ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x00')
+        elif front_back == 3:
+            if height == 1:
+                print("抬升200")
+                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x05')
+            elif height == 2:
+                print("抬升400")
+                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x0A')
+            else:
+                print(f"error:错误的抬升指令, target_dir={height*200}")
+        elif front_back == 1:#仅后腿
+            if height == 1:
+                print("仅后腿抬升200")
+                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x01')
+            elif height == 2:
+                print("仅后腿抬升400")
+                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x02')
+            else:
+                print(f"error:错误的抬升指令, target_dir={height*200}")
+        elif front_back == 2:#仅前腿
+            if height == 1:
+                print("仅前腿抬升200")
+                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x04')
+            elif height == 2:
+                print("仅前腿抬升400")
+                ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x08')
+            else:
+                print(f"error:错误的抬升指令, target_dir={height*200}")
+                return
+        else:
+            print(f"error:错误的抬升指令")
+            return
+        for i in range (100):
+            if self.check_arm_state() == front_back:
+                print("抬升完成！！")
+                return
+        print("抬升检查失败")
+        return
+    async def check_type(self):
+        current_type = await ClimbManagerInstance.climb_type
+        if not current_type and not len(current_type) >= 3:
+            print("抬升标志位数据类型错误")
+            return
+        else:#从车体前到后位数下降
+            this_time_type = 0
+            if current_type[0] == True:
+                this_time_type += 8
+            if current_type[1] == True:
+                this_time_type += 4
+            if current_type[2] == True:
+                this_time_type += 2
+            if current_type[3] == True:
+                this_time_type += 1
+            return this_time_type
+    async def check_arm_state(self):
+         max_retries = 100
+         for i in range (max_retries):
+            current_arm_state = await ClimbManagerInstance.climb_arm
+            if current_arm_state[0] == 0 and current_arm_state[1] == 0:
+                print("爬升机构放下")
+                return 0
+            elif current_arm_state[0] == 0 and current_arm_state[1] == 1:
+                print("爬升机构后腿抬起前腿放下")
+                return 1
+            elif current_arm_state[0] == 2 and current_arm_state[1] == 0:
+                print("爬升机构前腿抬起后腿放下")
+                return 2
+            elif current_arm_state[0] == 2 and current_arm_state[1] == 2:
+                print("爬升机构抬起")
+                return 3
+            elif current_arm_state[0] == 1 or current_arm_state[1] == 1:
+                print("抬升中")    
+            await asyncio.sleep(0.05)
+    async def climb(self, this_post: list, next_post: list):
+        max_retries = 100
+        climb_instruct = self.climb_find_grid(this_post, next_post)
+        await move_to(climb_instruct[0], climb_instruct[1], 0.0)
+        self.climb_armup(climb_instruct[4],3) 
+        for i in range (max_retries):
+            self._climb_forward()
+            if await self.check_type() == 8:
+                print("标志位1已激活")
+                break
+            print("直线前进")
+            await asyncio.sleep(0.01)
+        self._climb_stop()
+        self.climb_armup(climb_instruct[4],2) 
+        for i in range (max_retries):
+            self._climb_forward()
+            if await self.check_type() == 14:
+                print("标志位123已激活")
+                break
+            print("直线前进")
+            await asyncio.sleep(0.01)
+        self._climb_stop()
+        self.climb_armup(climb_instruct[4],2) 
+        for i in range (max_retries):
+            self._climb_forward()
+            if await self.check_type() == 15:
+                print("标志位1234已激活")
+                break
+            print("直线前进")
+            await asyncio.sleep(0.01)
+        self._climb_stop()
+        self.climb_armup(0,3) 
+        print("爬完成！！！！！！")
+   
 
 ClimbManagerInstance = ClimbManager()
 
