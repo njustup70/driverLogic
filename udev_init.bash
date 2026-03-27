@@ -55,6 +55,9 @@ echo 'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
 echo 'KERNEL=="ttyACM*", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="6666", MODE:="0777", GROUP:="dialout", SYMLINK+="serial_sick"' >> /etc/udev/rules.d/my_dev.rules
 #增加对hik_camera的支持
 echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="2bdf", ATTRS{idProduct}=="0001", MODE="0777", SYMLINK+="hik_camera"' >> /etc/udev/rules.d/my_dev.rules
+# 增加odin支持
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", MODE="0666", GROUP="plugdev"' | sudo tee /etc/udev/rules.d/99-odin-usb.rules >/dev/null
+
 service udev reload
 sleep 2
 service udev restart
