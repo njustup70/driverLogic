@@ -117,7 +117,7 @@ class TFManager:
         fused_base = self._mapToSlamInit @ self._slamInitToOdom @ wheel_pose
         self._mapToBase = fused_base
         self.baseLinkOdom.value = fused_base
-        print(f"is:{fused_base.x}")
+        # print(f"is:{fused_base.x}")
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
 
     def slam_100ms(self):

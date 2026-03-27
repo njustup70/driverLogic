@@ -37,9 +37,10 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
 
     #逻辑实例...,比如移动到某个坐标
+    await asyncio.sleep(3) # 等待系统稳定
     await move_to(2.5, 4.2, 0.0)
     # await move_to(1.0, 1.0, 1.0)
-    # await climb([0,1], [1,1])
+    await climb([0,1], [1,1])
     # await move_to(2.0, 2.5, 1.6) # 矛头位置
     # await move_to(0.5, 0.5, 0.0) # 原点
     # await take_spear_head()

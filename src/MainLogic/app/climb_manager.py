@@ -13,7 +13,7 @@ class ClimbManager:
     climb_type = async_property(lambda: [False, False, False, False])
     climb_arm = async_property(lambda: [0, 0])  # 0=缩回, 1=调整中, 2=到位
 
-    meilin_place = [2.5, 4.2]
+    meilin_place = [2.4, 4.2]
     meilin_distance = [1.2, -1.2]
     meilin_height = [[0, 0, 0], [1, 2, 3], [2, 3, 2], [1, 2, 3], [2, 1, 2], [0, 0, 0]]
 
@@ -53,11 +53,13 @@ class ClimbManager:
 
         assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
 
-        await move_to(this_place[0], this_place[1], -math.atan2(target_dir[1], target_dir[0]))
-
+        # await move_to(this_place[0], this_place[1], math.atan2(target_dir[1], target_dir[0]))
+        await move_to(this_place[0], this_place[1], 0.0) # 先不调整朝向，等爬上去再说
+        print("\u2713 移动到起始位置完成，准备爬墙...")
         target_leg_height = 200 if climb_height == 1 else 400
-
+        print(f"步骤1: 计算目标腿部高度 {target_leg_height}，准备发送指令...")
         if climb_height > 0:
+            print(f"\u2713 目标是向上爬，腿部高度设置为 {target_leg_height}")
             leg_code_stage1 = self._get_leg_encoding(target_leg_height, target_leg_height)
             print(f"步骤2: 设置前后腿均为{target_leg_height} -> 发送 FA B1 {leg_code_stage1:02X}")
             ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xFA\xB1' + bytes([leg_code_stage1]))
@@ -100,7 +102,7 @@ class ClimbManager:
             current_odom = await TFManagerInstance.baseLinkOdom
             target_yaw = -math.atan2(target_dir[1], target_dir[0])
             print(f"步骤6b: 重新校准朝向到 {target_yaw:.2f} rad")
-            await move_to(current_odom.x, current_odom.y, target_yaw)
+            # await move_to(current_odom.x, current_odom.y, target_yaw)
 
             print("步骤7: 发送B0直到标志位1,2,3全部激活...")
             max_retries = 200
@@ -136,7 +138,8 @@ class ClimbManager:
                     print("\u2713 标志位1,2,3,4已全部激活")
                     break
                 await asyncio.sleep(0.05)
-            await move_to(next_place[0], next_place[1], -math.atan2(target_dir[1], target_dir[0]))
+            # await move_to(this_place[0], this_place[1], math.atan2(target_dir[1], target_dir[0]))
+            await move_to(next_place[0], next_place[1],0.0)
             print("\u2713 爬墙流程完成！")
 
 
