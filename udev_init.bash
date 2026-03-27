@@ -56,11 +56,10 @@ echo 'KERNEL=="ttyACM*", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="6666", MODE
 #增加对hik_camera的支持
 echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="2bdf", ATTRS{idProduct}=="0001", MODE="0777", SYMLINK+="hik_camera"' >> /etc/udev/rules.d/my_dev.rules
 # 增加odin支持
-echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", MODE="0666", GROUP="plugdev"' | sudo tee /etc/udev/rules.d/99-odin-usb.rules >/dev/null
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", MODE="0777", SYMLINK+="odin"' >> /etc/udev/rules.d/my_dev.rules
 
 service udev reload
 sleep 2
 service udev restart
 #archlinux系统需要执行以下命令来重新加载 udev 规则并重启 udev 服务：
-sudo systemctl daemon-reload      # 重新加载 systemd 管理配置
-sudo systemctl restart systemd-udevd
+sudo udevadm control --reload-rules && sudo udevadm trigger
