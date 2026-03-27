@@ -1,19 +1,24 @@
 '''
 坐标管理类
 '''
-import math
+import math,time
 from typing import Tuple
+import numpy as np
 
 class Odom:
     '''
     2d坐标,包含x,y和yaw
     '''
-    def __init__(self, x=0.0, y=0.0, yaw=0.0):
+    def __init__(self, x=0.0, y=0.0, yaw=0.0,timestamp=None):
         self.x = x
         self.y = y
         # 内部yaw初始化
         self._yaw = 0.0
         self.yaw = yaw
+        if timestamp is not None:
+            self.timestamp = timestamp #单位为s
+        else:
+            self.timestamp=time.time()
     # 使用属性装修yaw,在任意地方处理yaw的范围,保持在[-pi,pi]之间
     @property
     def yaw(self):
@@ -26,9 +31,12 @@ class Odom:
     def __str__(self):
         return f"Odom(x={self.x}, y={self.y}, yaw={self.yaw/math.pi:.2f}π)"
 
-    def as_tuple(self) -> Tuple[float, float, float]:
-        return (self.x, self.y, self.yaw)
-
+    def __iter__(self):
+        yield self.x
+        yield self.y
+        yield self.yaw
+    def __array__(self, dtype=None):
+        return np.array([self.x, self.y, self.yaw], dtype=dtype)
     @property
     def dist(self):
         """返回当前坐标相对于原点的欧式距离 (位置误差模长)"""

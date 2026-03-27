@@ -26,6 +26,8 @@ class SerialNode(Node):
         # 将 ros2 话题收到的 UInt8MultiArray 数据直接发送到串口
         try:
             # 在 ROS2 Python 中，UInt8MultiArray.data 可直接转为 bytes 后发送
+            if msg.data and msg.data[0] == 0xFA and (msg.data[1] == 0xB1 or msg.data[1] == 0xBB):  # 以 0xB1 开头的消息视为心跳包，打印日志
+                print("[SerialNode] Sending data to serial: " + bytes(msg.data).hex())
             self._serial.write(bytes(msg.data))
         except Exception as e:
             self.get_logger().error(f'Failed to send data to serial: {e}')

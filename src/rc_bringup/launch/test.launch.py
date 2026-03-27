@@ -13,6 +13,14 @@ from launch.actions import TimerAction
 def generate_launch_description():
     ld = LaunchDescription()
 
+    # airy_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         os.path.join(get_package_share_directory('my_driver'), 'launch', 'mid360_bringup.launch.py')
+    #     ),
+    #     launch_arguments={
+    #         'use_rviz': 'false',
+    #     }.items(),
+    # )
     airy_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('my_driver'), 'launch', 'rs_airy.launch.py')

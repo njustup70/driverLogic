@@ -5,10 +5,11 @@ import asyncio
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import move_to, TFManagerInstance
-from MainLogic.app.climb_manager import climb
+from MainLogic.app.climb_manager import climb, climb_arm_act, ClimbManagerInstance
 from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
 from MainLogic.core.serial_node import start_serial_process
+from MainLogic.Lib.bytes import turn_to_bytes
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
@@ -22,9 +23,9 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
     sick2Base=Odom(0.0, -0.340, 0.0)
-    map2BaseInit=Odom(0.39, 0.39, 0.0)
+    map2BaseInit=Odom(0.39,0.39, 0.0)
     #map2BaseInit=Odom(0.390, 0.390, 0.0)
-    laser2Base=Odom(0.0, 0.390, 0.0)
+    laser2Base=Odom(0.0, -0.325, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     
@@ -35,12 +36,23 @@ async def async_main():
     #注册话题发布
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
-
     #逻辑实例...,比如移动到某个坐标
-    await asyncio.sleep(3) # 等待系统稳定
-    await move_to(2.5, 4.2, 0.0)
-    # await move_to(1.0, 1.0, 1.0)
+    print("开始移动到梅林位置")
+    await move_to(2.0, 4.2, 0.0) 
+    print("到达梅林位置")
+    # await climb_arm_act(1, 3)
+
+
+    # while True:
+    #     #阻塞，无任务
+    #     ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x05')
+    #     print("send heartbeat")
+    #     await asyncio.sleep(0.01)
+
+
     await climb([0,1], [1,1])
+
+    
     # await move_to(2.0, 2.5, 1.6) # 矛头位置
     # await move_to(0.5, 0.5, 0.0) # 原点
     # await take_spear_head()
