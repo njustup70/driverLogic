@@ -48,7 +48,7 @@ class ClimbManager:
         if abs(target_dir[0] + target_dir[1]) != 1:
             print(f"error:错误的梅林目标要求, target_dir={target_dir}")
             return
-        return [this_place[0], this_place[1], next_place[0], next_place[1], climb_height*200]
+        return [this_place[0], this_place[1], next_place[0], next_place[1], climb_height]
     def climb_armup(self, height, front_back):
         if height == 0:#回收
             print("双腿回收")
@@ -61,7 +61,7 @@ class ClimbManager:
                 print("抬升400")
                 ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x0A')
             else:
-                print(f"error:错误的抬升指令, target_dir={height*200}")
+                print(f"error:错误的抬升指令, target_dir={height}")
         elif front_back == 1:#仅后腿
             if height == 1:
                 print("仅后腿抬升200")
@@ -70,7 +70,7 @@ class ClimbManager:
                 print("仅后腿抬升400")
                 ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x02')
             else:
-                print(f"error:错误的抬升指令, target_dir={height*200}")
+                print(f"error:错误的抬升指令, target_dir={height}")
         elif front_back == 2:#仅前腿
             if height == 1:
                 print("仅前腿抬升200")
@@ -79,7 +79,7 @@ class ClimbManager:
                 print("仅前腿抬升400")
                 ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x08')
             else:
-                print(f"error:错误的抬升指令, target_dir={height*200}")
+                print(f"error:错误的抬升指令, target_dir={height}")
                 return
         else:
             print(f"error:错误的抬升指令")
