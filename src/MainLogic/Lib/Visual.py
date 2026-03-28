@@ -233,4 +233,59 @@ imu_data = {
 self.imu_channel.log(imu_data)
 '''
 # foxgloveViusalInstance=FoxgloveVisual(port=8766)
+from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
+import numpy as np
+from geometry_msgs.msg import Point, Pose, PoseStamped
+from nav_msgs.msg import Path
+from std_msgs.msg import Header
+from rclpy.time import Time
+import time
 
+class PathVisual():
+    def __init__(self, frame_id='base_link', max_len=2000) -> None:
+        self.node = RosBridgeNodeInstance
+        self.max_len = max_len
+        self.frame_id = frame_id
+        # 缓存 Path 对象，避免重复创建整个列表
+        self.path_cache = {} 
+
+    def update(self, topic: str, point):
+        """
+        优化后的路径更新：复用消息对象，仅追加新点
+        """
+        # 1. 初始化或获取缓存的消息对象
+        if topic not in self.path_cache:
+            path_msg = Path()
+            path_msg.header.frame_id = self.frame_id
+            self.path_cache[topic] = path_msg
+        
+        path_msg: Path = self.path_cache[topic]
+        
+        # 2. 限制长度：如果超过 max_len，移除最早的点 (O(1) 或 O(n) 操作)
+        if len(path_msg.poses) >= self.max_len:
+            #判断属性避免分析器报错
+            assert isinstance(path_msg.poses, list)
+            path_msg.poses.pop(0)
+
+        # 3. 仅创建一个新的 PoseStamped 对象 (核心优化：从 O(n) 降到 O(1))
+        new_pose = PoseStamped()
+        # 简化赋值，避免重复调用 get_clock().now()
+        now = self.node.get_clock().now().to_msg() 
+        new_pose.header.stamp = now
+        new_pose.header.frame_id = self.frame_id
+        
+        # 快速赋值
+        pt = np.asarray(point)
+        new_pose.pose.position.x = float(pt[0])
+        new_pose.pose.position.y = float(pt[1])
+        new_pose.pose.position.z = float(pt[2]) if pt.size > 2 else 0.0
+        new_pose.pose.orientation.w = 1.0 # 必须设置 w=1，否则 Foxglove 可能不显示
+        
+        # 4. 追加并发布
+        assert isinstance(path_msg.poses, list)
+        path_msg.poses.append(new_pose)
+        path_msg.header.stamp = now
+        
+        # 发布整条路径（注意：发布本身在大数组下仍有序列化开销，但计算开销已降至最低）
+        self.node.publish_ros2(topic, path_msg)
+PathVisualInstance=PathVisual(frame_id='map', max_len=2000)
