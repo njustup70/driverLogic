@@ -27,12 +27,10 @@ class Odom:
     def __str__(self):
         return f"Odom(x={self.x}, y={self.y}, yaw={self.yaw/math.pi:.2f}π)"
 
-    def as_tuple(self) -> Tuple[float, float, float]:
-        return (self.x, self.y, self.yaw)
-
-    def as_array(self) -> np.ndarray:
-        """将 Odom 转换为 numpy 数组 [x, y, yaw]。"""
-        return np.array([self.x, self.y, self.yaw])
+    def __iter__(self):
+        yield self.x
+        yield self.y
+        yield self.yaw
 
     @property
     def dist(self):
