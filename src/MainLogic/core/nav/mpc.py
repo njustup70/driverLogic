@@ -6,7 +6,7 @@ from casadi import vertcat, cos, sin
 import numpy as np
 from MainLogic.Lib.decorder import time_print
 from MainLogic.Lib.bytes import turn_to_bytes
-from MainLogic.core.linear import SplinePlanner
+from MainLogic.core.nav.path_generate import SplinePlanner
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from geometry_msgs.msg import Twist, Vector3Stamped,Vector3
 class MPCPathFollower:

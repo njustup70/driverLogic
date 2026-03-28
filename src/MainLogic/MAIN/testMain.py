@@ -3,9 +3,9 @@ from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
 import asyncio
 from MainLogic.core.tf_manager import TFManagerInstance
-import MainLogic.core.observer as observer_module
+import MainLogic.core.nav.observer as observer_module
 from MainLogic.Lib.odomVec import Odom
-import MainLogic.core.mpc as mpc
+import MainLogic.core.nav.mpc as mpc
 from geometry_msgs.msg import Twist
 import numpy as np
 async def async_main():
