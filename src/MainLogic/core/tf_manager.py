@@ -70,7 +70,6 @@ class TFManager:
         self._sickYawCorrection = 0.0
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         # 注册 Vector3Stamped 发布者
-        self.rosBridge.register_ros2_pub(BASE_LINK_ODOM_TOPIC, Vector3)
         self._tf_chain_registered = True
 
     def odom(self, x: float, y: float, yaw: float):

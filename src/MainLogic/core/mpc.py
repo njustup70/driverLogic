@@ -206,7 +206,6 @@ async def mpc_loop():
     from MainLogic.core.tf_manager import TFManagerInstance
     # 控制帧类型: A2 + [vx, vy, vw] float32
     serial_cmd_prefix = b'\xBB'
-    state_pub_registered = False
     while True:                   
         current_odom = TFManagerInstance.baseLinkOdom.value
         if current_odom is not None:
@@ -217,9 +216,6 @@ async def mpc_loop():
 
             ros_bridge = ros_bridge_module.RosBridgeNodeInstance
             if ros_bridge is not None:
-                if not state_pub_registered:
-                    ros_bridge.register_ros2_pub(STATE_MPC_CONTROL_TOPIC, Vector3)
-                    state_pub_registered = True
                 state_msg = Vector3(x=float(u[0]), y=float(u[1]), z=float(u[2]))
                 ros_bridge.publish_ros2(STATE_MPC_CONTROL_TOPIC, state_msg)
                 # 发布 ROS2 cmd_vel
