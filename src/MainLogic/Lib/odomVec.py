@@ -31,7 +31,8 @@ class Odom:
         yield self.x
         yield self.y
         yield self.yaw
-
+    def __array__(self, dtype=None):
+        return np.array([self.x, self.y, self.yaw], dtype=dtype)
     @property
     def dist(self):
         """返回当前坐标相对于原点的欧式距离 (位置误差模长)"""

@@ -238,9 +238,9 @@ async def mpc_loop():
     serial_cmd_prefix = b'\xBB'
     state_pub_registered = False
     while True:                   
-        current_odom = TFManagerInstance.baseLinkOdom
+        current_odom = TFManagerInstance.baseLinkOdom.value
         if current_odom is not None:
-            x = np.array(current_odom)
+            x = np.asarray(current_odom).reshape((3, 1))  # 确保 x 的形状是 (3, 1)
             # u = MPCPathFollowerInstance.update(x)
             u=await MPCPathFollowerInstance.async_update(x)  #如果需要异步版本，改成 await MPCPathFollowerInstance.async_update(x)
             # print(f"MPC output control: {u}")

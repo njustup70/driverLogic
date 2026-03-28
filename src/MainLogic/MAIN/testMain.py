@@ -28,7 +28,7 @@ async def async_main():
     # path=np.array([[1.0, 1.0]])
     # mpc.MPCPathFollowerInstance.set_target_point(10.0, 10.0, 0.5)
     # 固定终点模式
-    mpc.MPCPathFollowerInstance.set_target_point(np.array([1.5, 1.5, 1.0]))
+    mpc.MPCPathFollowerInstance.set_target_point(Odom(1.5, 1.5, 1.0))
     # mpc.MPCPathFollowerInstance.set_path(path, 0.5)
     while True:
         #阻塞，无任务
