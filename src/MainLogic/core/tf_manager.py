@@ -150,7 +150,7 @@ class TFManager:
         self._slamInitToOdom = slam_base_pose @ wheel_pose.inverse()
         self.rosBridge.publish_static_tf(self.slam_init_frame, self.odom_frame, self._slamInitToOdom)
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
-        PathVisualInstance.update("/state/base_link_path",self.baseLinkOdom.value)
+        PathVisualInstance.add_point("/state/base_link_path",self.baseLinkOdom.value)
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新，每 100ms 执行一次 slam 更新。"""
         tick_10ms = 0

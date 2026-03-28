@@ -144,7 +144,11 @@ class MPCPathFollower:
         #传入的target_points是一个二维数组，形状为 (N, 2)，每行是一个路径点的 (x, y) 坐标
         x_pts = target_points[:, 0]
         y_pts = target_points[:, 1]
-        self.path_planner.generate_path(x_pts, y_pts, step_cm=10.0)
+        x_points,y_points,_=self.path_planner.generate_path(x_pts, y_pts, step_cm=10.0)
+        #将x_points与y_points打包成二维数组，每行是一个路径点的 (x, y) 坐标
+        path_points = np.column_stack((x_points, y_points))
+        from MainLogic.Lib.Visual import PathVisualInstance
+        PathVisualInstance.publish_points("/state/target_path", path_points)
         self.end_point=np.array([float(x_pts[-1]), float(y_pts[-1]), float(target_yaw)])
         if ref_speed is not None:
             self.ref_speed = float(ref_speed)

@@ -248,8 +248,24 @@ class PathVisual():
         self.frame_id = frame_id
         # 缓存 Path 对象，避免重复创建整个列表
         self.path_cache = {} 
-
-    def update(self, topic: str, point):
+    def publish_points(self, topic: str, points: list[np.ndarray]):
+        # 批量发布路径点，适用于一次性发送多个点的场景。
+        path_msg = Path()
+        path_msg.header.frame_id = self.frame_id
+        path_msg.header.stamp = self.node.get_clock().now().to_msg()
+        for point in points:
+            pose = PoseStamped()
+            pose.header.frame_id = self.frame_id
+            pose.header.stamp = path_msg.header.stamp
+            pt = np.asarray(point)
+            pose.pose.position.x = float(pt[0])
+            pose.pose.position.y = float(pt[1])
+            pose.pose.position.z = float(pt[2]) if pt.size > 2 else 0.0
+            pose.pose.orientation.w = 1.0
+            assert isinstance(path_msg.poses, list)
+            path_msg.poses.append(pose)
+        self.node.publish_ros2(topic, path_msg)
+    def add_point(self, topic: str, point):
         """
         优化后的路径更新：复用消息对象，仅追加新点
         """
