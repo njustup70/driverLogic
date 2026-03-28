@@ -21,8 +21,9 @@ class rosBridgeNode(Node):
         self._serial_tx_pub = self.create_publisher(UInt8MultiArray, 'serial_tx', 10)
         self._serial_rx_sub = self.create_subscription(UInt8MultiArray, 'serial_rx', self._serial_rx_callback, 10)
         self._loop: asyncio.events.AbstractEventLoop
-        self._subPool = []
-        self._pubPool = []
+               # 将 pub 和 sub 改为字典形式：{topic_name: publisher/subscription}
+        self._pubDict = {}  # {topic_name: publisher}
+        self._subDict = {}  # {topic_name: (subscription, msg_type)}
         # 创建 tf2 坐标管理器（Buffer + Listener + Broadcaster）
         self._tfBuffer = Buffer()
         self._tfListener = TransformListener(self._tfBuffer, self)
@@ -36,8 +37,12 @@ class rosBridgeNode(Node):
 
     def register_ros2_sub(self, topic_name, callback, type=UInt8MultiArray):
         # 注册 ros2 话题回调
-        sub = self.create_subscription(type, topic_name, callback, 10)
-        self._subPool.append(sub)
+               # 注册 ros2 话题回调（字典形式）
+               if topic_name not in self._subDict:
+                   sub = self.create_subscription(type, topic_name, callback, 10)
+                   self._subDict[topic_name] = (sub, type)
+               else:
+                   print(f"Warning: Topic '{topic_name}' already registered as subscriber")
 
     def register_serial_sub(self, callback):
         # 注册串口数据回调
@@ -74,16 +79,26 @@ class rosBridgeNode(Node):
 
     def register_ros2_pub(self, topic_name, msg_type):
         # 注册 ros2 话题发布器
-        pub = self.create_publisher(msg_type, topic_name, 10)
-        self._pubPool.append(pub)
-
+        # 注册 ros2 话题发布器（字典形式）
+        if topic_name not in self._pubDict:
+            pub = self.create_publisher(msg_type, topic_name, 10)
+            self._pubDict[topic_name] = pub
+        else:
+            # print(f"Warning: Topic '{topic_name}' already registered as publisher")
+            raise ValueError(f"Topic '{topic_name}' already registered as publisher")
     def publish_ros2(self, topic_name, msg):
         # 按 topic_name 定位发布器并发布消息
-        for pub in self._pubPool:
-            if pub.topic_name == topic_name:
-                msg = msg if isinstance(msg, pub.msg_type) else pub.msg_type(data=msg)
-                pub.publish(msg)
-                break
+        # 按 topic_name 定位发布器并发布消息
+        # 如果话题未注册，自动从 msg 推导类型并注册
+        if topic_name not in self._pubDict:
+            msg_type = type(msg)
+            self.register_ros2_pub(topic_name, msg_type)
+       
+        pub = self._pubDict[topic_name]
+        # 检查 msg 类型是否匹配
+        if not isinstance(msg, pub.msg_type):
+            raise TypeError(f"Message type {type(msg)} does not match publisher type {pub.msg_type} for topic '{topic_name}'")
+        pub.publish(msg)
 
 
 # 声明类实例引用（在 Main.py 中调用 init 初始化）

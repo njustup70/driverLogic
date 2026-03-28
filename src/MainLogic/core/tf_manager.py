@@ -7,11 +7,15 @@ import math
 from typing import cast
 
 import rclpy.time
+from geometry_msgs.msg import Vector3Stamped,Vector3
 
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.Lib.bytes import turn_to_bytes
 from MainLogic.Lib.AsyncTools import AsyncVariable
 from MainLogic.core import ros_bridge_node as ros_bridge_module
+from MainLogic.Lib.Visual import PathVisualInstance
+
+BASE_LINK_ODOM_TOPIC = '/state/base_link_odom'
 
 
 class TFManager:
@@ -65,6 +69,7 @@ class TFManager:
         self._mapToSlamInit = self._mapToSlamInitNominal
         self._sickYawCorrection = 0.0
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
+        # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
 
     def odom(self, x: float, y: float, yaw: float):
@@ -118,6 +123,9 @@ class TFManager:
         self.baseLinkOdom.value = fused_base
         
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
+        # 发布 Vector3Stamped 话题
+        odom_msg = Vector3(x=fused_base.x, y=fused_base.y, z=fused_base.yaw)
+        self.rosBridge.publish_ros2(BASE_LINK_ODOM_TOPIC, odom_msg)
 
     def slam_100ms(self):
         """100ms 更新：读取 SLAM TF 并更新 slam_init->odom。"""
@@ -142,6 +150,7 @@ class TFManager:
         self._slamInitToOdom = slam_base_pose @ wheel_pose.inverse()
         self.rosBridge.publish_static_tf(self.slam_init_frame, self.odom_frame, self._slamInitToOdom)
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
+        PathVisualInstance.add_point("/state/base_link_path",self.baseLinkOdom.value)
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新，每 100ms 执行一次 slam 更新。"""
         tick_10ms = 0
