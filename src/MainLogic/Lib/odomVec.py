@@ -1,7 +1,7 @@
 '''
 坐标管理类
 '''
-import math
+import math,time
 from typing import Tuple
 import numpy as np
 
@@ -9,12 +9,16 @@ class Odom:
     '''
     2d坐标,包含x,y和yaw
     '''
-    def __init__(self, x=0.0, y=0.0, yaw=0.0):
+    def __init__(self, x=0.0, y=0.0, yaw=0.0,timestamp=None):
         self.x = x
         self.y = y
         # 内部yaw初始化
         self._yaw = 0.0
         self.yaw = yaw
+        if timestamp is not None:
+            self.timestamp = timestamp #单位为s
+        else:
+            self.timestamp=time.time()
     # 使用属性装修yaw,在任意地方处理yaw的范围,保持在[-pi,pi]之间
     @property
     def yaw(self):

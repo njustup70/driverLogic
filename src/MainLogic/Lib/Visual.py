@@ -232,4 +232,5 @@ imu_data = {
 }
 self.imu_channel.log(imu_data)
 '''
-foxgloveViusalInstance=FoxgloveVisual(port=8766)
+# foxgloveViusalInstance=FoxgloveVisual(port=8766)
+
