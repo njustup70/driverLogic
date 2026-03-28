@@ -285,7 +285,6 @@ class MPCPathFollower:
         '''设置 MPC 的初始状态'''
         self.mpc.x0 = x0
         self.mpc.set_initial_guess()
-    @time_print(10)
     def update(self,x):
         assert isinstance(x, np.ndarray) and x.shape == (3, 1)
         self._step_count += 1
@@ -339,8 +338,9 @@ async def mpc_loop():
         current_odom = TFManagerInstance.baseLinkOdom
         if current_odom is not None:
             x = np.array(current_odom.as_array()).reshape((3, 1))
-            u = MPCPathFollowerInstance.update(x)
-            print(f"MPC output control: {u}")
+            # u = MPCPathFollowerInstance.update(x)
+            u=await MPCPathFollowerInstance.async_update(x)  #如果需要异步版本，改成 await MPCPathFollowerInstance.async_update(x)
+            # print(f"MPC output control: {u}")
 
             ros_bridge = ros_bridge_module.RosBridgeNodeInstance
             if ros_bridge is not None:

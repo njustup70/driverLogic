@@ -9,7 +9,7 @@ import multiprocessing
 import os
 import threading
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor,SingleThreadedExecutor
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 
 # 设置多进程启动方法为 'spawn'，确保子进程完全独立，不共享 ROS2 上下文
@@ -52,7 +52,7 @@ def main():
     t = threading.Thread(target=asyncioEventLoop.run_forever, daemon=True)
     t.start()
     #创建ROS2节点与多线程执行器
-    executor = MultiThreadedExecutor()
+    executor = SingleThreadedExecutor()
     '''需要用命名空间来保证修改修改的是全局变量'''
     '''原来的from MainLogic.core.ros_bridge_node import rosBridgeNode,RosBridgeNodeInstance'''
     '''是在本地命名空间里创建了RosBridgeNodeInstance,修改的是本地的RosBridgeNodeInstance,而不是全局的RosBridgeNodeInstance'''

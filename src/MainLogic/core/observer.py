@@ -159,7 +159,6 @@ class PoseVelocityObserver:
             or abs(innovation[2, 0]) > self.reset_threshold_yaw
         )
 
-    @time_print(10)
     def update(self, x: float, y: float, yaw: float, stamp_sec: float | None = None) -> np.ndarray:
         """输入位姿与时间戳, 输出车体系速度 [vx_body, vy_body, yaw_rate]。"""
         if stamp_sec is None:
@@ -241,7 +240,7 @@ async def observer_update():
         current_time = time.time()
         current_odom:Odom=cast (Odom,TFManagerInstance.baseLinkOdom)
         velocity = ObserveInstance.update(current_odom.x, current_odom.y, current_odom.yaw, stamp_sec=current_time)
-        print("Estimated velocity:", velocity)
+        # print("Estimated velocity:", velocity)
 
         ros_bridge = ros_bridge_module.RosBridgeNodeInstance
         if ros_bridge is not None:
