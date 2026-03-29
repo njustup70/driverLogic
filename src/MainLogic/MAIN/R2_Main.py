@@ -50,7 +50,9 @@ async def async_main():
     #     await asyncio.sleep(0.01)
 
 
-    await climb([0,1], [1,1])
+    await climb([1,0], [1,1])
+    await climb([1,1], [2,1])
+    await climb([2,1], [3,1])
 
     
     # await move_to(2.0, 2.5, 1.6) # 矛头位置

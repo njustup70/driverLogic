@@ -11,7 +11,7 @@ class ClimbManager:
     climb_type = async_property(lambda: [False, False, False, False])
     climb_arm = async_property(lambda: [0, 0])  # 0=缩回, 1=调整中, 2=到位
 
-    meilin_place = [2.45, 4.2]
+    meilin_place = [2.48, 4.2]
     meilin_distance = [1.2, -1.2]
     meilin_height = [[0, 0, 0], [2, 1, 2], [3, 2, 1], [2, 3, 2], [2, 1, 2], [0, 0, 0]]
     max_retries = 100
@@ -25,12 +25,12 @@ class ClimbManager:
     async def _climb_forward(self,distance: float):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("向前移动中...")
-        await move_to(current_odom.x + distance, current_odom.y, 0.0, 4.0)
+        await move_to(current_odom.x + distance, current_odom.y, 0.0, 2.0)
         print("向前移动完成")
     async def _climb_stop(self):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("停止移动...")
-        await move_to(current_odom.x, current_odom.y, 0.0, 1.0)
+        await move_to(current_odom.x, current_odom.y, 0.0, 0.5)
     async def climb_move(self,type_num, distance: float):#或许可以尝试自增move
         await self._climb_forward(distance)
         await self._climb_stop()
@@ -116,7 +116,7 @@ class ClimbManager:
                 # print("抬升完成！！")
                 # return
             # await asyncio.sleep(0.1)
-        await asyncio.sleep(3) # 等待一段时间让状态更新，实际应用中可以改为更智能的等待方式
+        await asyncio.sleep(1) # 等待一段时间让状态更新，实际应用中可以改为更智能的等待方式
         print("抬升检查失败")
         return
     async def check_type(self):#8421码，从车体前到后位数下降
@@ -160,15 +160,15 @@ class ClimbManager:
         print("到达攀爬起点，准备爬升")
         await self.climb_arm_act(climb_instruct[4],3) 
         print("抬升完成，准备前进")
-        await self.climb_move(8, 0.45)
+        await self.climb_move(8, 0.40)
         print("前进中，等待标志位1激活")
         await self.climb_arm_act(climb_instruct[4],2)
         print("前腿放下，准备前进")
-        await self.climb_move(14, 1.0)
+        await self.climb_move(14, 0.6)
         print("前进中，等待标志位123激活")
         await self.climb_arm_act(0,3)
         print("双腿放下，调整位置")
-        await self.climb_move(15, 0.45)
+        await self.climb_move(15, 0.40)
         print("前进中，等待标志位1234激活")
         await move_to(climb_instruct[2], climb_instruct[3], 0.0)
         print("爬完成！！！！！！")
