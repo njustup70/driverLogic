@@ -18,9 +18,9 @@ class ClimbManager:
         next_place_x: float
         next_place_y: float
         climb_height: int
-        climb_dir: int
+        climb_dir: float
 
-    meilin_place = [2.48, 4.2]
+    meilin_place = [2.50, 4.2]
     meilin_distance = [1.2, -1.2]
     meilin_height = [[0, 0, 0], [2, 1, 2], [3, 2, 1], [2, 3, 2], [2, 1, 2], [0, 0, 0]]
     max_retries = 100
@@ -35,8 +35,8 @@ class ClimbManager:
     forth_type = 1
 
     start_to_front_climb_distance = 0.40
-    front_climb_to_back_climb_distance = 0.6
-    back_climb_to_finish_distance = 0.40
+    front_climb_to_back_climb_distance = 0.50
+    back_climb_to_finish_distance = 0.35
 
     @staticmethod
     def _trans_type(a,b,c,d):
@@ -49,16 +49,16 @@ class ClimbManager:
         rear_bits = height_to_bits.get(rear_height, "00")
         return int(rear_bits + front_bits, 2)
 
-    async def _climb_forward(self,distance: float, climb_dir: int):
+    async def _climb_forward(self,distance: float, climb_dir: float):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("向前移动中...")
-        await move_to(current_odom.x + (1 - abs(climb_dir))*distance, current_odom.y + climb_dir * distance, 0.0, 2.0)
+        await move_to(current_odom.x + (1 - abs(climb_dir))*distance, current_odom.y + climb_dir * distance, current_odom.yaw, 1.5)
         print("向前移动完成")
 
     async def _climb_stop(self):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("停止移动...")
-        await move_to(current_odom.x, current_odom.y, 0.0, 0.5)
+        await move_to(current_odom.x, current_odom.y, current_odom.yaw, 0.5)
 
     async def climb_move(self,type_num, distance: float, climb_dir: int):
         await self._climb_forward(distance, climb_dir)
@@ -89,17 +89,18 @@ class ClimbManager:
         if abs(target_dir[0] + target_dir[1]) != 1:
             print(f"error:错误的梅林目标要求, target_dir={target_dir}")
             return
-        if target_dir[0] < 0 :
-            climb_dir = 0
-        elif target_dir[1] > 0:
-            climb_dir = 1
-        elif target_dir[1] < 0:
-            climb_dir = -1
+        if target_dir[0] < 0:
+            climb_dir = 0.0
+        if target_dir[1] > 0:
+            climb_dir = 1.0
+        if target_dir[1] < 0:
+            climb_dir = -1.0
         print(f"this_place={this_place}, next_place={next_place}, climb_height={climb_height}")
         return self.ClimbInstruction(this_place[0], this_place[1], next_place[0], next_place[1], climb_height, climb_dir)
 
     async def _climb_armup(self, height, front_back):
         assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
+        height = abs(height)
         if height == 0:
             print("双腿回收")
             await self.send_climb_command(b'\xB1\x00')
@@ -115,19 +116,19 @@ class ClimbManager:
         elif front_back == self.just_back_arm:
             if height == 1:
                 print("仅后腿抬升200")
-                await self.send_climb_command(b'\xB1\x01')
+                await self.send_climb_command(b'\xB1\x04')
             elif height == 2:
                 print("仅后腿抬升400")
-                await self.send_climb_command(b'\xB1\x02')
+                await self.send_climb_command(b'\xB1\x08')
             else:
                 print(f"error:错误的抬升指令, target_dir={height}")
         elif front_back == self.just_front_arm:
             if height == 1:
                 print("仅前腿抬升200")
-                await self.send_climb_command(b'\xB1\x04')
+                await self.send_climb_command(b'\xB1\x01')
             elif height == 2:
                 print("仅前腿抬升400")
-                await self.send_climb_command(b'\xB1\x08')
+                await self.send_climb_command(b'\xB1\x02')
             else:
                 print(f"error:错误的抬升指令, target_dir={height}")
                 return
@@ -174,11 +175,11 @@ class ClimbManager:
             elif current_arm_state[0] == 1 or current_arm_state[1] == 1:
                 print("抬升中")
             await asyncio.sleep(0.05)
-
     async def climb(self, this_post: list, next_post: list):
         climb_instruct = self.climb_find_grid(this_post, next_post)
         await move_to(climb_instruct.this_place_x, climb_instruct.this_place_y, 0.0)
-        await move_to(climb_instruct.this_place_x, climb_instruct.this_place_y, climb_instruct.climb_dir*math.pi/2)
+        await move_to(climb_instruct.this_place_x, climb_instruct.this_place_y, climb_instruct.climb_dir*3.14/2)
+        await asyncio.sleep(2)
         print("到达攀爬起点，准备爬升")
         if climb_instruct.climb_height == 1 or climb_instruct.climb_height == 2:
             await self.climb_arm_act(climb_instruct.climb_height,self.two_arms)
@@ -196,6 +197,7 @@ class ClimbManager:
             await move_to(climb_instruct.next_place_x, climb_instruct.next_place_y, 0.0)
             print("爬完成！！！！！！")
         elif climb_instruct.climb_height == -1 or climb_instruct.climb_height == -2:
+            print("下攀，准备前进")
             await self.climb_move(self._trans_type(0,1,1,1),self.start_to_front_climb_distance,climb_instruct.climb_dir)
             print("前进中，等待标志位1激活")
             await self.climb_arm_act(climb_instruct.climb_height,self.just_front_arm)
@@ -218,4 +220,8 @@ async def climb(this_post: list, next_post: list):
     return await ClimbManagerInstance.climb(this_post, next_post)
 async def climb_arm_act(height, front_back):
     print("处罚动作")
+    return await ClimbManagerInstance.climb_arm_act(height, front_back)
+async def climb_move(type, distance, direction):
+    return await ClimbManagerInstance.climb_move(type, distance, direction)
+async def  climb_arm_act(height, front_back):
     return await ClimbManagerInstance.climb_arm_act(height, front_back)

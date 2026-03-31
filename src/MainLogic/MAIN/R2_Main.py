@@ -5,7 +5,7 @@ import asyncio
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import move_to, TFManagerInstance
-from MainLogic.app.climb_manager import climb, climb_arm_act, ClimbManagerInstance
+from MainLogic.app.climb_manager import climb, climb_arm_act,climb_move, ClimbManagerInstance
 from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
 from MainLogic.core.serial_node import start_serial_process
@@ -41,18 +41,14 @@ async def async_main():
     await move_to(2.0, 4.2, 0.0) 
     print("到达梅林位置")
     # await climb_arm_act(1, 3)
+    # await move_to(2.0, 4.2, 3.14/2)
+    # await asyncio.sleep(1)
+    # await climb_move(0, ClimbManagerInstance.start_to_front_climb_distance, 0.0)
+    # await asyncio.sleep(1)
 
-
-    # while True:
-    #     #阻塞，无任务
-    #     ros_bridge_module.RosBridgeNodeInstance.writeBytes(b'\xB1\x05')
-    #     print("send heartbeat")
-    #     await asyncio.sleep(0.01)
-
-
-    await climb([1,0], [1,1])
-    await climb([1,1], [2,1])
-    await climb([2,1], [3,1])
+    await climb([0,1], [1,1])
+    # await climb([1,1], [1,0])
+    # await climb([2,1], [3,1])
 
     
     # await move_to(2.0, 2.5, 1.6) # 矛头位置
