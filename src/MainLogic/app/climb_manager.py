@@ -22,17 +22,17 @@ class ClimbManager:
         front_bits = height_to_bits.get(front_height, "00")
         rear_bits = height_to_bits.get(rear_height, "00")
         return int(rear_bits + front_bits, 2)
-    async def _climb_forward(self,distance: float):
+    async def _climb_forward(self,distance: float, climb_dir: int):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("向前移动中...")
-        await move_to(current_odom.x + distance, current_odom.y, 0.0, 2.0)
+        await move_to(current_odom.x + (1 - abs(climb_dir))*distance, current_odom.y + climb_dir * distance, 0.0, 2.0)
         print("向前移动完成")
     async def _climb_stop(self):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("停止移动...")
         await move_to(current_odom.x, current_odom.y, 0.0, 0.5)
-    async def climb_move(self,type_num, distance: float):#或许可以尝试自增move
-        await self._climb_forward(distance)
+    async def climb_move(self,type_num, distance: float, climb_dir: int):#或许可以尝试自增move
+        await self._climb_forward(distance, climb_dir)
         await self._climb_stop()
         print("停止移动完成，检查标志位...")
         # this_type = await self.check_type() 
@@ -42,7 +42,7 @@ class ClimbManager:
         #         return
         #     else:
         #         print(f"当前标志位 {this_type} 与目标类型 {type_num} 不符，继续前进...")
-        #         await self._climb_forward(distance)
+        #         await self._climb_forward(distance, climb_dir)
         #         await self._climb_stop()
             # await asyncio.sleep(0.01)
     async def send_climb_command(self, data: bytes):
@@ -70,8 +70,14 @@ class ClimbManager:
         if abs(target_dir[0] + target_dir[1]) != 1:
             print(f"error:错误的梅林目标要求, target_dir={target_dir}")
             return
+        if target_dir[0] < 0 :
+            climb_dir = 0
+        elif target_dir[1] > 0:
+            climb_dir = 1
+        elif target_dir[1] < 0:
+            climb_dir = -1
         print(f"this_place={this_place}, next_place={next_place}, climb_height={climb_height}")
-        return [this_place[0], this_place[1], next_place[0], next_place[1], climb_height]
+        return [this_place[0], this_place[1], next_place[0], next_place[1], climb_height, climb_dir]
     async def _climb_armup(self, height, front_back):
         assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
         if height == 0:#回收
@@ -157,22 +163,38 @@ class ClimbManager:
     async def climb(self, this_post: list, next_post: list):
         climb_instruct = self.climb_find_grid(this_post, next_post)
         await move_to(climb_instruct[0], climb_instruct[1], 0.0)
+        await move_to(climb_instruct[0], climb_instruct[1], climb_instruct[5]*math.pi/2) # 面向攀爬方向
         print("到达攀爬起点，准备爬升")
-        await self.climb_arm_act(climb_instruct[4],3) 
-        print("抬升完成，准备前进")
-        await self.climb_move(8, 0.40)
-        print("前进中，等待标志位1激活")
-        await self.climb_arm_act(climb_instruct[4],2)
-        print("前腿放下，准备前进")
-        await self.climb_move(14, 0.6)
-        print("前进中，等待标志位123激活")
-        await self.climb_arm_act(0,3)
-        print("双腿放下，调整位置")
-        await self.climb_move(15, 0.40)
-        print("前进中，等待标志位1234激活")
-        await move_to(climb_instruct[2], climb_instruct[3], 0.0)
-        print("爬完成！！！！！！")
-
+        if climb_instruct[4] == 1 or climb_instruct[4] == 2: # 如果需要爬升
+            await self.climb_arm_act(climb_instruct[4],3) 
+            print("抬升完成，准备前进")
+            await self.climb_move(8, 0.40, climb_instruct[5]) # 8为抬升后前进的标志位，0.40为前进距离，实际应用中可以根据需要调整
+            print("前进中，等待标志位1激活")
+            await self.climb_arm_act(climb_instruct[4],1)
+            print("前腿放下，准备前进")
+            await self.climb_move(14, 0.6, climb_instruct[5])
+            print("前进中，等待标志位123激活")
+            await self.climb_arm_act(0,3)
+            print("双腿放下，调整位置")
+            await self.climb_move(15, 0.40, climb_instruct[5])
+            print("前进中，等待标志位1234激活")
+            await move_to(climb_instruct[2], climb_instruct[3], 0.0)
+            print("爬完成！！！！！！")
+        elif climb_instruct[4] == -1 or climb_instruct[4] == -2: # 如果不需要爬升，直接前进
+            await self.climb_move(7, 0.40, climb_instruct[5]) # 8为抬升后前进的标志位，0.40为前进距离，实际应用中可以根据需要调整
+            print("前进中，等待标志位1激活")
+            await self.climb_arm_act(climb_instruct[4],2)
+            print("前腿放下，准备前进")
+            await self.climb_move(1, 0.6, climb_instruct[5])
+            print("前进中，等待标志位123激活")
+            await self.climb_arm_act(climb_instruct[4],3)
+            print("双腿放下，调整位置")
+            await self.climb_move(8, 0.40, climb_instruct[5])
+            print("前进中，等待标志位1234激活")
+            await self.climb_arm_act(0,3)
+            print("双腿放下，调整位置")
+            await move_to(climb_instruct[2], climb_instruct[3], 0.0)
+            print("爬完成！！！！！！")
 
 
    
