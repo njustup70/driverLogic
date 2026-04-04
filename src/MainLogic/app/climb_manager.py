@@ -8,12 +8,16 @@ from MainLogic.Lib.AsyncTools import AsyncVariable
 from MainLogic.core.tf_manager import TFManagerInstance, move_to
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.Lib.bytes import turn_to_bytes
+
+
+
 class ClimbManager:
-    
-    climb_type = async_property(lambda: [False, False, False, False])
-    climb_arm = async_property(lambda: [0, 0])
-from MainLogic.Lib.odomVec import Odom
-from MainLogic.Lib.bytes import turn_to_bytes
+    # climb_type = async_property(int)
+    # climb_arm = async_property(int)
+
+
+    climb_type = AsyncVariable(int)
+    climb_arm = AsyncVariable(int)
 
     class ClimbInstruction(NamedTuple):
         this_place_x: float
@@ -55,6 +59,7 @@ class ClimbManager:
     third_type = 2
     forth_type = 1
 
+    forward_step = 0.05
     start_to_front_climb_distance = 0.40
     front_climb_to_back_climb_distance = 0.6
     back_climb_to_finish_distance = 0.40
@@ -74,9 +79,14 @@ class ClimbManager:
     back_climb_to_finish_distance = 0.35
 
     @staticmethod
-    def _trans_type(a,b,c,d):
-        return (a<<3)|(b<<2)|(c<<1)|d
-
+    def _trans_type(a,b,c,d) -> int:
+        return (d<<3)|(c<<2)|(b<<1)|a
+    def _trans_climb_type(self, climb_type_bytes: bytes) -> int:
+        print(f"解析爬墙类型数据: {climb_type_bytes.hex()}")
+        return climb_type_bytes[0] & 0x0F
+    def _trans_climb_arm(self, climb_arm_bytes: bytes) -> int:
+        # print(f"解析爬墙手臂数据: {climb_arm_bytes.hex()}")
+        return climb_arm_bytes[0] & 0x05
     @staticmethod
     def _trans_type(a,b,c,d) -> int:
         return (d<<3)|(c<<2)|(b<<1)|a
@@ -105,15 +115,17 @@ class ClimbManager:
         await move_to(current_odom.x, current_odom.y, 0.0, 0.5)
 
     async def climb_move(self,type_num, distance: float, climb_dir: int):
-        await self._climb_forward(distance, climb_dir)
+        for i in range (self.max_retries):
+            await self._climb_forward(self.forward_step, climb_dir)
+            this_type = self._trans_climb_type(await ClimbManagerInstance.climb_type)
+            if this_type == type_num:
+                break
         await self._climb_stop()
         print("停止移动完成，检查标志位...")
-
     async def send_climb_command(self, data: bytes):
         for i in range(self.max_retries):
             ros_bridge_module.RosBridgeNodeInstance.writeBytes(data)
             await asyncio.sleep(0.01)
-
     def climb_find_grid(self, this_post: list, next_post: list):
     async def _climb_forward(self,distance: float, climb_dir: float):
         current_odom = await TFManagerInstance.baseLinkOdom
@@ -253,23 +265,6 @@ class ClimbManager:
         print("抬升检查失败")
         return
 
-    async def check_type(self):
-        current_type = await ClimbManagerInstance.climb_type
-        if not current_type or len(current_type) < 4:
-            print("抬升标志位数据类型错误")
-            return -1
-        else:
-            this_time_type = 0
-            if current_type[0] == True:
-                this_time_type += self.first_type
-            if current_type[1] == True:
-                this_time_type += self.second_type
-            if current_type[2] == True:
-                this_time_type += self.third_type
-            if current_type[3] == True:
-                this_time_type += self.forth_type
-            print(f"当前抬升标志位: {current_type}, 编码为: {this_time_type}")
-            return this_time_type
     async def check_type(self):
         print("检查爬墙类型中...")
         current_type = await ClimbManagerInstance.climb_type
