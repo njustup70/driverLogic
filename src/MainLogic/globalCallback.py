@@ -117,7 +117,15 @@ def climb_type_callback(data: bytes):
     """
     if data[0:1] == b'\xFF' and data[1:2] == b'\xB1':
         print(f"回调函数收到串口数据:{data.hex()}")
-        
+        try:
+            if len(data) != 4:
+                print("数据长度不足，无法解析爬墙类型和臂膀数据")
+                return
+            ClimbManagerInstance.climb_type = data[2:3]
+            ClimbManagerInstance.climb_arm = data[3:4]
+            
+        except Exception as e:
+            print(f"解析爬墙数据错误: {e}")
         try:
             # ===== 解析 climb_type =====
             # 从 data[2] 提取爬墙类型的 4 个二进制位（bit[0-3]）

@@ -9,8 +9,8 @@ from MainLogic.Lib.odomVec import Odom
 from MainLogic.Lib.bytes import turn_to_bytes
 class ClimbManager:
     
-    climb_type = async_property(lambda: [False, False, False, False])
-    climb_arm = async_property(lambda: [0, 0])
+    climb_type = async_property(bytes)
+    climb_arm = async_property(bytes)
 
     class ClimbInstruction(NamedTuple):
         this_place_x: float
@@ -34,14 +34,20 @@ class ClimbManager:
     third_type = 2
     forth_type = 1
 
+    forward_step = 0.05
     start_to_front_climb_distance = 0.40
     front_climb_to_back_climb_distance = 0.50
     back_climb_to_finish_distance = 0.35
 
     @staticmethod
-    def _trans_type(a,b,c,d):
-        return (a<<3)|(b<<2)|(c<<1)|d
-
+    def _trans_type(a,b,c,d) -> int:
+        return (d<<3)|(c<<2)|(b<<1)|a
+    def _trans_climb_type(self, climb_type_bytes: bytes) -> int:
+        print(f"解析爬墙类型数据: {climb_type_bytes.hex()}")
+        return climb_type_bytes[0] & 0x0F
+    def _trans_climb_arm(self, climb_arm_bytes: bytes) -> int:
+        # print(f"解析爬墙手臂数据: {climb_arm_bytes.hex()}")
+        return climb_arm_bytes[0] & 0x05
     @staticmethod
     def _get_leg_encoding(front_height: int, rear_height: int) -> int:
         height_to_bits = {0: "00", 200: "01", 400: "10"}
@@ -61,15 +67,17 @@ class ClimbManager:
         await move_to(current_odom.x, current_odom.y, current_odom.yaw, 0.5)
 
     async def climb_move(self,type_num, distance: float, climb_dir: int):
-        await self._climb_forward(distance, climb_dir)
+        for i in range (self.max_retries):
+            await self._climb_forward(self.forward_step, climb_dir)
+            this_type = self._trans_climb_type(await ClimbManagerInstance.climb_type)
+            if this_type == type_num:
+                break
         await self._climb_stop()
         print("停止移动完成，检查标志位...")
-
     async def send_climb_command(self, data: bytes):
         for i in range(self.max_retries):
             ros_bridge_module.RosBridgeNodeInstance.writeBytes(data)
             await asyncio.sleep(0.01)
-
     def climb_find_grid(self, this_post: list, next_post: list):
         this_place = [
             this_post[0] * self.meilin_distance[0] + self.meilin_place[0],

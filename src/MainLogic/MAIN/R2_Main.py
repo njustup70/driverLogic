@@ -45,7 +45,6 @@ async def async_main():
     # await asyncio.sleep(1)
     # await climb_move(0, ClimbManagerInstance.start_to_front_climb_distance, 0.0)
     # await asyncio.sleep(1)
-
     await climb([0,1], [1,1])
     # await climb([1,1], [1,0])
     # await climb([2,1], [3,1])
