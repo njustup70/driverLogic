@@ -13,7 +13,7 @@ from launch.actions import TimerAction
 def generate_launch_description():
     ld = LaunchDescription()
 
-    airy_launch = IncludeLaunchDescription(
+    mid360_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('my_driver'), 'launch', 'mid360_bringup.launch.py')
         ),
@@ -55,7 +55,7 @@ def generate_launch_description():
         period=5.0,  # Delay in seconds
         actions=[ros_bag_node]
     )
-    ld.add_action(airy_launch)
+    ld.add_action(mid360_launch)
     ld.add_action(slam_main)
     ld.add_action(foxglove)
     ld.add_action(ros_bag_action)
