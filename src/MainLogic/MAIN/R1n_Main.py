@@ -1,11 +1,3 @@
-'''
-异步主逻辑和其他函数
-'''
-import asyncio
-from MainLogic.Lib.odomVec import Odom
-from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import TFManagerInstance
-from MainLogic.app.climb_manager import climb
 from MainLogic import globalCallback as gcb
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
@@ -14,22 +6,17 @@ from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.Lib.odomVec import Odom
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
-    serial_port = '/dev/ttyUSB0'  # 可以根据需要修改串口路径
-    baudrate = 921600  # 可以根据需要修改波特率
+    serial_port = '/dev/ttyUSB0'  # 与SICK数据板连接的串口
+    baudrate = 115200  # 可以根据需要修改波特率
     start_serial_process(serial_port=serial_port, baudrate=baudrate)
-    #注册回调
-    assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
 
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.meilin_map_frame_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.action_callback)
+    while ros_bridge_module.RosBridgeNodeInstance is None:
+        await asyncio.sleep(0.05)
 
-
-async def test():
-    #测试函数
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
     sick2Base=Odom(0.0, 0.390, 0.0) # sick底盘
     map2BaseInit=Odom(0.250, 0.250, 0.0) # 地图起点
-    laser2Base=Odom(0.0725, 0.3976, 0.0) # 雷达底盘
+    laser2Base=Odom(0.345, 0.4775, 0.0) # 雷达底盘
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     while True:
