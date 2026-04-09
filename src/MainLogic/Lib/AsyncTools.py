@@ -29,7 +29,11 @@ class AsyncVariable(Generic[T]):
         self._value = value
         self._event = asyncio.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-
+        if isinstance(value, type):
+            raise TypeError(
+                f"预期接收一个实例对象，但接收到了类 '{value.__name__}'。 "
+                f"请传入 {value.__name__}(...) 的实例。"
+            )
     @property
     def value(self) -> T:
         return self._value
