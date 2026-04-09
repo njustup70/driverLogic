@@ -24,60 +24,47 @@ from typing import TypeVar, Generic, Optional, Generator, Any, Callable, cast, o
 # 1. 定义泛型变量 T，它代表你存入 value 的那个类（例如 RosBridgeNode）
 T = TypeVar("T")
 
-class AsyncVariable(Generic[T]): # 👈 继承 Generic[T] 是补全的关键
-    """
-    针对类型补全优化的异步变量类。
-    继承 Generic[T] 后，IDE 就能追踪 await 之后返回的具体对象类型。
-    """
+class AsyncVariable(Generic[T]):
     def __init__(self, value: T):
-        self._value: T = value
-        self._event: asyncio.Event = asyncio.Event()
-        #这里不一定在同一个线程里面,所以需要线程安全的事件循环访问
+        self._value = value
+        self._event = asyncio.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-    #只有整个重新赋值才会触发更新,修改value的属性不会触发更新,所以需要在外面修改完属性后再赋值一次,比如baseLink.value=baseLink.value
-    # （注：由于下方合并了原代理的 __setattr__ 魔法，现在直接修改属性也会自动触发更新了！）
+        if isinstance(value, type):
+            raise TypeError(
+                f"预期接收一个实例对象，但接收到了类 '{value.__name__}'。 "
+                f"请传入 {value.__name__}(...) 的实例。"
+            )
     @property
     def value(self) -> T:
         return self._value
 
     @value.setter
     def value(self, new_value: T):
-        # 捕获当前正在运行的异步事件循环
         self._value = new_value
-        loop = self._get_loop()
-        if loop:
-            # 线程安全地在事件循环中触发通知
+        # 核心精简：直接获取 loop 并触发更新
+        try:
+            loop = self._loop if self._loop is not None else asyncio.get_running_loop()
             loop.call_soon_threadsafe(self._notify)
-    def _get_loop(self):
-        if self._loop is None or self._loop.is_closed():
-            try:
-                self._loop = asyncio.get_running_loop()
-            except RuntimeError:
-                pass
-        return self._loop
+        except RuntimeError:
+            # 如果此时完全没有运行中的 loop，手动 set 确保下一次 await 不阻塞
+            self._event.set()
+
     def _notify(self):
-        # 唤醒所有等待这个事件的协程
-        # 1. 暂存当前的 event
+        # 经典的“替换并唤醒”模式
         old_event = self._event
-        # 2. 立即替换为一个全新的、未 set 的 event（供下一轮 await 使用）
         self._event = asyncio.Event()
-        # 3. 唤醒所有正在等 old_event 的协程
-        # 因为 old_event 不再被 self._event 引用，且已经 set，
-        # 所有等它的协程都会在下一轮调度中被 100% 唤醒，且不会被 reset 干扰。
         old_event.set()
-    # 2. 关键：明确标注返回类型为 T
+
     def __await__(self) -> Generator[Any, None, T]:
-        """
-        允许使用 'node = await var' 获取更新。
-        明确标注了返回类型，从而激活 IDE 补全。
-        """
-        event = self._event        
-        # 如果当前已经有值更新但还没被处理（虽然逻辑上 notify 会处理，但为了严谨增加判断）
-        if event.is_set():
+        # 记录当前协程的 loop，供后续同步线程修改属性时使用
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+        
+        if self._event.is_set():
+            self._event.clear() # 消费掉已有的更新
             return self._value
 
-        yield from event.wait().__await__()
-        
+        yield from self._event.wait().__await__()
         return self._value
 
     # ==========================================
