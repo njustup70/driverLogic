@@ -38,16 +38,19 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
     #逻辑实例...,比如移动到某个坐标
     print("开始移动到梅林位置")
-    # await move_to(2.0, 4.2, 0.0) 
+    await move_to(2.0, 4.2, 0.0) 
     print("到达梅林位置")
-    await check_types()
-    # print(f"爬墙类型检测结果: {climb_type}")
     # await climb_arm_act(1, 3)
+    # while True:
+    #     await check_types() 
+    #     await asyncio.sleep(0.01)
+    # print(f"爬墙类型检测结果: {climb_type}")
+    
     # await move_to(2.0, 4.2, 3.14/2)
     # await asyncio.sleep(1)
     # await climb_move(0, ClimbManagerInstance.start_to_front_climb_distance, 0.0)
     # await asyncio.sleep(1)
-    # await climb([0,1], [1,1])
+    await climb([0,1], [1,1])
     # await climb([1,1], [1,0])
     # await climb([2,1], [3,1])
 

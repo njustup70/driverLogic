@@ -192,3 +192,17 @@ def async_property(default_factory: Callable[[], T]) -> AsyncProperty[T]:
 # // .............~l}`::;i+i]i}+/+l@%$$E$&XYYY}!1,.!i>XIYX#N$REWEEEEEEEEEEEEE$N1+/+++/'iiiiii/1.`>:+...........
 # // ..............,i::;}i+i],*+++$@$EE$E%&']!~"+;~;>!"*}>$$$$EEE$EEEEEEEEEEE#%Fi//+1~'/i+++il>..>`i`..........
 # // ..............';:./]i++}.}li]NEEEE$W$}:i]+i!;~;i>i>,>%F/*$EEWWEEEEEEEEEEEE%Xi+//./+i++++*`..";i`..........
+class MoveControll:
+    stop_flag = AsyncVariable(False)
+    @classmethod
+    def stop(cls):
+        cls.stop_flag.value = True
+    @classmethod
+    def consume_stop(cls) -> bool:
+        """
+        消费停止信号（自动复位）
+        """
+        if cls.stop_flag.value:
+            cls.stop_flag.value = False
+            return True
+        return False

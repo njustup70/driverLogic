@@ -2,10 +2,12 @@
 全局回调函数串口接收回调和ros2话题回调
 '''
 import struct
+from functools import partial
 from MainLogic.Lib.AsyncTools import AsyncVariable
 from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core.tf_manager import TFManagerInstance
+from MainLogic.core import ros_bridge_node as ros_bridge_module
 
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
@@ -110,6 +112,8 @@ def climb_type_callback(data: bytes):
             if len(data) != 4:
                 print("数据长度不足，无法解析爬墙类型和臂膀数据")
                 return
+            # Assign into AsyncVariable from ROS callback thread safely by scheduling
+            # the assignment onto the asyncio event loop used by RosBridgeNodeInstance.
             ClimbManagerInstance.climb_type.value = data[2]
             ClimbManagerInstance.climb_arm.value = data[3]
             ClimbManagerInstance.climb_type.value = ClimbManagerInstance.climb_type.value

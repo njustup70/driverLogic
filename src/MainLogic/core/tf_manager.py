@@ -12,9 +12,9 @@ from geometry_msgs.msg import Vector3Stamped,Vector3
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.Lib.bytes import turn_to_bytes
 from MainLogic.Lib.AsyncTools import AsyncVariable
+
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.Lib.Visual import PathVisualInstance
-
 BASE_LINK_ODOM_TOPIC = '/state/base_link_odom'
 
 
@@ -176,6 +176,9 @@ async def move_to(x, y, yaw, timeout: float = 0.0):
     if timeout > 0.1:
         start_time = asyncio.get_event_loop().time()
     while True:
+        if MoveControll.consume_stop():
+            print("move_to 被中断（自动复位）")
+            break
         TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
         # print("发送移动指令")
         # 等待 baseLinkOdom 更新
@@ -193,3 +196,15 @@ async def move_to(x, y, yaw, timeout: float = 0.0):
                 break
 
 TFManagerInstance = TFManager()
+
+class MoveControll:
+    stop_flag = AsyncVariable(False)
+    @classmethod
+    def stop(cls):
+        cls.stop_flag.value = True
+    @classmethod
+    def consume_stop(cls) -> bool:
+        if cls.stop_flag.value:
+            cls.stop_flag.value = False
+            return True
+        return False
