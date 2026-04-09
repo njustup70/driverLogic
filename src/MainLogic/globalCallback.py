@@ -4,6 +4,7 @@
 import struct
 from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
+from MainLogic.app.meilin_manager import MeilinManagerInstance
 from MainLogic.core.tf_manager import TFManagerInstance
 
 def mcu_transmit_callback(data: bytes):
@@ -16,6 +17,18 @@ def mcu_transmit_callback(data: bytes):
     # slam correct纠正帧：
     _CORRECT_FRAME_PREFIX = b'\xFF\xB2'
     _CORRECT_FRAME_LEN = 4
+    # 梅林状态帧与重算触发帧：
+    _MEILIN_STATE_FRAME_PREFIX = b'\xFF\xB3'
+    _MEILIN_STATE_FRAME_LEN = 7
+    
+    _MEILIN_CMD_FRAME_PREFIX = b'\xFF\xB4'
+    _MEILIN_CMD_FRAME_LEN = 5
+    _MEILIN_STATE_CODE_TO_NAME = {
+        0: "EMPTY",
+        1: "R2",
+        2: "R1",
+        3: "FAKE",
+    }
     
     if not data:
         return
@@ -37,8 +50,23 @@ def mcu_transmit_callback(data: bytes):
         correct_tail = data[3] == 0xFF
         correct_valid = correct_header and correct_checksum and correct_tail
 
+    meilin_state_valid = False
+    if len(data) == _MEILIN_STATE_FRAME_LEN:
+        meilin_state_header = data[:2] == _MEILIN_STATE_FRAME_PREFIX
+        meilin_state_checksum = ((0xB3 + data[2] + data[3] + data[4]) & 0xFF) == data[5]
+        meilin_state_tail = data[6] == 0xFF
+        meilin_state_valid = meilin_state_header and meilin_state_checksum and meilin_state_tail
+
+    meilin_cmd_valid = False
+    if len(data) == _MEILIN_CMD_FRAME_LEN:
+        meilin_cmd_header = data[:2] == _MEILIN_CMD_FRAME_PREFIX
+        meilin_cmd_byte = data[2] == 0x01
+        meilin_cmd_checksum = ((0xB4 + data[2]) & 0xFF) == data[3]
+        meilin_cmd_tail = data[4] == 0xFF
+        meilin_cmd_valid = meilin_cmd_header and meilin_cmd_byte and meilin_cmd_checksum and meilin_cmd_tail
+
     # 检查帧类型互斥性
-    frame_count = sum([odom_valid, sick_valid, correct_valid])
+    frame_count = sum([odom_valid, sick_valid, correct_valid, meilin_state_valid, meilin_cmd_valid])
     if frame_count == 0:
         return
     
@@ -58,6 +86,28 @@ def mcu_transmit_callback(data: bytes):
 
     if correct_valid:
         serial_correct_callback(data)
+        return
+
+    if meilin_state_valid:
+        try:
+            meilin_states = []
+            payload = data[2:5]
+            for byte_index in range(3):
+                value = payload[byte_index]
+                for bit_pair_index in range(4):
+                    state_code = (value >> (bit_pair_index * 2)) & 0x03
+                    meilin_states.append(_MEILIN_STATE_CODE_TO_NAME[state_code])
+            MeilinManagerInstance.update_pile_states(meilin_states)
+        except Exception as e:
+            print(f"梅林状态帧解析错误: {e}")
+        return
+
+    if meilin_cmd_valid:
+        try:
+            MeilinManagerInstance.request_solve()
+            print("梅林重算请求已触发")
+        except Exception as e:
+            print(f"梅林重算命令处理错误: {e}")
         return
 
     try:

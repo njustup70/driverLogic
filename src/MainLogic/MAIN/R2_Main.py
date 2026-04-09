@@ -2,13 +2,17 @@
 异步主逻辑和其他函数
 '''
 import asyncio
+import os
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import move_to, TFManagerInstance
 from MainLogic.app.climb_manager import climb
+from MainLogic.app.meilin_manager import MeilinManagerInstance
 from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
 from MainLogic.core.serial_node import start_serial_process
+
+MEILIN_SOLVER_MODE = os.getenv("MEILIN_SOLVER_MODE", "MASTER").upper()
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
@@ -20,11 +24,13 @@ async def async_main():
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
+    MeilinManagerInstance.solver_mode = MEILIN_SOLVER_MODE
     sick2Base=Odom(0.0, -0.340, 0.0)
     map2BaseInit=Odom(0.390, 0.390, 0.0)
     laser2Base=Odom(0.0, 0.390, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
+    asyncio.create_task(MeilinManagerInstance.solve_loop())
     while True:
         await asyncio.sleep(1)
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
