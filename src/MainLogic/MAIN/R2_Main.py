@@ -19,7 +19,9 @@ async def async_main():
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, 0xAA)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
+
     sick2Base=Odom(0.0, -0.340, 0.0)
     map2BaseInit=Odom(0.390, 0.390, 0.0)
     laser2Base=Odom(0.0, 0.390, 0.0)
@@ -28,7 +30,7 @@ async def async_main():
     while True:
         await asyncio.sleep(1)
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, 0xB1)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('spear_status', gcb.spear_callback, type=UInt8MultiArray)
     #注册话题发布

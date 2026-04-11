@@ -20,7 +20,7 @@ async def async_main():
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, 0xB1)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('spear_status', gcb.spear_callback, type=UInt8MultiArray)
     #注册话题发布
