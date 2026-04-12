@@ -10,8 +10,8 @@ def mcu_transmit_callback(data: bytes): # 0xAA
     """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
     # odom数据帧：3个float，共12字节
     _ODOM_FRAME_LEN = 12
-    # sick数据帧：4个float，共16字节
-    _SICK_FRAME_LEN = 16
+    # sick数据帧：4个float加头3位，尾1位，共20字节
+    _SICK_FRAME_LEN = 20
     
     if not data:
         return
@@ -26,8 +26,16 @@ def mcu_transmit_callback(data: bytes): # 0xAA
         return
 
     if len(data) == _SICK_FRAME_LEN:
+        sick_header = data[0]
+        sick_tail = data[19]
+        sick_valid = sick_header == sick_tail and ((sum(data[1:19]) & 0xFF) == sick_tail)
+        if not sick_valid:
+            print(f"SICK数据校验失败")
+            return
+        
+        sick_data = data[3:19]
         try:
-            sick_floats = struct.unpack('<4f', data)
+            sick_floats = struct.unpack('<4f', sick_data)
             distance = 1.0667 * sick_floats[0] - 0.0533
             TFManagerInstance.sick(float(distance))
             print(f"SICK数据解析成功: distance={distance:.3f} m")

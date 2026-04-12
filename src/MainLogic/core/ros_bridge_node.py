@@ -46,6 +46,7 @@ class rosBridgeNode(Node):
 
     def register_serial_sub(self, callback, code):
         # 注册串口数据回调
+        code = code if isinstance(code, bytes) else bytes([code])
         self._serial_callbacks_dict[code] = callback
 
     def writeBytes(self, data: bytes):
@@ -58,7 +59,9 @@ class rosBridgeNode(Node):
         # 从串口收到数据后，转发目标回调
         if self._serial_callbacks_dict:
             data = bytes(msg.data)
-            data_code = data[1] if data else None
+            data_code = bytes([data[1]]) if data else None
+            print(data_code)
+            data = data[2:] if len(data) > 2 else b''
             if data_code in self._serial_callbacks_dict:
                 callback = self._serial_callbacks_dict[data_code]
                 if asyncio.iscoroutinefunction(callback):

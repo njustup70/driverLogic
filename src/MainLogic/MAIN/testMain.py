@@ -10,14 +10,16 @@ from geometry_msgs.msg import Twist
 import numpy as np
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
-    serial_port = '/dev/ttyUSB0'  # 与SICK数据板连接的串口
+    serial_port = '/dev/tnt0'  # 与SICK数据板连接的串口
     baudrate = 115200  # 可以根据需要修改波特率
     start_serial_process(serial_port=serial_port, baudrate=baudrate)
 
     while ros_bridge_module.RosBridgeNodeInstance is None:
         await asyncio.sleep(0.05)
 
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, b'\xAA')
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     sick2Base=Odom(0.0, -0.340, 0.0)
     map2BaseInit=Odom(0.390, 0.390, 0.0)
     laser2Base=Odom(0.0, -0.390, 0.0)
