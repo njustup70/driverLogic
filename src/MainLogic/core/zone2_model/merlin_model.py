@@ -1,21 +1,44 @@
 """
-梅林区域建模（基于 merlin_map）
-仅考虑 1~12 号桩的四个 R2 和一个 fake。
+梅林模型建模逻辑总览（基于 merlin_map）
+======================================
 
-规则：
-Step 1
-1) 所有相邻的 empty 桩互相有向连接（双向）
-2) R2 桩只能指向相邻的 empty 桩
-3) fake 桩孤立（不与任何桩有入边/出边）
+一、建模对象
+1) 主区域桩位：1~12。
+2) 门户桩位：start / end。
+3) 桩位类型：empty / R2 / fake。
 
-Step 2
-1) empty 桩若相邻 R2，不直接指向 R2，而是通过衍生节点：
-   empty -> derived_node -> R2
-2) 若同一个 empty 桩衍生出 >=2 个节点，这些衍生节点两两互连（双向）
+二、Step 1 基础边规则（仅 1~12）
+1) empty 与相邻 empty 建立有向边（遍历后形成双向）。
+2) R2 只允许指向相邻 empty（R2 -> empty）。
+3) fake 完全隔离，不产生任何入边/出边。
+
+三、Step 2 衍生节点规则
+1) 若某来源桩 src 与 R2 相邻，不直接连到 R2，而是：
+    src -> D_src_to_r2 -> r2。
+2) 衍生节点继承 src 的邻接特性时，遵循“单向继承”：
+    - 只继承 src 的出边方向（D_src_to_r2 -> x）；
+    - 不继承反向入边（不会添加 x -> D_src_to_r2）。
+3) 继承过滤：排除 r2 本身、背后节点、上方节点、fake 节点。
+4) 同一 owner 若有多个衍生节点，则这些衍生节点两两双向互连。
+
+四、start / end 硬约束
+1) start 不能有入边；只允许向 1/2/3（或对应 R2 的 start 衍生节点）出边。
+2) end 不能有出边；只允许 10/11/12（非 fake）指向 end。
+3) 对 10/11/12 中非 fake 节点，强制补齐到 end 的入边。
+
+五、R2 强制衍生补强
+1) 对每个 R2，所有相邻且非 fake 的 1~12 桩都必须具备衍生链：
+    src -> D_src_to_r2 -> r2。
+2) 衍生继承仍保持“仅继承 src 出边方向”。
+
+六、最终收敛
+1) 再次执行 fake 隔离（删去 fake 相关全部边）。
+2) 再次补强同 owner 衍生节点互连。
+3) 输出 graph_nodes、edges、derived_by_owner 等结构供绘图与求解使用。
 """
 
 from typing import Dict, List, Optional, Set, Tuple, Any
-from MainLogic.app.merlin_map import get_merlin_map
+from MainLogic.core.zone2_model.merlin_map import get_merlin_map
 
 
 def _node_kind(blocks: Dict[int, str], stake_id: int) -> str:
@@ -51,6 +74,14 @@ def _opposite_neighbor(src: int, target: int) -> Optional[int]:
     return None
 
 
+def _upper_neighbor(node_id: int) -> Optional[int]:
+    """返回当前桩位正上方桩位（编号-3），若不存在则返回 None。"""
+    up = node_id - 3
+    if 1 <= up <= 12:
+        return up
+    return None
+
+
 def build_merlin_model(map_data: Optional[dict] = None) -> dict:
     if map_data is None:
         map_data = get_merlin_map()
@@ -72,6 +103,9 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
 
     def add_edge(src: str, dst: str, rule: str) -> None:
         edge_set.add((src, dst, rule))
+
+    def has_directed_edge(src: str, dst: str) -> bool:
+        return any(esrc == src and edst == dst for esrc, edst, _ in edge_set)
 
     # Step 1（保持只在 1~12 内）
     for s in stakes:
@@ -120,18 +154,22 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
             add_edge(dnode, str(r2), "step2_derived_to_R2")
             derived_by_owner.setdefault(owner_key, []).append(dnode)
 
-            # 继承 owner 的相邻特性
+            # 继承 owner 的相邻特性（仅继承 owner 的“出边”方向）
             src_neigh = [x for x in adjacency.get(src, []) if x in modeled_sources]
             back_node = _opposite_neighbor(src, r2)
+            up_node = _upper_neighbor(src)
             for x in src_neigh:
                 if x == r2:
                     continue
                 if back_node is not None and x == back_node:
                     continue
+                if up_node is not None and x == up_node:
+                    continue
                 if isinstance(x, int) and kinds[x] == "fake":
                     continue
+                if not has_directed_edge(owner_key, str(x)):
+                    continue
                 add_edge(dnode, str(x), "step2_derived_inherit_adj")
-                add_edge(str(x), dnode, "step2_derived_inherit_adj")
 
     # 同 owner 的多个衍生节点互连（双向）
     for owner, dnodes in derived_by_owner.items():
@@ -222,6 +260,7 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
                 continue
 
             back_node = _opposite_neighbor(src, r2)
+            up_node = _upper_neighbor(src)
 
             dnode = f"D_{src}_to_{r2}"
             if dnode not in graph_nodes:
@@ -235,7 +274,7 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
             add_edge(dnode, str(r2), "step2_derived_to_R2")
             derived_by_owner.setdefault(str(src), []).append(dnode)
 
-            # 继承 src 的相邻特性时，排除背后节点
+            # 继承 src 的相邻特性时，排除背后节点（仅继承 src 的出边方向）
             for x in adjacency.get(src, []):
                 if not isinstance(x, int):
                     continue
@@ -245,10 +284,13 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
                     continue
                 if back_node is not None and x == back_node:
                     continue
+                if up_node is not None and x == up_node:
+                    continue
                 if kinds[x] == "fake":
                     continue
+                if not has_directed_edge(str(src), str(x)):
+                    continue
                 add_edge(dnode, str(x), "step2_derived_inherit_adj")
-                add_edge(str(x), dnode, "step2_derived_inherit_adj")
 
     # ---- fake 最高优先级隔离 ----
     # fake 物块独立：不允许任何输入/输出边。

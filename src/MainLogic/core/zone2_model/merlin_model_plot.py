@@ -7,8 +7,54 @@
 """
 
 from typing import Dict, Tuple, List, Set, Any
-from MainLogic.app.merlin_model import build_merlin_model
+from MainLogic.core.zone2_model.merlin_model import build_merlin_model
 import math
+
+
+# 衍生节点局部方向规则（可按需扩展）
+# 方向语义基于有向边 src -> dst 的局部坐标：
+# - left/right: ±n（n = (-u_y, u_x)）
+# - up/down:   ±u（u 为 src->dst 单位向量）
+DERIVED_DIRECTION_OVERRIDES: Dict[Tuple[str, str], str] = {
+    ("2", "5"): "left",
+    ("4", "5"): "down",
+}
+
+TOP_STAKES_FOR_ARROW_OVERLAY: Set[str] = {"1", "2", "3"}
+
+
+def _direction_vector_from_local(
+    direction: str,
+    ux: float,
+    uy: float,
+    nx: float,
+    ny: float,
+) -> Tuple[float, float]:
+    d = str(direction).lower()
+    if d == "left":
+        return nx, ny
+    if d == "right":
+        return -nx, -ny
+    if d == "up":
+        return ux, uy
+    if d == "down":
+        return -ux, -uy
+    # 默认 left，保证结果稳定
+    return nx, ny
+
+
+def _lateral_vector_for_local_direction(
+    direction: str,
+    ux: float,
+    uy: float,
+    nx: float,
+    ny: float,
+) -> Tuple[float, float]:
+    d = str(direction).lower()
+    # left/right 以法向为主，切向做微调；up/down 以切向为主，法向做微调
+    if d in {"left", "right"}:
+        return ux, uy
+    return nx, ny
 
 
 def _fixed_stake_pos() -> Dict[str, Tuple[float, float]]:
@@ -37,6 +83,7 @@ def _enforce_min_distance(
     fixed_nodes: Set[str],
     min_dist: float = 0.22,
     iterations: int = 160,
+    derived_side_constraints: Dict[str, Tuple[float, float, float, float, float]] | None = None,
 ) -> Dict[str, Tuple[float, float]]:
     """
     简单的最小距离迭代：
@@ -44,6 +91,20 @@ def _enforce_min_distance(
     - 其他节点自动避让
     """
     keys = list(pos.keys())
+
+    def _project_if_needed(node: str) -> None:
+        if not derived_side_constraints:
+            return
+        c = derived_side_constraints.get(node)
+        if not c:
+            return
+        mx, my, bx, by, eps = c
+        px, py = pos[node]
+        dot = (px - mx) * bx + (py - my) * by
+        if dot < eps:
+            # 投影回约束半平面，避免跨侧
+            corr = (eps - dot)
+            pos[node] = (px + bx * corr, py + by * corr)
 
     for _ in range(iterations):
         moved = False
@@ -72,12 +133,16 @@ def _enforce_min_distance(
                         continue
                     elif a_fixed and not b_fixed:
                         pos[b] = (bx + ux * overlap, by + uy * overlap)
+                        _project_if_needed(b)
                     elif b_fixed and not a_fixed:
                         pos[a] = (ax - ux * overlap, ay - uy * overlap)
+                        _project_if_needed(a)
                     else:
                         half = overlap * 0.5
                         pos[a] = (ax - ux * half, ay - uy * half)
                         pos[b] = (bx + ux * half, by + uy * half)
+                        _project_if_needed(a)
+                        _project_if_needed(b)
                     moved = True
 
         if not moved:
@@ -102,12 +167,15 @@ def _place_derived_nodes_avoiding_edges(
     graph_nodes: Dict[str, dict],
     edges: List[dict],
     stakes_fixed: Set[str],
-) -> Dict[str, Tuple[float, float]]:
+) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Tuple[float, float, float, float, float]]]:
     """
     给衍生节点选位置：不压到其他边段上（尽量远离）
     """
     # 先收集“基础边段”（不包含任何衍生节点参与的边）
     base_segments: List[Tuple[float, float, float, float]] = []
+    # 衍生节点侧约束：node -> (mx, my, bx, by, eps)
+    # 要求 (p-m)·b >= eps，保证最小间距后处理不跨侧
+    derived_side_constraints: Dict[str, Tuple[float, float, float, float, float]] = {}
     for e in edges:
         u, v = str(e["from"]), str(e["to"])
         if u not in pos or v not in pos:
@@ -142,30 +210,37 @@ def _place_derived_nodes_avoiding_edges(
             ux, uy = dx / norm, dy / norm
             nx, ny = -uy, ux  # 法向量
 
-            # 候选点：优先放在中垂线两侧，保证视觉上对称美观
-            # idx 交替决定左右两侧，层级决定离中线的距离
-            side = -1.0 if idx % 2 == 0 else 1.0
-            layer = idx // 2 + 1
+            preferred_direction = DERIVED_DIRECTION_OVERRIDES.get((src, dst), "left")
+            bx, by = _direction_vector_from_local(preferred_direction, ux, uy, nx, ny)
+            lx, ly = _lateral_vector_for_local_direction(preferred_direction, ux, uy, nx, ny)
+
+            # 候选点：优先落在局部方向指定的一侧，层级决定离中点的距离
+            layer = idx + 1
             base_offset = 0.16 * layer
 
             candidates: List[Tuple[float, float]] = []
-            # 主候选：严格落在中垂线两侧
-            candidates.append((mx + nx * side * base_offset, my + ny * side * base_offset))
-            candidates.append((mx + nx * side * (base_offset + 0.08), my + ny * side * (base_offset + 0.08)))
-            candidates.append((mx + nx * side * (base_offset + 0.16), my + ny * side * (base_offset + 0.16)))
+            # 主候选：严格落在目标半平面
+            candidates.append((mx + bx * base_offset, my + by * base_offset))
+            candidates.append((mx + bx * (base_offset + 0.08), my + by * (base_offset + 0.08)))
+            candidates.append((mx + bx * (base_offset + 0.16), my + by * (base_offset + 0.16)))
 
-            # 备选：在中垂线两侧附近做轻微切向微调，避免重叠到边上
+            # 备选：沿横向轻微微调，避免重叠到边上
             for shift in (-0.08, 0.08):
-                candidates.append((mx + nx * side * base_offset + ux * shift, my + ny * side * base_offset + uy * shift))
-                candidates.append((mx + nx * side * (base_offset + 0.08) + ux * shift, my + ny * side * (base_offset + 0.08) + uy * shift))
+                candidates.append((mx + bx * base_offset + lx * shift, my + by * base_offset + ly * shift))
+                candidates.append((mx + bx * (base_offset + 0.08) + lx * shift, my + by * (base_offset + 0.08) + ly * shift))
 
             # 选分数最高：离基础边越远越好、离其它已放衍生节点越远越好
             best_p = (mx, my)
             best_score = -1e9
             for cx, cy in candidates:
+                side_dot = (cx - mx) * bx + (cy - my) * by
+                if side_dot <= 0.0:
+                    # 硬约束：不允许落在目标侧反面
+                    continue
+
                 min_edge_dist = 1e9
-                for ax, ay, bx, by in base_segments:
-                    d = _point_to_segment_distance(cx, cy, ax, ay, bx, by)
+                for ax, ay, sx2, sy2 in base_segments:
+                    d = _point_to_segment_distance(cx, cy, ax, ay, sx2, sy2)
                     if d < min_edge_dist:
                         min_edge_dist = d
 
@@ -178,14 +253,15 @@ def _place_derived_nodes_avoiding_edges(
                         min_node_dist = d
 
                 # 优先远离边，其次远离节点
-                score = min_edge_dist * 3.0 + min_node_dist
+                score = min_edge_dist * 3.0 + min_node_dist + side_dot * 0.2
                 if score > best_score:
                     best_score = score
                     best_p = (cx, cy)
 
             pos[dn] = best_p
+            derived_side_constraints[dn] = (mx, my, bx, by, 0.02)
 
-    return pos
+    return pos, derived_side_constraints
 
 
 def _bidirectional_edge_pairs(g) -> Set[Tuple[str, str]]:
@@ -226,10 +302,53 @@ def _edge_connectionstyle(u: str, v: str, data: dict, graph_nodes: Dict[str, dic
     return "arc3,rad=0.0"
 
 
+def _edge_color_by_direction(u: str, v: str, graph_nodes: Dict[str, dict]) -> str:
+    """边颜色规则：
+    - 基础边与从衍生节点发出的箭头：红色
+    - 指向衍生节点的箭头：紫色
+    """
+    u_meta = graph_nodes.get(str(u), {})
+    v_meta = graph_nodes.get(str(v), {})
+    u_is_derived = u_meta.get("kind") == "derived"
+    v_is_derived = v_meta.get("kind") == "derived"
+
+    if v_is_derived and not u_is_derived:
+        return "#7B2CBF"  # 紫色：指向衍生节点
+    return "#D00000"      # 红色：基础边 + 从衍生节点发出
+
+
+def _edge_zorder_for_target(v: str, graph_nodes: Dict[str, dict]) -> float:
+    """指向 1/2/3 号桩的箭头放到桩层之上。"""
+    v_str = str(v)
+    v_meta = graph_nodes.get(v_str, {})
+    if v_str in TOP_STAKES_FOR_ARROW_OVERLAY and v_meta.get("kind") == "stake":
+        return 5.0
+    return 2.0
+
+
+def _set_edge_artists_zorder(artists: Any, z: float) -> None:
+    if artists is None:
+        return
+    if isinstance(artists, list):
+        for a in artists:
+            if hasattr(a, "set_zorder"):
+                a.set_zorder(z)
+        return
+    if hasattr(artists, "set_zorder"):
+        artists.set_zorder(z)
+
+
+def _signed_bidir_connectionstyle(u: str, v: str) -> str:
+    """双向边使用相反弧度，避免重叠遮挡箭头。"""
+    rad = 0.12 if str(u) < str(v) else -0.12
+    return f"arc3,rad={rad}"
+
+
 def draw_merlin_model(
     save_path: str = "/tmp/merlin_model.png",
     show: bool = False,
     show_bidirectional_white_arrows: bool = False,
+    show_base_edges: bool = False,
 ) -> str:
     try:
         import networkx as nx
@@ -251,7 +370,7 @@ def draw_merlin_model(
     pos = _fixed_stake_pos()
 
     # 2) 放置衍生节点（避开已有边）
-    pos = _place_derived_nodes_avoiding_edges(
+    pos, derived_side_constraints = _place_derived_nodes_avoiding_edges(
         pos=pos,
         graph_nodes=graph_nodes,
         edges=edges,
@@ -264,6 +383,7 @@ def draw_merlin_model(
         fixed_nodes={str(i) for i in range(1, 13)} | {"start", "end"},
         min_dist=0.24,
         iterations=200,
+        derived_side_constraints=derived_side_constraints,
     )
 
     # 4) 颜色和大小映射
@@ -315,59 +435,52 @@ def draw_merlin_model(
         else:
             normal_edges.append((u, v, data))
 
-    # 普通边：批量绘制
-    if normal_edges:
-        normal_edgelist = [(u, v) for u, v, _ in normal_edges]
-        normal_colors = [node_color_map.get(str(u), "#333333") for u, _, _ in normal_edges]
-        nx.draw_networkx_edges(
+    # 普通边：统一细线样式（仅使用红/紫两种颜色）
+    if show_base_edges and normal_edges:
+        for u, v, data in normal_edges:
+            base_color = _edge_color_by_direction(str(u), str(v), graph_nodes)
+            edge_z = _edge_zorder_for_target(str(v), graph_nodes)
+            connectionstyle = (
+                _signed_bidir_connectionstyle(str(u), str(v))
+                if show_bidirectional_white_arrows and (u, v) in bidirectional_edges
+                else "arc3,rad=0.0"
+            )
+            artists = nx.draw_networkx_edges(
+                g,
+                pos,
+                edgelist=[(u, v)],
+                arrowstyle="->",
+                arrows=True,
+                arrowsize=11,
+                width=1.0,
+                edge_color=[base_color],
+                alpha=0.95,
+                connectionstyle=connectionstyle,
+            )
+            _set_edge_artists_zorder(artists, edge_z)
+
+    # 衍生相关边：统一细线样式（与基础红线一致，仅颜色由规则区分红/紫）
+    for u, v, data in derived_edges:
+        edge_z = _edge_zorder_for_target(str(v), graph_nodes)
+        base_cs = _edge_connectionstyle(str(u), str(v), data, graph_nodes, pos)
+        connectionstyle = (
+            _signed_bidir_connectionstyle(str(u), str(v))
+            if show_bidirectional_white_arrows and (u, v) in bidirectional_edges
+            else base_cs
+        )
+        artists = nx.draw_networkx_edges(
             g,
             pos,
-            edgelist=normal_edgelist,
+            edgelist=[(u, v)],
             arrowstyle="->",
-            arrowsize=14,
-            width=1.4,
-            edge_color=normal_colors,
+            arrows=True,
+            arrowsize=11,
+            width=1.0,
+            edge_color=[_edge_color_by_direction(str(u), str(v), graph_nodes)],
             alpha=0.95,
-            connectionstyle="arc3,rad=0.0",
+            connectionstyle=connectionstyle,
         )
-
-    # 衍生相关边：逐条绘制，给更大的弧度，绕开衍生节点
-    for u, v, data in derived_edges:
-        if show_bidirectional_white_arrows and (u, v) in bidirectional_edges:
-            nx.draw_networkx_edges(
-                g,
-                pos,
-                edgelist=[(u, v)],
-                arrowstyle="->",
-                arrowsize=15,
-                width=3.0,
-                edge_color="#2B2B2B",
-                alpha=0.95,
-                connectionstyle=_edge_connectionstyle(str(u), str(v), data, graph_nodes, pos),
-            )
-            nx.draw_networkx_edges(
-                g,
-                pos,
-                edgelist=[(u, v)],
-                arrowstyle="->",
-                arrowsize=14,
-                width=1.9,
-                edge_color="#FFFFFF",
-                alpha=1.0,
-                connectionstyle=_edge_connectionstyle(str(u), str(v), data, graph_nodes, pos),
-            )
-        elif not show_bidirectional_white_arrows or (u, v) not in bidirectional_edges:
-            nx.draw_networkx_edges(
-                g,
-                pos,
-                edgelist=[(u, v)],
-                arrowstyle="->",
-                arrowsize=14,
-                width=1.4,
-                edge_color=[node_color_map.get(str(u), "#333333")],
-                alpha=0.95,
-                connectionstyle=_edge_connectionstyle(str(u), str(v), data, graph_nodes, pos),
-            )
+        _set_edge_artists_zorder(artists, edge_z)
 
     plt.title("Merlin Directed Graph (Fixed Layout)")
     plt.axis("off")
@@ -383,16 +496,19 @@ def draw_merlin_model(
 
 
 def main() -> None:
-    path_without_white = draw_merlin_model(
-        save_path="/tmp/merlin_model_no_white_bidirectional.png",
-        show_bidirectional_white_arrows=False,
-    )
-    path_with_white = draw_merlin_model(
-        save_path="/tmp/merlin_model_with_white_bidirectional.png",
+    path_without_base_edges = draw_merlin_model(
+        save_path="/tmp/merlin_model_without_base_edges.png",
         show_bidirectional_white_arrows=True,
+        show_base_edges=False,
     )
-    print(f"图已生成(无白色双向箭头): {path_without_white}")
-    print(f"图已生成(有白色双向箭头): {path_with_white}")
+    print(f"图已生成(不含基础边): {path_without_base_edges}")
+
+    path_with_base_edges = draw_merlin_model(
+        save_path="/tmp/merlin_model_with_base_edges.png",
+        show_bidirectional_white_arrows=True,
+        show_base_edges=True,
+    )
+    print(f"图已生成(含基础边): {path_with_base_edges}")
 
 
 if __name__ == "__main__":
