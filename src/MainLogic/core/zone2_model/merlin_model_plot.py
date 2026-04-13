@@ -8,6 +8,7 @@
 
 from typing import Dict, Tuple, List, Set, Any
 from MainLogic.core.zone2_model.merlin_model import build_merlin_model
+from MainLogic.core.zone2_model.path_solver import dijkstra_min_cost_path
 import math
 
 
@@ -349,6 +350,8 @@ def draw_merlin_model(
     show: bool = False,
     show_bidirectional_white_arrows: bool = False,
     show_base_edges: bool = False,
+    show_optimal_path: bool = True,
+    optimal_path_width: float = 3.0,
 ) -> str:
     try:
         import networkx as nx
@@ -482,7 +485,46 @@ def draw_merlin_model(
         )
         _set_edge_artists_zorder(artists, edge_z)
 
-    plt.title("Merlin Directed Graph (Fixed Layout)")
+    # 最优路径叠加高亮（Dijkstra: start -> end）
+    if show_optimal_path:
+        path_result = dijkstra_min_cost_path(start="start", end="end")
+        if path_result.get("found"):
+            for u, v, _, rule, _ in path_result.get("path_edges", []):
+                edge_z = 7.0
+                color = _edge_color_by_direction(str(u), str(v), graph_nodes)
+                is_derived_edge = (
+                    graph_nodes.get(str(u), {}).get("kind") == "derived"
+                    or graph_nodes.get(str(v), {}).get("kind") == "derived"
+                )
+
+                if show_bidirectional_white_arrows and (u, v) in bidirectional_edges:
+                    connectionstyle = _signed_bidir_connectionstyle(str(u), str(v))
+                elif is_derived_edge:
+                    connectionstyle = _edge_connectionstyle(
+                        str(u), str(v), {"rule": rule}, graph_nodes, pos
+                    )
+                else:
+                    connectionstyle = "arc3,rad=0.0"
+
+                artists = nx.draw_networkx_edges(
+                    g,
+                    pos,
+                    edgelist=[(u, v)],
+                    arrowstyle="->",
+                    arrows=True,
+                    arrowsize=13,
+                    width=optimal_path_width,
+                    edge_color=[color],
+                    alpha=1.0,
+                    connectionstyle=connectionstyle,
+                )
+                _set_edge_artists_zorder(artists, edge_z)
+
+            plt.title(f"Merlin Directed Graph (Fixed Layout) | Optimal Cost: {path_result.get('cost', 0.0):.2f}")
+        else:
+            plt.title("Merlin Directed Graph (Fixed Layout) | Optimal Path Not Found")
+    else:
+        plt.title("Merlin Directed Graph (Fixed Layout)")
     plt.axis("off")
     plt.tight_layout()
     plt.savefig(save_path, dpi=200)
