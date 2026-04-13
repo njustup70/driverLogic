@@ -9,71 +9,43 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 
-def mcu_transmit_callback(data: bytes):
-    """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
-    # odom数据帧：
-    _ODOM_FRAME_PREFIX = b'\xFF\xAA'
-    _ODOM_FRAME_LEN = 14
-    # sick数据帧：
+def mcu_transmit_callback(data: bytes): # 0xAA
+    """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
+    # odom数据帧：3个float，共12字节
+    _ODOM_FRAME_LEN = 12
+    # sick数据帧：4个float加头3位，尾1位，共20字节
     _SICK_FRAME_LEN = 20
-    # slam correct纠正帧：
-    _CORRECT_FRAME_PREFIX = b'\xFF\xB2'
-    _CORRECT_FRAME_LEN = 4
     
     if not data:
         return
 
-    odom_valid = len(data) == _ODOM_FRAME_LEN and data[:2] == _ODOM_FRAME_PREFIX
-
-    sick_valid = False
-    if len(data) == _SICK_FRAME_LEN:
-        sick_header = data[0]
-        sick_tail = data[19]
-        sick_valid = sick_header == sick_tail and ((sum(data[1:19]) & 0xFF) == sick_tail)
-
-    correct_valid = False
-    if len(data) == _CORRECT_FRAME_LEN:
-        # 帧格式：FF B2 [checksum] FF
-        # checksum = 0xB2 (frame type)
-        correct_header = data[:2] == _CORRECT_FRAME_PREFIX
-        correct_checksum = data[2] == 0xB2
-        correct_tail = data[3] == 0xFF
-        correct_valid = correct_header and correct_checksum and correct_tail
-
-    # 检查帧类型互斥性
-    frame_count = sum([odom_valid, sick_valid, correct_valid])
-    if frame_count == 0:
-        return
-    
-    if frame_count > 1:
-        print("帧类型歧义，丢弃该帧")
-        return
-
-    if odom_valid:
+    if len(data) == _ODOM_FRAME_LEN:
         try:
-            odom_payload = data[2:14]
-            x, y, yaw = struct.unpack('<fff', odom_payload)
+            x, y, yaw = struct.unpack('<fff', data)
             TFManagerInstance.odom(float(x), float(y), float(yaw))
             # print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
 
-    if correct_valid:
-        serial_correct_callback(data)
-        return
+    if len(data) == _SICK_FRAME_LEN:
+        sick_header = data[0]
+        sick_tail = data[19]
+        sick_valid = sick_header == sick_tail and ((sum(data[1:19]) & 0xFF) == sick_tail)
+        if not sick_valid:
+            print(f"SICK数据校验失败")
+            return
+        
+        sick_data = data[3:19]
+        try:
+            sick_floats = struct.unpack('<4f', sick_data)
+            distance = 1.0667 * sick_floats[0] - 0.0533
+            TFManagerInstance.sick(float(distance))
+            print(f"SICK数据解析成功: distance={distance:.3f} m")
+        except Exception as e:
+            print(f"SICK解析错误: {e}")
 
-    try:
-        sick_payload = data[3:19]
-        sick_floats = struct.unpack('<4f', sick_payload)
-        distance = 1.0667 * sick_floats[0] - 0.0533
-        TFManagerInstance.sick(float(distance))
-        # print(f"SICK数据解析成功: distance={distance:.3f} m")
-    except Exception as e:
-        print(f"SICK解析错误: {e}")
-
-
-def serial_correct_callback(data: bytes):
+def serial_correct_callback(data: bytes): # 0xB2
     """
     correct纠正指令核心处理函数
     帧格式：FF B2 [checksum=0xB2] FF (4 字节)
@@ -101,27 +73,42 @@ def serial_correct_callback(data: bytes):
 #         return_statu = data[3:4]
 #         #print(f"回调函数收到串口数据，状态码:{data.hex()}")
 #         serial_action_finish.value = return_statu
-def climb_type_callback(data: bytes):
+def climb_type_callback(data: bytes): # 0xB1
     """
     
     """
-    # print(f"回调函数收到串口数据:{data.hex()}")
-    if data[0:1] == b'\xFF' and data[1:2] == b'\xB1':
-        # print(f"回调函数收到串口数据:{data.hex()}")
-        try:
-            if len(data) != 4:
-                print("数据长度不足，无法解析爬墙类型和臂膀数据")
-                return
-            # Assign into AsyncVariable from ROS callback thread safely by scheduling
-            # the assignment onto the asyncio event loop used by RosBridgeNodeInstance.
-            ClimbManagerInstance.climb_type.value = data[2]
-            ClimbManagerInstance.climb_arm.value = data[3]
-            ClimbManagerInstance.climb_type.value = ClimbManagerInstance.climb_type.value
-            ClimbManagerInstance.climb_arm.value = ClimbManagerInstance.climb_arm.value
-            # print("爬墙类型和臂膀数据解析成功: 爬墙类型={}, 臂膀={}".format(ClimbManagerInstance.climb_type, ClimbManagerInstance.climb_arm))
-        except Exception as e:
-            print(f"解析爬墙数据错误: {e}")
+
+    print(f"回调函数收到串口数据:{data.hex()}")
         
+    try:
+        # ===== 解析 climb_type =====
+        if len(data) > 0:
+            climb_type_byte = data[0]
+            ClimbManagerInstance.climb_type.value = [
+                bool(climb_type_byte & (1 << 0)),  # 比特 0：标志 1
+                bool(climb_type_byte & (1 << 1)),  # 比特 1：标志 2
+                bool(climb_type_byte & (1 << 2)),  # 比特 2：标志 3
+                bool(climb_type_byte & (1 << 3)),  # 比特 3：标志 4
+            ]
+            print(f"爬墙类型: [标志1={ClimbManagerInstance.climb_type.value[0]}, "
+                    f"标志2={ClimbManagerInstance.climb_type.value[1]}, "
+                    f"标志3={ClimbManagerInstance.climb_type.value[2]}, "
+                    f"标志4={ClimbManagerInstance.climb_type.value[3]}]")
+        
+        # ===== 解析 climb_arm =====
+        if len(data) > 1:
+            front_leg = (data[0] >> 4) & 0x03     # data[0] 的 bit[4-5]：前腿
+            rear_leg = (data[0] >> 6) & 0x03      # data[0] 的 bit[6-7]：后腿
+            
+            if front_leg == 0 and rear_leg == 0:
+                front_leg = data[1] & 0x03        # data[1] 的 bit[0-1]：前腿
+                rear_leg = (data[1] >> 2) & 0x03  # data[1] 的 bit[2-3]：后腿
+            
+            ClimbManagerInstance.climb_arm.value = [front_leg, rear_leg]
+            print(f"臂膀状态: 前腿={front_leg}, 后腿={rear_leg}")
+    except Exception as e:
+        print(f"解析爬墙数据错误: {e}")
+
 
 
 

@@ -29,7 +29,7 @@ class rosBridgeNode(Node):
         self._tfListener = TransformListener(self._tfBuffer, self)
         self._tfBroadcaster = TransformBroadcaster(self)
         self._staticTfBroadcaster = StaticTransformBroadcaster(self)
-        self._serial_callbacks = []
+        self._serial_callbacks_dict = {}
 
     def register_event_loop(self, loop: asyncio.events.AbstractEventLoop):
         assert isinstance(loop, asyncio.events.AbstractEventLoop), '传入的 loop 必须是 asyncio 的事件循环'
@@ -44,9 +44,10 @@ class rosBridgeNode(Node):
                else:
                    print(f"Warning: Topic '{topic_name}' already registered as subscriber")
 
-    def register_serial_sub(self, callback):
+    def register_serial_sub(self, callback, code):
         # 注册串口数据回调
-        self._serial_callbacks.append(callback)
+        code = code if isinstance(code, bytes) else bytes([code])
+        self._serial_callbacks_dict[code] = callback
 
     def writeBytes(self, data: bytes):
         # 给下位机发送数据，增加 \xFA 帧头，直接使用原始字节
@@ -55,11 +56,21 @@ class rosBridgeNode(Node):
         self._serial_tx_pub.publish(msg)
 
     def _serial_rx_callback(self, msg: UInt8MultiArray):
-        # 从串口收到数据后，转发给所有注册回调
-        if self._serial_callbacks:
+        # 从串口收到数据后，转发目标回调
+        if self._serial_callbacks_dict:
             data = bytes(msg.data)
-            for callback in self._serial_callbacks:
-                callback(data)
+            data_code = bytes([data[1]]) if data else None
+            print(data_code)
+            data = data[2:] if len(data) > 2 else b''
+            if data_code in self._serial_callbacks_dict:
+                callback = self._serial_callbacks_dict[data_code]
+                if asyncio.iscoroutinefunction(callback):
+                    asyncio.run_coroutine_threadsafe(callback(data), self._loop)
+                else:
+                    callback(data)
+            else: # 广播，用于兼容
+                for callback in self._serial_callbacks_dict.values():
+                    callback(data)
 
     def publish_dynamic_tf(self, parent_frame: str, child_frame: str, odom: Odom):
         tf_msg = odom.to_transform_stamped(
