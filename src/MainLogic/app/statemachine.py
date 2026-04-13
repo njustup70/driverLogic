@@ -7,8 +7,9 @@ class MachineState(str, Enum):
     PLACE_LAYER2 = "PLACE_LAYER2"
     PLACE_LAYER3 = "PLACE_LAYER3"
     INTERRUPTED = "INTERRUPTED"
-
+    ONR1= "ONR1"
 class Signal(str, Enum):
+    TO_R1 = "TO_R1"
     TO_L2 = "TO_L2"
     TO_L3 = "TO_L3"
     FINISH = "FINISH"
@@ -24,11 +25,12 @@ class StateMachine:
         self._table: Dict[Tuple[MachineState, Signal], Tuple[MachineState, ActionHandler]] = {
             # IDLE 状态下产生的信号决定去哪
             (MachineState.IDLE, Signal.TO_L2): (MachineState.PLACE_LAYER2, self._run_place_layer2_flow),
-            (MachineState.IDLE, Signal.TO_L3): (MachineState.PLACE_LAYER3, self._run_place_layer3_flow),
-            
+            # (MachineState.IDLE, Signal.TO_L3): (MachineState.PLACE_LAYER3, self._run_place_layer3_flow),
+            (MachineState.IDLE, Signal.TO_R1): (MachineState.ONR1, self._run_onr2_flow),
+            (MachineState.ONR1, Signal.TO_L3): (MachineState.PLACE_LAYER3, self._run_place_layer3_flow),    
             # 流程完成后回到 IDLE
             (MachineState.PLACE_LAYER2, Signal.FINISH): (MachineState.IDLE, self._idle_flow),
-            (MachineState.PLACE_LAYER3, Signal.FINISH): (MachineState.IDLE, self._idle_flow),
+            (MachineState.PLACE_LAYER3, Signal.FINISH): (MachineState.ONR1, self._idle_flow),
         }
 
     async def start(self):
@@ -102,6 +104,10 @@ class StateMachine:
     async def _run_place_layer3_flow(self) -> Signal:
         print("-> [L3] 正在放置三层...")
         await asyncio.sleep(2)
+        return Signal.FINISH
+    async def _run_onr2_flow(self) -> Signal:
+        print("-> [ONR2] 正在准备上R1...")
+        await asyncio.sleep(3)
         return Signal.FINISH
 # --- 测试代码 ---
 async def main():
