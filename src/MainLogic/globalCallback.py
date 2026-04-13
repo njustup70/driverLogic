@@ -2,9 +2,12 @@
 全局回调函数串口接收回调和ros2话题回调
 '''
 import struct
+from functools import partial
+from MainLogic.Lib.AsyncTools import AsyncVariable
 from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core.tf_manager import TFManagerInstance
+from MainLogic.core import ros_bridge_node as ros_bridge_module
 
 def mcu_transmit_callback(data: bytes): # 0xAA
     """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
@@ -72,20 +75,7 @@ def serial_correct_callback(data: bytes): # 0xB2
 #         serial_action_finish.value = return_statu
 def climb_type_callback(data: bytes): # 0xB1
     """
-    解析串口接收的爬墙类型和臂膀数据（基于二进制编码）
     
-    数据帧格式：FF B1 [数据1] [数据2] ...
-    
-    数据1 = 0x0F 时：
-    - bit[0-3] = 四个标志（1/0）
-    - bit[4-7] = 腿部数据的高位
-    
-    数据2 = 0x00 时：
-    - bit[0-3] = 腿部数据的低位或直接腿部状态
-    
-    示例：FF B1 0F 00
-    - 0x0F = 0b00001111 → 四个标志均为 1，腿部高位为 0
-    - 0x00 = 0b00000000 → 腿部低位为 0，所以腿部状态均为 0
     """
 
     print(f"回调函数收到串口数据:{data.hex()}")
