@@ -351,6 +351,7 @@ def draw_merlin_model(
     show_bidirectional_white_arrows: bool = False,
     show_base_edges: bool = False,
     show_optimal_path: bool = True,
+    show_turn_markers: bool = True,
     optimal_path_width: float = 3.0,
 ) -> str:
     try:
@@ -489,6 +490,12 @@ def draw_merlin_model(
     if show_optimal_path:
         path_result = dijkstra_min_cost_path(start="start", end="end")
         if path_result.get("found"):
+            turn_nodes: Set[str] = set()
+            if show_turn_markers:
+                for step in path_result.get("path_steps", []):
+                    if step.get("turn_cost", 0.0) > 0:
+                        turn_nodes.add(str(step.get("from")))
+
             for u, v, _, rule, _ in path_result.get("path_edges", []):
                 edge_z = 7.0
                 color = _edge_color_by_direction(str(u), str(v), graph_nodes)
@@ -520,7 +527,23 @@ def draw_merlin_model(
                 )
                 _set_edge_artists_zorder(artists, edge_z)
 
-            plt.title(f"Merlin Directed Graph (Fixed Layout) | Optimal Cost: {path_result.get('cost', 0.0):.2f}")
+            if turn_nodes:
+                nx.draw_networkx_nodes(
+                    g,
+                    pos,
+                    nodelist=list(turn_nodes),
+                    node_size=980,
+                    node_color="none",
+                    edgecolors="#FF8C00",
+                    linewidths=2.8,
+                )
+
+            plt.title(
+                f"Merlin Directed Graph (Fixed Layout) | Cost: {path_result.get('cost', 0.0):.2f} "
+                f"| Turn: {path_result.get('total_turn_cost', 0.0):.2f} "
+                f"| Move: {path_result.get('total_move_cost', 0.0):.2f} "
+                f"| Pick: {path_result.get('total_pick_cost', 0.0):.2f}"
+            )
         else:
             plt.title("Merlin Directed Graph (Fixed Layout) | Optimal Path Not Found")
     else:
