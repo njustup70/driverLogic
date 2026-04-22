@@ -12,17 +12,17 @@ from MainLogic.core.serial_node import start_serial_process
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
-    serial_port = '/dev/ttyACM0'  # 可以根据需要修改串口路径
+    serial_port = '/dev/serial_qh'  # 可以根据需要修改串口路径
     baudrate = 115200  # 可以根据需要修改波特率
     start_serial_process(serial_port=serial_port, baudrate=baudrate)
     #注册回调
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback,0xAA)
     sick2Base=Odom(0.0, -0.340, 0.0)
     map2BaseInit=Odom(0.390, 0.390, 0.0)
-    laser2Base=Odom(0.0, 0.390, 0.0)
+    laser2Base=Odom(0.310, -0.3515, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     while True:

@@ -56,7 +56,7 @@ def generate_launch_description():
         actions=[ros_bag_node]
     )
     ld.add_action(airy_launch)
-    ld.add_action(slam_main)
+    # ld.add_action(slam_main)
     ld.add_action(foxglove)
     ld.add_action(ros_bag_action)
     return ld
