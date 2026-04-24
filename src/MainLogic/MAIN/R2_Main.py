@@ -3,61 +3,34 @@
 '''
 import asyncio
 import os
-from MainLogic.Lib.odomVec import Odom
-from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import move_to, TFManagerInstance
-from MainLogic.app.climb_manager import climb
-from MainLogic.app.meilin_manager import MeilinManagerInstance
-from MainLogic import globalCallback as gcb
-from std_msgs.msg import UInt8MultiArray, String
-from MainLogic.core.serial_node import start_serial_process
+from MainLogic.app.zone2_model_api import zone2_model_api
+# from MainLogic.core.serial_node import start_serial_process
 
-MEILIN_SOLVER_MODE = os.getenv("MEILIN_SOLVER_MODE", "MASTER").upper()
+ZONE2_DEMO_SEED = os.getenv("ZONE2_DEMO_SEED")
+
 
 async def async_main():
-    # 启动 rosSerialNode 进程（非阻塞）
-    serial_port = '/dev/ttyACM0'  # 可以根据需要修改串口路径
-    baudrate = 115200  # 可以根据需要修改波特率
-    start_serial_process(serial_port=serial_port, baudrate=baudrate)
-    #注册回调
-    assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
-    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
-    #往下继续注册
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
-    MeilinManagerInstance.solver_mode = MEILIN_SOLVER_MODE
-    sick2Base=Odom(0.0, -0.340, 0.0)
-    map2BaseInit=Odom(0.390, 0.390, 0.0)
-    laser2Base=Odom(0.0, 0.390, 0.0)
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
-    asyncio.create_task(TFManagerInstance.tf_update_loop())
-    asyncio.create_task(MeilinManagerInstance.solve_loop())
+    """融合后的 main：先跑 zone2 演示，再执行原 ROS 回调与动作逻辑。"""
+    seed = None if ZONE2_DEMO_SEED is None else int(ZONE2_DEMO_SEED)
+
+    move_cost = 1.0
+    pick_cost = 2.0
+    turn_cost = 0.5
+    required_r2_count = 3
+
+    result = zone2_model_api.demo_visualize_random_map(
+        seed=seed,
+        show=True,
+        move_cost=move_cost,
+        pick_cost=pick_cost,
+        turn_cost=turn_cost,
+        required_r2_count=required_r2_count,
+    )
+    print(f"[R2_Main] zone2 demo finished: found={result.get('found')} cost={result.get('cost')} image={result.get('image_path')}")
+
+    # serial_port = '/dev/ttyACM0'
+    # baudrate = 115200
+    # start_serial_process(serial_port=serial_port, baudrate=baudrate)
+
     while True:
         await asyncio.sleep(1)
-    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)
-    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('spear_status', gcb.spear_callback, type=UInt8MultiArray)
-    #注册话题发布
-    ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
-    ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
-
-    TFManagerInstance.register_tf_chain()
-    asyncio.create_task(TFManagerInstance.tf_update_loop())
-
-    #逻辑实例...,比如移动到某个坐标
-    await move_to(1.0,1.0,1.0)
-    await climb([0,1], [1,1])
-    # await move_to(2.0, 2.5, 1.6) # 矛头位置
-    # await move_to(0.5, 0.5, 0.0) # 原点
-    # await take_spear_head()
-    # await move_to(0.2, 0.2, 0.0) # 矛对接点
-    # await build_spear()
-    # await move_to(1.0,1.0,1.0)
-
-async def test():
-    #测试函数
-    while True:
-        await asyncio.sleep(1)
-        #这里的baseLinkOdom必须整个重新赋值，如果用baseLinkOdom.x=...是不会触发更新的
-        TFManagerInstance.baseLinkOdom.value= Odom(TFManagerInstance.baseLinkOdom.x + 0.1, TFManagerInstance.baseLinkOdom.y, TFManagerInstance.baseLinkOdom.yaw)
-        # TFManagerInstance.baseLinkOdom.value.x+=0.1

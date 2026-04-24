@@ -353,14 +353,16 @@ def draw_merlin_model(
     show_optimal_path: bool = True,
     show_turn_markers: bool = True,
     optimal_path_width: float = 3.0,
+    map_data: dict | None = None,
+    path_result: dict | None = None,
 ) -> str:
     try:
-        import networkx as nx
-        import matplotlib.pyplot as plt
+        import networkx as nx  # type: ignore[reportMissingImports]
+        import matplotlib.pyplot as plt  # type: ignore[reportMissingImports]
     except ImportError as e:
         raise RuntimeError("缺少依赖，请先安装: pip3 install networkx matplotlib") from e
 
-    model = build_merlin_model()
+    model = build_merlin_model(map_data=map_data)
     edges = model["edges"]
     graph_nodes = model["graph_nodes"]
 
@@ -488,7 +490,8 @@ def draw_merlin_model(
 
     # 最优路径叠加高亮（Dijkstra: start -> end）
     if show_optimal_path:
-        path_result = dijkstra_min_cost_path(start="start", end="end")
+        if path_result is None:
+            path_result = dijkstra_min_cost_path(start="start", end="end", map_data=map_data)
         if path_result.get("found"):
             turn_nodes: Set[str] = set()
             if show_turn_markers:

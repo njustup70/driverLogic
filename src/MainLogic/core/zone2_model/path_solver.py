@@ -31,9 +31,10 @@ Merlin 路径求解器（状态扩展 Dijkstra）
 
 四、可供修改的参数
 A. 全局默认参数（文件内常量）
-1) TURN_AND_MOVE_COST：normal 边基础代价（默认 1.0）
-2) TURN_AND_PICK_COST：to_derived 边基础代价（默认 2.0）
+1) MOVE_COST：normal 边基础代价（默认 1.0）
+2) PICK_COST：to_derived 边基础代价（默认 2.0）
 3) TURN_COST：转向代价（默认 0.5）
+4) REQUIRED_R2_COUNT：到达 end 前至少获取的不同 R2 数量（默认 3）
 
 B. dijkstra_min_cost_path(...) 调用参数
 1) start / end：起终点（默认 start/end）
@@ -65,9 +66,10 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 # normal: 非“指向衍生节点”的边（对应 plot 中红色箭头性质）
 # to_derived: 指向衍生节点的边（对应 plot 中紫色箭头性质）
 # 这里先把它们作为“基础动作代价”使用，真正的转向代价在状态搜索中单独叠加。
-TURN_AND_MOVE_COST: float = 1.0   # 红色边基础代价
-TURN_AND_PICK_COST: float = 2.0   # 紫色边基础代价
+MOVE_COST: float = 1.0   # 红色边基础代价
+PICK_COST: float = 2.0   # 紫色边基础代价
 TURN_COST: float = 0.5            # 转向代价（与边基础代价分离）
+REQUIRED_R2_COUNT: int = 3        # 到达 end 前至少获取的不同 R2 数量（默认 3）
 
 
 def _fixed_stake_pos() -> Dict[str, Tuple[float, float]]:
@@ -176,8 +178,8 @@ def build_weighted_edges(
     - to_derived_edges / normal_edges: 按箭头性质分组
     - weighted_edges: (src, dst, cost, rule, edge_class)
     """
-    normal_cost = TURN_AND_MOVE_COST if normal_cost is None else normal_cost
-    to_derived_cost = TURN_AND_PICK_COST if to_derived_cost is None else to_derived_cost
+    normal_cost = MOVE_COST if normal_cost is None else normal_cost
+    to_derived_cost = PICK_COST if to_derived_cost is None else to_derived_cost
 
     model = build_merlin_model(map_data=map_data)
     graph_nodes: Dict[str, dict] = model["graph_nodes"]
@@ -241,7 +243,7 @@ def dijkstra_min_cost_path(
     end: str = "end",
     normal_cost: Optional[float] = None,
     to_derived_cost: Optional[float] = None,
-    required_r2_count: int = 3,
+    required_r2_count: int = REQUIRED_R2_COUNT,
     enforce_top_entry_after_one_pick: bool = True,
     turn_cost: Optional[float] = None,
     turn_free_rules: Optional[Set[str]] = None,
