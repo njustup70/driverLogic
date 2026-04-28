@@ -51,16 +51,35 @@ def _build_adjacency() -> Dict[Node, List[Node]]:
 def _generate_blocks(rng: random.Random) -> Dict[int, str]:
     """
     返回: {桩号: 物块类型}
-    共 5 个物块：4 个 R2 + 1 个 fake
+    共 8 个物块：3 个 R1 + 4 个 R2 + 1 个 fake
+    R1 物块только能放在外圈（1,2,3,4,6,7,9,10,11,12）
     fake 不会在 1/2/3
     """
-    all_slots = list(range(1, 13))
+    # 外圈位置：上下两行（1,2,3,10,11,12）+ 左右两列边界（4,6,7,9）
+    outer_ring = [1, 2, 3, 4, 6, 7, 9, 10, 11, 12]
+    # 内圈位置：5, 8
+    inner_positions = [5, 8]
+    
+    # 选择 fake 位置（不在 1/2/3）
     fake_slot = rng.choice(list(range(4, 13)))  # 4~12
-    remain = [x for x in all_slots if x != fake_slot]
-    r2_slots = rng.sample(remain, 4)
-
-    blocks: Dict[int, str] = {s: "R2" for s in r2_slots}
+    
+    # 从外圈选择 3 个 R1 物块位置（不包括 fake）
+    available_outer = [x for x in outer_ring if x != fake_slot]
+    r1_slots = rng.sample(available_outer, 3)
+    
+    # 剩余位置用来放 R2（不是 R1、fake 的位置）
+    used_slots = set(r1_slots) | {fake_slot}
+    all_slots = set(range(1, 13))
+    r2_candidates = list(all_slots - used_slots)
+    r2_slots = rng.sample(r2_candidates, 4)  # 4 个 R2
+    
+    blocks: Dict[int, str] = {}
+    for s in r1_slots:
+        blocks[s] = "R1"
+    for s in r2_slots:
+        blocks[s] = "R2"
     blocks[fake_slot] = "fake"
+    
     return blocks
 
 
@@ -111,6 +130,8 @@ def render_merlin_map(data: Optional[dict] = None) -> str:
         t = blocks.get(node_id)
         if t == "R2":
             return f"{node_id:>2}[R2]"
+        if t == "R1":
+            return f"{node_id:>2}[R1]"
         if t == "fake":
             return f"{node_id:>2}[FAKE]"
         return f"{node_id:>2}[  ]"

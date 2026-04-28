@@ -37,6 +37,8 @@
 1) 再次执行 fake 隔离（删去 fake 相关全部边）。
 2) 再次补强同 owner 衍生节点互连。
 3) 输出 graph_nodes、edges、derived_by_owner 等结构供绘图与求解使用。
+
+补充说明：地图中可生成 4 个 R2 物块，建模时会按实际 blocks 自动处理。
 """
 
 from typing import Dict, List, Optional, Set, Tuple, Any
@@ -47,6 +49,8 @@ def _node_kind(blocks: Dict[int, str], stake_id: int) -> str:
     t = blocks.get(stake_id)
     if t == "R2":
         return "R2"
+    if t == "R1":
+        return "R1"
     if t == "fake":
         return "fake"
     return "empty"
@@ -118,17 +122,19 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
             # fake 孤立：不产生任何边
             continue
 
-        if s_kind == "empty":
-            # empty <-> empty（有向双向由遍历自然形成）
+        if s_kind in {"empty", "R1"}:
+            # empty 与 R1 拓扑上完全等价：都能与相邻的 empty/R1 建边
             for n in neigh:
-                if kinds[n] == "empty":
-                    add_edge(str(s), str(n), "step1_empty_to_empty")
+                if kinds[n] in {"empty", "R1"}:
+                    add_edge(str(s), str(n), "step1_empty_like_adjacent")
 
         elif s_kind == "R2":
-            # R2 -> empty
+            # R2 -> empty / R1
             for n in neigh:
-                if kinds[n] == "empty":
-                    add_edge(str(s), str(n), "step1_R2_to_empty")
+                if kinds[n] in {"empty", "R1"}:
+                    add_edge(str(s), str(n), "step1_R2_to_empty_like")
+
+
 
     # Step 2（仅允许 src 来自 1~12）
     derived_by_owner: Dict[str, List[str]] = {}
@@ -305,7 +311,7 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
                     continue
                 add_edge(dnode, str(x), "step2_derived_inherit_adj")
 
-    # ---- 10/11/12 的衍生节点补强到 end ----
+
     # 若 10/11/12 为非 fake，则其衍生节点也可直接指向 end。
     for owner in ("10", "11", "12"):
         if kinds[int(owner)] == "fake":

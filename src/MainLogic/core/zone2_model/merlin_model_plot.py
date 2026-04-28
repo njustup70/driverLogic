@@ -413,6 +413,9 @@ def draw_merlin_model(
         elif stake_kind == "R2":
             node_color_map[str(n)] = "#90BE6D"
             node_sizes.append(1200)
+        elif stake_kind == "R1":
+            node_color_map[str(n)] = "#FF0000"   # R1 物块：红色
+            node_sizes.append(1200)
         elif stake_kind == "fake":
             node_color_map[str(n)] = "#6C757D"
             node_sizes.append(1200)

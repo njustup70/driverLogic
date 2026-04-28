@@ -66,10 +66,11 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 # normal: 非“指向衍生节点”的边（对应 plot 中红色箭头性质）
 # to_derived: 指向衍生节点的边（对应 plot 中紫色箭头性质）
 # 这里先把它们作为“基础动作代价”使用，真正的转向代价在状态搜索中单独叠加。
-MOVE_COST: float = 1.0   # 红色边基础代价
+MOVE_COST: float = 2.0   # 红色边基础代价
 PICK_COST: float = 2.0   # 紫色边基础代价
-TURN_COST: float = 0.5            # 转向代价（与边基础代价分离）
+TURN_COST: float = 1.0            # 转向代价（与边基础代价分离）
 REQUIRED_R2_COUNT: int = 3        # 到达 end 前至少获取的不同 R2 数量（默认 3）
+R1_REMOVE_COST: float = 0.01      # R1物块消除代价
 
 
 def _fixed_stake_pos() -> Dict[str, Tuple[float, float]]:
@@ -114,18 +115,6 @@ def _edge_heading(src: str, dst: str, pos: Dict[str, Tuple[float, float]]) -> st
     if abs(vx) >= abs(vy):
         return "right" if vx >= 0 else "left"
     return "up" if vy >= 0 else "down"
-
-
-def _is_end_facing_node(node_id: str) -> bool:
-    """需要在该节点落点强制朝向 end 的节点。"""
-    return str(node_id) in {"start", "1", "2", "3", "10", "11", "12", "end"}
-
-
-def _node_heading_override(node_id: str, pos: Dict[str, Tuple[float, float]]) -> Optional[str]:
-    """节点级朝向覆盖：这些节点在落点上统一按 end 方向处理。"""
-    if _is_end_facing_node(node_id):
-        return "down"
-    return None
 
 
 def classify_edge_by_arrow_property(src: str, dst: str, graph_nodes: Dict[str, dict]) -> ArrowClass:
@@ -246,6 +235,7 @@ def dijkstra_min_cost_path(
     required_r2_count: int = REQUIRED_R2_COUNT,
     enforce_top_entry_after_one_pick: bool = True,
     turn_cost: Optional[float] = None,
+    r1_remove_cost: Optional[float] = None,
     turn_free_rules: Optional[Set[str]] = None,
     map_data: Optional[dict] = None,
 ) -> Dict[str, Any]:
@@ -257,8 +247,10 @@ def dijkstra_min_cost_path(
     2) 若该 R2 已经获取过，则再次经过指向同一 R2 的衍生边代价为 0。
     3) 仅当到达 end 且已获取的不同 R2 数量 >= required_r2_count 时，才算有效终点。
     4) 转向代价从边代价中独立出来，作为相邻两步之间的状态代价单独叠加。
+    5) R1_REMOVE_COST 可通过 r1_remove_cost 覆盖。
     """
     turn_cost = TURN_COST if turn_cost is None else turn_cost
+    r1_remove_cost = R1_REMOVE_COST if r1_remove_cost is None else r1_remove_cost
     turn_free_rules = set() if turn_free_rules is None else set(turn_free_rules)
 
     weighted = build_weighted_edges(
@@ -294,6 +286,10 @@ def dijkstra_min_cost_path(
     if required_r2_count > max_collectable:
         required_r2_count = max_collectable
 
+    # 统计模型中的所有 R1 节点并构建位图索引
+    r1_values = sorted([str(s) for s in range(1, 13) if stake_kinds.get(s) == "R1"])
+    r1_to_bit: Dict[str, int] = {r1: i for i, r1 in enumerate(r1_values)}
+
     def _mask_count(mask: int) -> int:
         return mask.bit_count()
 
@@ -316,16 +312,14 @@ def dijkstra_min_cost_path(
         u: str,
         v: str,
         edge_class: ArrowClass,
-        current_mask: int,
+        current_r2_mask: int,
+        current_r1_mask: int,
         base_cost: float,
         prev_heading: Optional[str],
         rule: str,
-    ) -> Tuple[float, int, str, float]:
-        """返回在 current_mask 下经过边 u->v 的实际代价、新mask、当前朝向、转向代价。"""
+    ) -> Tuple[float, int, int, str, float]:
+        """返回在当前 mask 下经过边 u->v 的实际代价、新的 r2_mask、新的 r1_mask、当前朝向、转向代价。"""
         edge_heading = _edge_heading(u, v, layout_pos)
-        node_override = _node_heading_override(v, layout_pos)
-        if node_override is not None:
-            edge_heading = node_override
 
         # start 顶排取块约束：
         # 从 start 出发取 1/2/3（含 start 的衍生节点链路）默认都视为朝向 end，
@@ -338,65 +332,87 @@ def dijkstra_min_cost_path(
             edge_heading = "down"
 
         step_turn_cost = 0.0
+        
+        # 判断：如果在底排（10/11/12）并且进入 end，则把这条边视为朝下。
+        # 这样 10/11/12 -> end 不会因为图布局里的斜线几何而误计为转向。
+        u_in_bottom_row = str(u) in {"10", "11", "12"}
+        v_is_end = str(v) == "end"
+        if u_in_bottom_row and v_is_end:
+            edge_heading = "down"
+
+        is_bottom_to_end_straight = u_in_bottom_row and v_is_end and prev_heading == "down" and edge_heading == "down"
+        
         if prev_heading is not None and prev_heading != edge_heading and rule not in turn_free_rules:
-            step_turn_cost = turn_cost
+            if not is_bottom_to_end_straight:
+                step_turn_cost = turn_cost
+
+        # R1 节点访问成本
+        r1_cost = 0.0
+        new_r1_mask = current_r1_mask
+        if str(v) in r1_to_bit:
+            bit = r1_to_bit[str(v)]
+            bit_mask = 1 << bit
+            if not (current_r1_mask & bit_mask):
+                # 首次访问该 R1 节点，加上消除成本
+                r1_cost = r1_remove_cost
+                new_r1_mask = current_r1_mask | bit_mask
 
         if edge_class != "to_derived":
-            return base_cost + step_turn_cost, current_mask, edge_heading, step_turn_cost
+            return base_cost + step_turn_cost + r1_cost, current_r2_mask, new_r1_mask, edge_heading, step_turn_cost
 
         dst_meta = graph_nodes.get(str(v), {})
         target_r2 = dst_meta.get("target_r2")
         if target_r2 is None:
-            return base_cost + step_turn_cost, current_mask, edge_heading, step_turn_cost
+            return base_cost + step_turn_cost + r1_cost, current_r2_mask, new_r1_mask, edge_heading, step_turn_cost
 
         r2_key = str(target_r2)
         bit = r2_to_bit.get(r2_key)
         if bit is None:
-            return base_cost + step_turn_cost, current_mask, edge_heading, step_turn_cost
+            return base_cost + step_turn_cost + r1_cost, current_r2_mask, new_r1_mask, edge_heading, step_turn_cost
 
         bit_mask = 1 << bit
-        if current_mask & bit_mask:
+        if current_r2_mask & bit_mask:
             # 同一 R2 已获取，再进入指向该 R2 的衍生节点代价为 0
-            return step_turn_cost, current_mask, edge_heading, step_turn_cost
+            return step_turn_cost + r1_cost, current_r2_mask, new_r1_mask, edge_heading, step_turn_cost
 
-        return base_cost + step_turn_cost, (current_mask | bit_mask), edge_heading, step_turn_cost
+        return base_cost + step_turn_cost + r1_cost, (current_r2_mask | bit_mask), new_r1_mask, edge_heading, step_turn_cost
 
-    # 扩展状态：(node, r2_mask, heading)
-    start_state = (start, 0, None)
-    dist: Dict[Tuple[str, int], float] = {start_state: 0.0}
-    # prev[(node, mask, heading)] = ((pre_node, pre_mask, pre_heading), step_cost, rule, edge_class, turn_cost)
-    prev: Dict[Tuple[str, int, Optional[str]], Tuple[Tuple[str, int, Optional[str]], float, str, ArrowClass, float]] = {}
+    # 扩展状态：(node, r2_mask, r1_mask, heading)
+    start_state = (start, 0, 0, None)
+    dist: Dict[Tuple[str, int, int, Optional[str]], float] = {start_state: 0.0}
+    # prev[(node, r2_mask, r1_mask, heading)] = ((pre_node, pre_r2_mask, pre_r1_mask, pre_heading), step_cost, rule, edge_class, turn_cost)
+    prev: Dict[Tuple[str, int, int, Optional[str]], Tuple[Tuple[str, int, int, Optional[str]], float, str, ArrowClass, float]] = {}
 
-    pq: List[Tuple[float, str, int, Optional[str]]] = [(0.0, start, 0, None)]
-    visited: set[Tuple[str, int, Optional[str]]] = set()
+    pq: List[Tuple[float, str, int, int, Optional[str]]] = [(0.0, start, 0, 0, None)]
+    visited: set[Tuple[str, int, int, Optional[str]]] = set()
 
-    best_end_state: Optional[Tuple[str, int, Optional[str]]] = None
+    best_end_state: Optional[Tuple[str, int, int, Optional[str]]] = None
 
     while pq:
-        cur_cost, u, mask, heading = heapq.heappop(pq)
-        state = (u, mask, heading)
+        cur_cost, u, r2_mask, r1_mask, heading = heapq.heappop(pq)
+        state = (u, r2_mask, r1_mask, heading)
         if state in visited:
             continue
         visited.add(state)
 
-        if u == end and _mask_count(mask) >= required_r2_count:
+        if u == end and _mask_count(r2_mask) >= required_r2_count:
             best_end_state = state
             break
 
         for v, base_w, rule, edge_class in adjacency.get(u, []):
             if base_w < 0:
                 raise ValueError("Dijkstra 仅适用于非负权重，请检查代价设置")
-            if not _is_transition_allowed(v, mask):
+            if not _is_transition_allowed(v, r2_mask):
                 continue
-            step_cost, next_mask, next_heading, applied_turn = _edge_step_cost_and_mask(
-                u, v, edge_class, mask, base_w, heading, rule
+            step_cost, next_r2_mask, next_r1_mask, next_heading, applied_turn = _edge_step_cost_and_mask(
+                u, v, edge_class, r2_mask, r1_mask, base_w, heading, rule
             )
             new_cost = cur_cost + step_cost
-            next_state = (v, next_mask, next_heading)
+            next_state = (v, next_r2_mask, next_r1_mask, next_heading)
             if next_state not in dist or new_cost < dist[next_state]:
                 dist[next_state] = new_cost
                 prev[next_state] = (state, step_cost, rule, edge_class, applied_turn)
-                heapq.heappush(pq, (new_cost, v, next_mask, next_heading))
+                heapq.heappush(pq, (new_cost, v, next_r2_mask, next_r1_mask, next_heading))
 
     if best_end_state is None:
         return {
@@ -418,15 +434,15 @@ def dijkstra_min_cost_path(
         }
 
     # 回溯路径
-    end_node, end_mask, end_heading = best_end_state
+    end_node, end_r2_mask, end_r1_mask, end_heading = best_end_state
     path_nodes: List[str] = [end_node]
     path_edges_rev: List[Tuple[str, str, float, str, ArrowClass]] = []
     path_steps_rev: List[Dict[str, Any]] = []
     cur_state = best_end_state
     while cur_state != start_state:
         pre_state, edge_cost, rule, edge_class, applied_turn = prev[cur_state]
-        pre_node, _, pre_heading = pre_state
-        cur_node, _, cur_heading = cur_state
+        pre_node, _, _, pre_heading = pre_state
+        cur_node, _, _, cur_heading = cur_state
         path_edges_rev.append((pre_node, cur_node, edge_cost, rule, edge_class))
         path_steps_rev.append({
             "from": pre_node,
@@ -446,7 +462,7 @@ def dijkstra_min_cost_path(
     path_edges = list(reversed(path_edges_rev))
     path_steps = list(reversed(path_steps_rev))
 
-    collected_r2 = [r2 for r2, bit in r2_to_bit.items() if end_mask & (1 << bit)]
+    collected_r2 = [r2 for r2, bit in r2_to_bit.items() if end_r2_mask & (1 << bit)]
     collected_r2.sort(key=lambda x: int(x) if str(x).isdigit() else x)
 
     total_turn_cost = sum(step["turn_cost"] for step in path_steps)
