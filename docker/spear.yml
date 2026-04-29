@@ -1,4 +1,4 @@
-name: driver
+version: "3.8"
 
 x-common-env: &common_env
   DISPLAY: ${DISPLAY}
@@ -22,6 +22,7 @@ services:
   zenoh_service:
     image: elainasuki/rc2026:driverLogic
     container_name: zenoh_runtime
+    restart: always
     <<: *common
     entrypoint:
       - /bin/bash
@@ -38,6 +39,7 @@ services:
   driverLogic_service:
     image: elainasuki/rc2026:driverLogic
     container_name: driverLogic_runtime
+    restart: always
     <<: *common
     environment:
       <<: *common_env
@@ -48,10 +50,29 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /dev:/dev
     working_dir: "/home/Elaina/ros2_ws"
-    entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch my_driver hik_camera.launch.py"]
+    entrypoint:
+      - /bin/bash
+      - -i
+      - -c
+      - |
+        source ~/.bashrc
+        source /opt/ros/humble/setup.bash
+        if [ -f /home/Elaina/ros2_ws/install/setup.bash ]; then
+          source /home/Elaina/ros2_ws/install/setup.bash
+        fi
+        export PYTHONPATH=/home/Elaina/ros2_ws/src:$$PYTHONPATH
+
+        ros2 launch my_driver hik_camera.launch.py &
+        camera_pid=$$!
+        python3 -m MainLogic.Main --main-module R2_build_spear &
+        mainlogic_pid=$$!
+
+        trap 'kill "$$camera_pid" "$$mainlogic_pid" 2>/dev/null || true' INT TERM EXIT
+        wait -n "$$camera_pid" "$$mainlogic_pid"
   opencv_service:
     image: elainasuki/rc2026:yolo-ros
     container_name: opencv_runtime
+    restart: always
     <<: *common
     environment:
       <<: *common_env
@@ -69,4 +90,3 @@ volumes:
   opencv_volume:
     external: true
     name: ros2_opencv_volume
-
