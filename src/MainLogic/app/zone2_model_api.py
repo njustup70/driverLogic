@@ -147,6 +147,20 @@ def _extract_pick_target_from_derived_node(node: str) -> int:
     return int(match.group(1))
 
 
+def _extract_owner_from_derived_node(node: str) -> str:
+    """从衍生节点名中提取其隶属的 owner。"""
+    node_str = str(node)
+    match = re.match(r"^D_(.+?)_to_\d+$", node_str)
+    if match is not None:
+        return match.group(1)
+
+    match = re.match(r"^(\d+)to\d+$", node_str)
+    if match is not None:
+        return match.group(1)
+
+    return node_str
+
+
 def build_path_step_records(result: dict) -> list[dict]:
     """把 path_steps 压缩成只保留实际节点的发送记录。
 
@@ -232,8 +246,8 @@ def _node_display_name(node: object) -> str:
 def _display_node_for_action(node: object) -> str:
     node_str = str(node)
     if _is_derived_node(node_str):
-        target = _extract_pick_target_from_derived_node(node_str)
-        return f"{target}号衍生节点" if target > 0 else "衍生节点"
+        owner = _extract_owner_from_derived_node(node_str)
+        return _node_display_name(owner)
     return _node_display_name(node_str)
 
 
@@ -256,25 +270,25 @@ def format_action_chain(records: list[dict]) -> str:
         pick_target = int(record.get("pick_target", 0))
         edge_class = str(record.get("edge_class", ""))
 
-        # 如果有取块动作，先打印取块再打印转向（用户期望先取块再转向）
-        if edge_class == "to_derived" or _is_derived_node(raw_to):
+        is_pick_step = edge_class == "to_derived" or _is_derived_node(raw_to)
+
+        # 如果有取块动作，只打印取块动作；衍生节点本身归属到 owner，不单独显示
+        if is_pick_step:
             if pick_target > 0:
                 lines.append(f"{step_no:02d}. 在 {from_node} 拾取 {pick_target} 号上的 R2 物块")
+            else:
+                lines.append(f"{step_no:02d}. 在 {from_node} 执行取块动作")
+            step_no += 1
+        else:
+            # 有转向动作时输出转向（根据 turn_action 判断）
+            # 但若起点是 start，则遵循 "start 面向 end" 的约定，不把后续转向计入 start
+            if turn_action != TURN_ACTION_STRAIGHT and str(raw_from) != "start":
+                turn_name = _turn_action_name(turn_action)
+                lines.append(f"{step_no:02d}. 在 {from_node} 节点{turn_name}，面向 {to_node}")
                 step_no += 1
 
-        # 有转向动作时输出转向（根据 turn_action 判断）
-        # 但若起点是 start，则遵循 "start 面向 end" 的约定，不把后续转向计入 start
-        if turn_action != TURN_ACTION_STRAIGHT and str(raw_from) != "start":
-            turn_name = _turn_action_name(turn_action)
-            lines.append(f"{step_no:02d}. 在 {from_node} 节点{turn_name}，面向 {to_node}")
+            lines.append(f"{step_no:02d}. 从 {from_node} 节点走到 {to_node} 节点")
             step_no += 1
-
-        # 最后打印移动动作
-        if edge_class == "to_derived" or _is_derived_node(raw_to):
-            lines.append(f"{step_no:02d}. 从 {from_node} 节点走到 {to_node} 节点")
-        else:
-            lines.append(f"{step_no:02d}. 从 {from_node} 节点走到 {to_node} 节点")
-        step_no += 1
 
     return "\n".join(lines)
 
@@ -324,7 +338,8 @@ def format_chronological_steps(result: dict) -> str:
         turn_cost = float(step.get("turn_cost", 0.0))
         pick_target = _extract_pick_target_from_derived_node(v) if edge_class == "to_derived" or _is_derived_node(v) else PICK_ACTION_NONE
 
-        from_name = _node_display_name(u)
+        # 起点也按 owner 归属展示，避免把 D_x_to_y 直接打印出来
+        from_name = _display_node_for_action(u)
         to_name = _display_node_for_action(v)
 
         # 转向先行（但保留 start 特例）
@@ -332,16 +347,18 @@ def format_chronological_steps(result: dict) -> str:
             lines.append(f"{step_no:02d}. 在 {from_name} 节点{_turn_action_name(turn_action)}，面向 {to_name}")
             step_no += 1
 
-        # 边动作：紫色（to_derived）视为取块动作（移动+取块），红色为普通移动
-        if edge_class == "to_derived" or _is_derived_node(v):
+        is_pick_step = edge_class == "to_derived" or _is_derived_node(v)
+
+        # 紫色边（to_derived）只展开成“先取块”；衍生节点名字会归属到 owner
+        if is_pick_step:
             if pick_target > 0:
-                lines.append(f"{step_no:02d}. 从 {from_name} 节点走到 {to_name} 并拾取 {pick_target} 号上的 R2 物块")
+                lines.append(f"{step_no:02d}. 在 {from_name} 拾取 {pick_target} 号上的 R2 物块")
             else:
-                lines.append(f"{step_no:02d}. 从 {from_name} 节点走到 {to_name}")
+                lines.append(f"{step_no:02d}. 在 {from_name} 执行取块动作")
+            step_no += 1
         else:
             lines.append(f"{step_no:02d}. 从 {from_name} 节点走到 {to_name} 节点")
-
-        step_no += 1
+            step_no += 1
 
     return "\n".join(lines)
 
