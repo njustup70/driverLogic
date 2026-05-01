@@ -127,7 +127,9 @@ def classify_edge_by_arrow_property(src: str, dst: str, graph_nodes: Dict[str, d
 	src_is_derived = src_meta.get("kind") == "derived"
 	dst_is_derived = dst_meta.get("kind") == "derived"
 
-	if dst_is_derived and not src_is_derived:
+	# 变更：将所有指向衍生节点的边都视为 to_derived。
+	# 之前仅当 src 非衍生时才判为 to_derived，导致衍生->衍生 边不会触发拾取逻辑。
+	if dst_is_derived:
 		return "to_derived"
 	return "normal"
 
@@ -427,6 +429,7 @@ def dijkstra_min_cost_path(
             "required_r2_count": required_r2_count,
             "collected_r2_count": 0,
             "collected_r2": [],
+            "r1_nodes_on_path": [],
             "total_turn_cost": 0.0,
             "total_move_cost": 0.0,
             "total_pick_cost": 0.0,
@@ -473,6 +476,9 @@ def dijkstra_min_cost_path(
             total_pick_cost += step["base_cost"]
     total_move_cost = total_base_cost - total_pick_cost
 
+    r1_nodes_on_path = [r1 for r1, bit in r1_to_bit.items() if end_r1_mask & (1 << bit)]
+    r1_nodes_on_path.sort(key=lambda x: int(x) if str(x).isdigit() else x)
+
     return {
         "found": True,
         "start": start,
@@ -485,6 +491,7 @@ def dijkstra_min_cost_path(
         "required_r2_count": required_r2_count,
         "collected_r2_count": len(collected_r2),
         "collected_r2": collected_r2,
+        "r1_nodes_on_path": r1_nodes_on_path,
         "total_turn_cost": total_turn_cost,
         "total_move_cost": total_move_cost,
         "total_pick_cost": total_pick_cost,

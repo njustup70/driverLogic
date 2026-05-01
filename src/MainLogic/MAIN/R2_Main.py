@@ -35,7 +35,7 @@ async def async_main():
     print(f"[R2_Main] zone2 demo finished: found={result.get('found')} cost={result.get('cost')} image={result.get('image_path')}")
     zone2_model_api.print_path_debug_info(result)
     
-    zone2_model_api.send_path_result_to_mcu(result)
     zone2_model_api.visualize_path_result(result, show=True)
+    zone2_model_api.send_mcu_action_frame_to_mcu(result)
     while True:
         await asyncio.sleep(1)
