@@ -28,16 +28,12 @@ async def async_main():
     asyncio.create_task(mpc.mpc_loop())
     asyncio.create_task(observer_module.observer_update())
     # 固定终点模式
-    # paths=np.array([[0.0, 0.0],
-    #        [0.5, 0.0],
-    #        [1.0, 0.0],
-    #        [1.5, 0.0],
-    #        [1.5, 0.5],
-    #        [1.5, 1.0],
-    #        [1.5, 1.5]])
-    # target_yaw=1.0
-    # mpc.MPCPathFollowerInstance.set_path(paths, target_yaw, ref_speed=0.5)
-    mpc.MPCPathFollowerInstance.set_target_point(Odom(0.5, 0.5, 0.5))
+    paths=np.array([[0.5, 0.5],
+           [1.5, 1.5],
+           [2.0,3.5]])
+    target_yaw=1.0
+    mpc.MPCPathFollowerInstance.set_path(paths, target_yaw, ref_speed=1.5)
+    # mpc.MPCPathFollowerInstance.set_target_point(Odom(1.0, 1.0, 0.5))
     # mpc.MPCPathFollowerInstance.set_path(path, 0.5)
     while True:
         # 阻塞，无任务

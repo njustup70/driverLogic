@@ -86,8 +86,8 @@ class MPCPathFollower:
             )
 
             rterm = np.array([50.0, 50.0, 50.0])
-            lower_u = np.array([[-0.5], [-0.5], [-1.0]])
-            upper_u = np.array([[0.5], [0.5], [1.0]])
+            lower_u = np.array([[-3], [-3], [-6.0]])
+            upper_u = np.array([[3], [3], [6.0]])
             set_up_settings = {
                 'n_horizon': self.n_horizon,
                 't_step': self.dt,
