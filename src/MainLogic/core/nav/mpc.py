@@ -188,7 +188,7 @@ class MPCPathFollower:
 
         # print(self.mpc.data)
         return u.flatten()
-    def set_target_point(self, target):
+    def set_target_point(self, target:np.ndarray):
         '''设置 MPC 的目标点'''
         #将target转换成 numpy 数组，并确保它的形状正确
         target = np.asarray(target, dtype=float)
