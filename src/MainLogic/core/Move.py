@@ -8,30 +8,33 @@ from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 import numpy as np
 import asyncio
 _enable_mpc=False
-async def mpc_move_to(target: np.ndarray,min_distance=0.05):
+async def mpc_move_to(target,min_distance=0.05):
     '''
     通过 MPC 控制底盘移动到目标位置,(最快速度无参考路径)
     :param target: 目标位置，格式为 [x, y, yaw]
     '''
     # 这里我们假设已经有一个 MPC 控制器实例，命名为 mpc_controller
     assert _enable_mpc, "MPC控制未启用，请设置mpc_control_loop任务"
+    target=np.asarray(target, dtype=float)
     MPCPathFollowerInstance.set_target_point(target)
     # 启动一个异步任务来监听 TF 更新，直到接近目标位置
     asyncio.create_task(_listen_tf(target,min_distance))
 
-async def chassic_move_to(target: np.ndarray,min_distance=0.05):
+async def chassic_move_to(target,min_distance=0.05):
     """
     给底盘发位置指令，底盘实现位置控制
     """ 
+    target=np.asarray(target, dtype=float)
     TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes(target.tolist()))
     asyncio.create_task(_listen_tf(target,min_distance))
 
-async def mpc_move_to_baseodom(target: np.ndarray,min_distance=0.05):
+async def mpc_move_to_baseodom(target,min_distance=0.05):
     '''
     发布基于局部坐标系的 MPC 目标点，底盘实现位置控制
     '''
     assert _enable_mpc, "MPC控制未启用，请设置mpc_control_loop任务"
     # 将目标点转换到 base_link 坐标系下
+    target=np.asarray(target, dtype=float)
     current_odom =TFManagerInstance.baseLinkOdom.value
     target_odombase=odomVec.Odom().from_array(target)
     target_odom_map=target_odombase@current_odom
@@ -65,6 +68,7 @@ async def mpc_control_loop():
     固定100hz控制频率而不是每次TF更新都发控制指令，避免过度控制
     '''
     serial_cmd_prefix = b'\xBB'
+    global _enable_mpc
     _enable_mpc=True
     while True:                   
         current_odom = TFManagerInstance.baseLinkOdom.value

@@ -7,6 +7,7 @@ import MainLogic.core.nav.observer as observer_module
 from MainLogic.Lib.odomVec import Odom
 import MainLogic.core.nav.mpc as mpc
 from geometry_msgs.msg import Twist
+import MainLogic.core.Move as Move
 import numpy as np
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
@@ -25,16 +26,16 @@ async def async_main():
     laser2Base=Odom(0.310, -0.3515, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
-    asyncio.create_task(mpc.mpc_loop())
+    asyncio.create_task(Move.mpc_control_loop())
     asyncio.create_task(observer_module.observer_update())
+    #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
+    await asyncio.sleep(0.0)
     # 固定终点模式
     paths=np.array([[0.5, 0.5],
            [1.5, 1.5],
            [2.0,3.5]])
     target_yaw=1.0
-    mpc.MPCPathFollowerInstance.set_path(paths, target_yaw, ref_speed=1.5)
-    # mpc.MPCPathFollowerInstance.set_target_point(Odom(1.0, 1.0, 0.5))
-    # mpc.MPCPathFollowerInstance.set_path(path, 0.5)
+    await Move.mpc_move_to([0.5, 0.5, target_yaw])
     while True:
         # 阻塞，无任务
         # from MainLogic.Lib.Visual import PathVisualInstance
