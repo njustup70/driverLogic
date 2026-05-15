@@ -23,6 +23,9 @@ def mcu_transmit_callback(data: bytes): # 0xAA
         try:
             x, y, yaw = struct.unpack('<fff', data)
             TFManagerInstance.odom(float(x), float(y), float(yaw))
+            #if have nan value
+            if any(map(lambda v: not isinstance(v, float) or v != v, [x, y, yaw])):
+                print(f"ODOM数据包含无效值: x={x}, y={y}, yaw={yaw}")
             # print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")

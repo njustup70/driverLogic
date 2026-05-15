@@ -20,7 +20,7 @@ async def async_main():
 
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, b'\xAA')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
+    # ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     sick2Base=Odom(0.0, -0.340, 0.0)
     map2BaseInit=Odom(0.390, 0.390, 0.0)
     laser2Base=Odom(0.310, -0.3515, 0.0)
@@ -34,7 +34,7 @@ async def async_main():
     paths=np.array([[0.5, 0.5],
            [1.5, 1.5],
            [2.0,3.5]])
-    target_yaw=1.0
+    target_yaw=3.14
     await Move.mpc_move_to([0.5, 0.5, target_yaw])
     while True:
         # 阻塞，无任务
