@@ -18,7 +18,7 @@ async def mpc_move_to(target,min_distance=0.05):
     target=np.asarray(target, dtype=float)
     MPCPathFollowerInstance.set_target_point(target)
     # 启动一个异步任务来监听 TF 更新，直到接近目标位置
-    asyncio.create_task(_listen_tf(target,min_distance))
+    await _listen_tf(target,min_distance)
 
 async def chassic_move_to(target,min_distance=0.05):
     """
@@ -26,7 +26,19 @@ async def chassic_move_to(target,min_distance=0.05):
     """ 
     target=np.asarray(target, dtype=float)
     TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes(target.tolist()))
-    asyncio.create_task(_listen_tf(target,min_distance))
+    await _listen_tf(target,min_distance)
+async def mpc_by_path_move(points,yaw,ref_speed=1.5,mindistance=0.05):
+    """
+    给底盘发位置指令，底盘实现lujing控制
+    """
+    assert _enable_mpc, "MPC控制未启用，请设置mpc_control_loop任务"
+
+
+    # 将路径传给 MPC 跟随器（会生成样条并设置终点）
+    MPCPathFollowerInstance.set_path(points, yaw, ref_speed=ref_speed)
+    # 等待机器人到达 MPC 设置的终点
+    await _listen_tf(MPCPathFollowerInstance.end_point, mindistance)
+    
 
 async def mpc_move_to_baseodom(target,min_distance=0.05):
     '''
@@ -40,7 +52,7 @@ async def mpc_move_to_baseodom(target,min_distance=0.05):
     target_odom_map=target_odombase@current_odom
     MPCPathFollowerInstance.set_target_point(np.array(target_odom_map))
     # 启动一个异步任务来监听 TF 更新，直到接近目标位置
-    asyncio.create_task(_listen_tf(target_odom_map,min_distance))
+    await _listen_tf(target_odom_map,min_distance)
 
 async def _listen_tf(target,min_distance=0.02):
     '''
