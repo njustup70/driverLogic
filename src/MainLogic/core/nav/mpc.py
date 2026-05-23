@@ -86,8 +86,8 @@ class MPCPathFollower:
             )
 
             rterm = np.array([50.0, 50.0, 50.0])
-            lower_u = np.array([[-0.5], [-0.5], [-1.0]])
-            upper_u = np.array([[0.5], [0.5], [1.0]])
+            lower_u = np.array([[-3], [-3], [-6.0]])
+            upper_u = np.array([[3], [3], [6.0]])
             set_up_settings = {
                 'n_horizon': self.n_horizon,
                 't_step': self.dt,
@@ -188,7 +188,7 @@ class MPCPathFollower:
 
         # print(self.mpc.data)
         return u.flatten()
-    def set_target_point(self, target):
+    def set_target_point(self, target:np.ndarray):
         '''设置 MPC 的目标点'''
         #将target转换成 numpy 数组，并确保它的形状正确
         target = np.asarray(target, dtype=float)

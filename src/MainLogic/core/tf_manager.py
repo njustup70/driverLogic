@@ -125,9 +125,10 @@ class TFManager:
         # print(f"is:{fused_base.x}")
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
         # 发布 Vector3Stamped 话题
+        odom_raw=Vector3(x=wheel_pose.x, y=wheel_pose.y, z=wheel_pose.yaw)
         odom_msg = Vector3(x=fused_base.x, y=fused_base.y, z=fused_base.yaw)
         self.rosBridge.publish_ros2(BASE_LINK_ODOM_TOPIC, odom_msg)
-
+        self.rosBridge.publish_ros2('/state/odom_raw',odom_raw)
     def slam_100ms(self):
         """100ms 更新：读取 SLAM TF 并更新 slam_init->odom。"""
         if not self._tf_chain_registered or self.rosBridge is None:
@@ -158,9 +159,12 @@ class TFManager:
         while True:
             assert self._tf_chain_registered, 'TF chain is not registered yet!'
             try:
-                self.odom_10ms()
+                
                 if tick_10ms % 10 == 0:
                     self.slam_100ms()
+                    self.odom_10ms()
+                else:
+                    self.odom_10ms()
             except Exception as e:
                 print(e)
             tick_10ms = (tick_10ms + 1) % 10

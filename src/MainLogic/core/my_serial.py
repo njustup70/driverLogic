@@ -149,14 +149,23 @@ class AsyncSerial_t:
             self.loop.call_soon_threadsafe(self.write_queue.put_nowait, data)
 # --- 使用示例 ---
 receive_cnt=0
-
+def mcu_transmit_callback(data: bytes): # 0xAA
+    """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
+    # odom数据帧：3个float，共12字节
+    if data[0:2]!=b'\xFF\xAA':
+        return
+    else:
+        data=data[2:]
+        print(data.hex())
+        x, y, yaw = struct.unpack('<fff', data)
+        print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
 def my_data_callback(payload: bytes):
     """
     负责解析收到的纯数据部分
     根据类逻辑，传入的 payload 已经是 [0xFF][Len] 之后的部分了
     所以 payload 的第一个字节应该是我们自定义的 0xBB
     """
-    global receive_cnt
+    global receive_cnt             
     # 检查我们自定义的次级头 0xBB，并确保长度足够（1字节头 + 8字节双精度）
     if len(payload) >= 9 and payload[0:2] == b'\xFF\xBB':
         try:
@@ -182,8 +191,10 @@ if __name__ == "__main__":
     ser = AsyncSerial_t("/dev/serial_ch340", 921600)
 
     # 2. 注册回调
-    ser.register_callback(my_data_callback)
-
+    ser.register_callback(mcu_transmit_callback)
+    while True:
+        time.sleep(1)
+        
     print("开始发送 [FF][09][BB][8字节时间戳] 帧...")
 
     try:

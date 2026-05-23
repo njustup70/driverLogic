@@ -37,6 +37,8 @@ class Odom:
         yield self.yaw
     def __array__(self, dtype=None):
         return np.array([self.x, self.y, self.yaw], dtype=dtype)
+    
+    
     @property
     def dist(self):
         """返回当前坐标相对于原点的欧式距离 (位置误差模长)"""
@@ -144,7 +146,12 @@ class Odom:
         r = transform_stamped.transform.rotation
         yaw = cls.quaternion_to_yaw(r.x, r.y, r.z, r.w)
         return cls(float(t.x), float(t.y), yaw)
-
+    @classmethod
+    def from_array(cls, arr) -> 'Odom':
+        """从数组或列表创建 Odom，支持任意长度但至少包含 x, y, yaw 三个元素。"""
+        if len(arr) < 3:
+            raise ValueError("Input array must have at least 3 elements for x, y, yaw")
+        return cls(float(arr[0]), float(arr[1]), float(arr[2]))
 def test():
     #world->A
     o1 = Odom(1, 2, math.pi)
