@@ -169,36 +169,6 @@ class TFManager:
                 print(e)
             tick_10ms = (tick_10ms + 1) % 10
             await asyncio.sleep(0.01)
-
-
-
-async def move_to(x, y, yaw, timeout: float = 0.0):
-    targetOdom = Odom(x, y, yaw)
-    # 给电控发坐标指令
-    assert TFManagerInstance.rosBridge is not None, 'rosBridge is not initialized yet!'
-    TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
-    if timeout > 0.1:
-        start_time = asyncio.get_event_loop().time()
-    while True:
-        if MoveControll.consume_stop():
-            print("move_to 被中断（自动复位）")
-            break
-        TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
-        # print("发送移动指令")
-        # 等待 baseLinkOdom 更新
-        current_odom = await TFManagerInstance.baseLinkOdom
-        # print("位置更新完成")
-        dx = targetOdom - current_odom
-        # 距离小于1cm且角度误差小于0.05rad就认为到达目标
-        if dx.dist < 0.01 and abs(dx.yaw) < 0.05:
-            print('Arrived at target!')
-            break
-        await asyncio.sleep(0.01)
-        if timeout > 0.1:
-            if asyncio.get_event_loop().time() - start_time > timeout:
-                print(f"move超时退出，当前距离: {dx.dist:.3f} m, 角度误差: {abs(dx.yaw):.3f} rad")
-                break
-
 TFManagerInstance = TFManager()
 
 class MoveControll:

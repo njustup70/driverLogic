@@ -4,7 +4,7 @@
 import asyncio
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import move_to, TFManagerInstance
+from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.app.climb_manager import climb, climb_arm_act,check_types ,ClimbManagerInstance
 from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
@@ -38,7 +38,7 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
     #逻辑实例...,比如移动到某个坐标
     print("开始移动到梅林位置")
-    await move_to(2.0, 4.2, 0.0) 
+    
     print("到达梅林位置")
     # await climb_arm_act(1, 3)
     # while True:

@@ -4,7 +4,7 @@
 import asyncio
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import move_to, TFManagerInstance
+from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.app.climb_manager import climb
 from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
