@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-
+from MainLogic.Lib.odomVec import Odom,SE3
 def align_and_evaluate(src_pts, ref_pts):
     """
     使用 OpenCV API 将源点云配准到参考点云，并评估 X-Y 平面上的误差
@@ -37,8 +37,9 @@ def align_and_evaluate(src_pts, ref_pts):
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
     plt.show()  # 直接弹窗显示
-
-    return errors, transformed_pts
+    #将M转化成4*4的齐次变换矩阵,现在少最后一行的0 0 0 1
+    M=np.vstack([M,np.array([0,0,0,1])])
+    return errors, M
 
 def main():
     # 1. 参考 3D 数据 (对应 5 个点)
@@ -60,12 +61,17 @@ def main():
     ])
 
     # 3. 调用函数进行配准与评估
-    errors, _ = align_and_evaluate(src_pts, ref_pts)
-
+    errors, M = align_and_evaluate(src_pts, ref_pts)
+    print(f"计算得到的变换矩阵:\n{M}")
     if errors is not None:
         # 4. 输出每个点的具体 X-Y 误差
         print(f"每个点的 X-Y 配准误差: {np.round(errors, 4)}")
         print(f"平均 X-Y 配准误差: {np.mean(errors):.4f}")
-
+    assert isinstance(M,np.ndarray)
+    transform_se3 = SE3(matrix=M)
+    #将第一个点变换到参考坐标系
+    transformed_first_point=SE3(matrix=src_pts[0])
+    ref=transform_se3 @ transformed_first_point
+    print(f"第一个点变换后的坐标: {ref}")
 if __name__ == '__main__':
     main()
