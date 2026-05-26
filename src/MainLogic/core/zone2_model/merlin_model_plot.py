@@ -12,15 +12,6 @@ from MainLogic.core.zone2_model.path_solver import dijkstra_min_cost_path
 import math
 
 
-# 衍生节点局部方向规则（可按需扩展）
-# 方向语义基于有向边 src -> dst 的局部坐标：
-# - left/right: ±n（n = (-u_y, u_x)）
-# - up/down:   ±u（u 为 src->dst 单位向量）
-DERIVED_DIRECTION_OVERRIDES: Dict[Tuple[str, str], str] = {
-    ("2", "5"): "left",
-    ("4", "5"): "down",
-}
-
 TOP_STAKES_FOR_ARROW_OVERLAY: Set[str] = {"1", "2", "3"}
 
 
@@ -211,9 +202,8 @@ def _place_derived_nodes_avoiding_edges(
             ux, uy = dx / norm, dy / norm
             nx, ny = -uy, ux  # 法向量
 
-            preferred_direction = DERIVED_DIRECTION_OVERRIDES.get((src, dst), "left")
-            bx, by = _direction_vector_from_local(preferred_direction, ux, uy, nx, ny)
-            lx, ly = _lateral_vector_for_local_direction(preferred_direction, ux, uy, nx, ny)
+            bx, by = _direction_vector_from_local("left", ux, uy, nx, ny)
+            lx, ly = _lateral_vector_for_local_direction("left", ux, uy, nx, ny)
 
             # 候选点：优先落在局部方向指定的一侧，层级决定离中点的距离
             layer = idx + 1

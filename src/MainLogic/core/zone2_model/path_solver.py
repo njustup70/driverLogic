@@ -54,6 +54,7 @@ B. dijkstra_min_cost_path(...) 调用参数
 
 from typing import Dict, List, Optional, Tuple, Any, Set
 import heapq
+import math
 
 from MainLogic.core.zone2_model.merlin_model import build_merlin_model
 
@@ -73,6 +74,7 @@ REQUIRED_R2_COUNT: int = 3        # 到达 end 前至少获取的不同 R2 数�
 R1_REMOVE_COST: float = 0.01      # R1物块消除代价
 
 
+
 def _fixed_stake_pos() -> Dict[str, Tuple[float, float]]:
     """固定桩位坐标：四行三列 + start/end。"""
     pos: Dict[str, Tuple[float, float]] = {}
@@ -88,8 +90,28 @@ def _fixed_stake_pos() -> Dict[str, Tuple[float, float]]:
     return pos
 
 
+def _direction_vector_from_local(
+    direction: str,
+    ux: float,
+    uy: float,
+    nx: float,
+    ny: float,
+) -> Tuple[float, float]:
+    """把局部方向映射到平面位移方向。"""
+    d = str(direction).lower()
+    if d == "left":
+        return nx, ny
+    if d == "right":
+        return -nx, -ny
+    if d == "up":
+        return ux, uy
+    if d == "down":
+        return -ux, -uy
+    return nx, ny
+
+
 def _build_layout_positions(model: dict) -> Dict[str, Tuple[float, float]]:
-    """用于转向判断的简化布局：基础桩位固定，衍生节点放在 owner 和 target 的中点。"""
+    """用于转向判断的简化布局：基础桩位固定，衍生节点按局部方向规则偏置。"""
     pos = _fixed_stake_pos()
     graph_nodes: Dict[str, dict] = model.get("graph_nodes", {})
 
@@ -102,7 +124,14 @@ def _build_layout_positions(model: dict) -> Dict[str, Tuple[float, float]]:
             continue
         ox, oy = pos[owner]
         tx, ty = pos[target_r2]
-        pos[str(node_id)] = ((ox + tx) / 2.0, (oy + ty) / 2.0)
+        mx, my = (ox + tx) / 2.0, (oy + ty) / 2.0
+        dx, dy = tx - ox, ty - oy
+        norm = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / norm, dy / norm
+        nx, ny = -uy, ux
+
+        bx, by = _direction_vector_from_local("left", ux, uy, nx, ny)
+        pos[str(node_id)] = (mx + bx * 0.18, my + by * 0.18)
 
     return pos
 

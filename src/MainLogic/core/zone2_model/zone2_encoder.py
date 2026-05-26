@@ -2,22 +2,19 @@
 
 负责把路径和动作记录编码成二进制帧，供串口或下位机直接消费。
 
-本模块只做“数据编码”，不负责打印和发送；发送逻辑放在 `zone2_sender.py`。
+本模块只做"数据编码"，不负责打印和发送；发送逻辑放在 `zone2_sender.py`。
 """
 from __future__ import annotations
 
 from MainLogic.core.zone2_model.zone2_helpers import (
     _encode_path_node,
-    _encode_path_node_text,
     _is_derived_node,
     _extract_pick_target_from_derived_node,
     _turn_action_from_headings,
 )
-from MainLogic.core.zone2_model.zone2_format import build_path_step_records, extract_r1_nodes_on_path
+from MainLogic.core.zone2_model.zone2_format import extract_r1_nodes_on_path
 
 PATH_NODE_FRAME_HEADER = 0xB5
-PATH_NODE_ACTION_FRAME_HEADER = 0xB6
-PATH_FULL_PATH_FRAME_HEADER = 0xB7
 MCU_ACTION_FRAME_HEADER = 0xB8
 
 MCU_ACTION_TYPE_TURN = 0x01
@@ -83,56 +80,54 @@ def _build_action_payload(result: dict, include_r1_list: bool = False) -> tuple[
     return bytes(payload), action_count
 
 
-def encode_path_frame(path_nodes: list[str]) -> bytes:
-    """把路径节点列表编码成最基础的节点帧。"""
-    if not path_nodes:
-        return bytes([PATH_NODE_FRAME_HEADER, 0x00])
-
-    node_bytes = bytearray()
-    for node in path_nodes:
-        node_bytes.append(_encode_path_node(node))
-
-    if len(node_bytes) > 255:
-        raise ValueError(f"路径过长，当前长度 {len(node_bytes)} 超过单帧上限 255")
-
-    return bytes([PATH_NODE_FRAME_HEADER, len(node_bytes)]) + bytes(node_bytes)
-
-
-def encode_path_action_frame(result: dict) -> bytes:
-    """把路径记录编码成“节点 + 动作”的文本友好帧。"""
-    records = build_path_step_records(result)
-
-    if not records:
-        return bytes([PATH_NODE_ACTION_FRAME_HEADER, 0x00])
-
+def encode_path_frame(path_nodes: list[str], result: dict = None) -> bytes:
+    """把路径节点列表编码成节点帧，并包含R1物块列表。
+    
+    帧格式：[0xB5, 节点总数, ..., 0x04, R1数量, 节点码1, 节点码2, ...]
+    """
     payload = bytearray()
-    for record in records:
-        payload.extend(_encode_path_node_text(record["node"]))
-        payload.append(record["turn_action"])
-        payload.append(record["pick_target"])
+    
+    # 编码路径节点
+    node_count = len(path_nodes)
+    payload.append(node_count)
+    
+    for node in path_nodes:
+        payload.append(_encode_path_node(node))
+    
+    # 添加R1物块列表分隔符和数据
+    payload.append(MCU_ACTION_TYPE_R1_LIST)  # 0x04
+    
+    # 编码R1物块列表
+    if result:
+        r1_nodes = extract_r1_nodes_on_path(result)
+        if r1_nodes:
+            if len(r1_nodes) > 255:
+                raise ValueError(f"R1 列表过长，数量 {len(r1_nodes)} 超过单帧上限 255")
+            payload.append(len(r1_nodes))
+            for nid in r1_nodes:
+                payload.append(_encode_path_node(str(nid)))
+        else:
+            payload.append(0)
+    else:
+        payload.append(0)
+    
+    return bytes([PATH_NODE_FRAME_HEADER]) + bytes(payload)
 
-    pair_count = len(records)
-    if pair_count > 255:
-        raise ValueError(f"路径过长，当前节点数 {pair_count} 超过单帧上限 255")
 
-    return bytes([PATH_NODE_ACTION_FRAME_HEADER, pair_count]) + bytes(payload)
-
-
-def encode_full_path_frame(result: dict) -> bytes:
-    """把完整路径按动作序列直接拼接后编码成完整路径帧。"""
-    payload, action_count = _build_action_payload(result, include_r1_list=False)
-
-    if action_count == 0:
-        return bytes([PATH_FULL_PATH_FRAME_HEADER, 0x00])
-
-    return bytes([PATH_FULL_PATH_FRAME_HEADER, action_count]) + payload
-
-
-def encode_mcu_action_frame(result: dict) -> bytes:
-    """把完整动作序列编码成 MCU 二进制帧。"""
-    payload, action_count = _build_action_payload(result, include_r1_list=True)
-
-    if action_count == 0:
-        return bytes([MCU_ACTION_FRAME_HEADER, 0x00])
-
-    return bytes([MCU_ACTION_FRAME_HEADER, action_count]) + bytes(payload)
+def encode_mcu_action_frame(action_type: int, from_node: str, to_or_code) -> bytes:
+    """把单个动作编码成 MCU 二进制帧。
+    
+    帧格式：[0xB8, 动作类型, 当前节点编码, 目标或代码]
+    
+    - 移动：(0x03, 当前节点编码, 目标位置编码)
+    - 转向：(0x01, 当前节点编码, 转向码)
+    - 拾取：(0x02, 当前节点编码, R2物块的位置编码)
+    """
+    from_node_code = _encode_path_node(from_node)
+    
+    payload = bytearray()
+    payload.append(action_type)
+    payload.append(from_node_code)
+    payload.append(int(to_or_code))
+    
+    return bytes([MCU_ACTION_FRAME_HEADER]) + bytes(payload)
