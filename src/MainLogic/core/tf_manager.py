@@ -249,4 +249,4 @@ class TFOdin:
             assert self._tf_chain_registered, 'TF chain is not registered yet!'
             self.odom_10ms()
             await asyncio.sleep(0.01)
-TFManagerInstance = TFOdin()
+TFManagerInstance = TFManager()
