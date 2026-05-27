@@ -178,7 +178,7 @@ class TFOdin:
         self.map_frame = 'map_odin'
         self.odom_frame = 'odom_odin'
         # map 到 odom 含有Odin自带刷新 重定位矩阵 和 固定偏置M矩阵
-        self.base_frame = 'base_link_'
+        self.base_frame = 'base_link'
 
         self.odin_map_frame = 'map'
         self.odin_odom_frame = 'camera_init'
@@ -227,12 +227,11 @@ class TFOdin:
         #抓换到ref座标系(地图座标系)
         # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系
         ref_SE3=self._transSE@raw_SE3
-        map_to_odom = ref_SE3.to_odom() # 降维到 2D 准备发布
+        map_to_odom = ref_SE3
 
-        odom_to_base = (raw_odom.to_odom()) @ self._odin_to_base # 叠加雷达到车心的偏置
+        odom_to_base = raw_odom @ self._odin_to_base # 叠加雷达到车心的偏置
 
-        baselink = map_to_odom @ odom_to_base
-
+        baselink = (map_to_odom @ odom_to_base).to_odom()
         # ========== 发布 TF 树 ============
         # 发布 map_odin -> odom_odin
         self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
