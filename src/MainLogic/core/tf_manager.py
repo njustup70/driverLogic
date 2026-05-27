@@ -175,7 +175,7 @@ class TFOdin:
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
 
         # 坐标系固定配置（不使用 ROS2 参数）
-        self.map_frame = 'map_odin'
+        self.map_frame = 'map'
         self.odom_frame = 'odom_odin'
         # map 到 odom 含有Odin自带刷新 重定位矩阵 和 固定偏置M矩阵
         self.base_frame = 'base_link'
@@ -207,36 +207,39 @@ class TFOdin:
         assert self._tf_chain_registered, 'TF chain is not registered yet!'
         #从slam_odom->slam_base的TF中获取slam_init->base_link
         try:
-            tf_reloc_msg = self.rosBridge._tfBuffer.lookup_transform(
+            # tf_reloc_msg = self.rosBridge._tfBuffer.lookup_transform(
+            #     self.odin_map_frame,
+            #     self.odin_odom_frame,
+            #     rclpy.time.Time(),
+            # )
+            # tf_odom_msg = self.rosBridge._tfBuffer.lookup_transform(
+            #     self.odin_odom_frame,
+            #     self.odin_base_frame,
+            #     rclpy.time.Time(),
+            # )
+            tf_map_base_odin=self.rosBridge._tfBuffer.lookup_transform(
                 self.odin_map_frame,
-                self.odin_odom_frame,
-                rclpy.time.Time(),
-            )
-            tf_odom_msg = self.rosBridge._tfBuffer.lookup_transform(
-                self.odin_odom_frame,
                 self.odin_base_frame,
                 rclpy.time.Time(),
             )
         except Exception:
             return
         
-        raw_SE3=SE3.from_transform_stamped(tf_reloc_msg)
-        raw_odom=SE3.from_transform_stamped(tf_odom_msg)
+        raw_SE3=SE3.from_transform_stamped(tf_map_base_odin)
+        # raw_odom=SE3.from_transform_stamped(tf_odom_msg)
         #========== 坐标变换逻辑 ============
         # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系 ——> Odin里程计坐标系 ——> 车体中心坐标系
         #抓换到ref座标系(地图座标系)
         # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系
         ref_SE3=self._transSE@raw_SE3
-        map_to_odom = ref_SE3
+        map_to_odin = ref_SE3.to_odom()
 
-        odom_to_base = raw_odom @ self._odin_to_base # 叠加雷达到车心的偏置
-
-        baselink = (map_to_odom @ odom_to_base).to_odom()
+        baselink = (map_to_odin @ self._odin_to_base)
         # ========== 发布 TF 树 ============
         # 发布 map_odin -> odom_odin
-        self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
+        # self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
         # 发布 odom_odin -> base_link_
-        self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, odom_to_base)
+        self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, baselink)
         
         self.baseLinkOdom.value = baselink
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([baselink.x, baselink.y, baselink.yaw]))
