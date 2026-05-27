@@ -173,24 +173,28 @@ class TFOdin:
     def __init__(self):
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
+
         # 坐标系固定配置（不使用 ROS2 参数）
-        self.map_frame = 'map'
-        self.slam_init_frame = 'slam_init'
-        self.base_frame = 'base_link'
-        self.slam_odom_frame = 'camera_init'
-        self.slam_base_frame = 'aft_mapped'
-        # slam_init->base_link 位姿，由 slam 直接测量得到，供 sick 修正使用
-        self._laser_to_base = Odom(0.0, -0.390, 0.0)
+        self.map_frame = 'map_odin'
+        self.odom_frame = 'odom_odin'
+        # map 到 odom 含有Odin自带刷新 重定位矩阵 和 固定偏置M矩阵
+        self.base_frame = 'base_link_'
+
+        self.odin_map_frame = 'map'
+        self.odin_odom_frame = 'camera_init'
+        self.odin_base_frame = 'aft_mapped'
+        
         # map -> slam_init（默认对齐）
         self._mapToBase = Odom(0.0, 0.0, 0.0)
+
         # 控制标志
         self._tf_chain_registered = False
         self._has_slam_pose = False
         self._transSE=SE3(np.array([0.0,0.0,0.0]))
-    def register_tf_chain(self,laser2Base: Odom,Trans:SE3):
+    def register_tf_chain(self,odin2Base: Odom,Trans:SE3):
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
-        assert   laser2Base is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
-        self._laser_to_base = laser2Base
+        assert   odin2Base is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
+        self._odin_to_base = odin2Base
         self._transSE=Trans
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
@@ -203,19 +207,38 @@ class TFOdin:
         assert self._tf_chain_registered, 'TF chain is not registered yet!'
         #从slam_odom->slam_base的TF中获取slam_init->base_link
         try:
-            tf_msg = self.rosBridge._tfBuffer.lookup_transform(
-                self.slam_odom_frame,
-                self.slam_base_frame,
+            tf_reloc_msg = self.rosBridge._tfBuffer.lookup_transform(
+                self.odin_map_frame,
+                self.odin_odom_frame,
+                rclpy.time.Time(),
+            )
+            tf_odom_msg = self.rosBridge._tfBuffer.lookup_transform(
+                self.odin_odom_frame,
+                self.odin_base_frame,
                 rclpy.time.Time(),
             )
         except Exception:
             return
-        raw_SE3=SE3.from_transform_stamped(tf_msg)
+        
+        raw_SE3=SE3.from_transform_stamped(tf_reloc_msg)
+        raw_odom=SE3.from_transform_stamped(tf_odom_msg)
+        #========== 坐标变换逻辑 ============
+        # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系 ——> Odin里程计坐标系 ——> 车体中心坐标系
         #抓换到ref座标系(地图座标系)
+        # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系
         ref_SE3=self._transSE@raw_SE3
-        ref_SE2=ref_SE3.to_odom()
-        #发布到base_link
-        baselink=ref_SE2@self._laser_to_base
+        map_to_odom = ref_SE3.to_odom() # 降维到 2D 准备发布
+
+        odom_to_base = (raw_odom.to_odom()) @ self._odin_to_base # 叠加雷达到车心的偏置
+
+        baselink = map_to_odom @ odom_to_base
+
+        # ========== 发布 TF 树 ============
+        # 发布 map_odin -> odom_odin
+        self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
+        # 发布 odom_odin -> base_link_
+        self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, odom_to_base)
+        
         self.baseLinkOdom.value = baselink
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([baselink.x, baselink.y, baselink.yaw]))
     async def tf_update_loop(self):
@@ -224,4 +247,4 @@ class TFOdin:
             assert self._tf_chain_registered, 'TF chain is not registered yet!'
             self.odom_10ms()
             await asyncio.sleep(0.01)
-TFManagerInstance = TFManager()
+TFManagerInstance = TFOdin()
