@@ -177,7 +177,7 @@ class TFOdin:
         # 坐标系固定配置（不使用 ROS2 参数）
         self.map_frame = 'map'
         self.odom_frame = 'odom_odin'
-        # map 到 odom 含有Odin自带刷新 重定位矩阵 和 固定偏置M矩阵
+        # map 到 odom 含有Odin 刷新 重定位矩阵 和 固定偏置M矩阵
         self.base_frame = 'base_link'
 
         self.odin_map_frame = 'map'
