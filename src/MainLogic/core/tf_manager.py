@@ -199,7 +199,7 @@ class TFOdin:
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
-        self.rosBridge.publish_static_tf(self.map_frame, self.odin_odom_frame, self._transSE)
+        self.rosBridge.publish_static_tf(self.odin_map_frame, self.map_frame, self._transSE.inverse())
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
     def odom_10ms(self):

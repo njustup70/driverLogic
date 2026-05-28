@@ -21,12 +21,12 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
     # ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     TFManagerInstance=TFOdin()
-    odin2Base=Odom(0.310, -0.3515, 0.0)
+    odin2Base=Odom(-0.310,- 0.3515, 3.14/2)
     SE3_map2odin=SE3(matrix=
-        np.array(np.array([[-0.96348529 , -0.50031332,  -2.50062547,  2.03121702],
- [0.45047610, 0.908507880 , 0.101089020 , 1.71528424 ],
- [ -0.002389106 , 0.01138071  ,1.36228514 , -0.191222456],
- [ 0.       ,   0.      ,    0.       ,   1.        ]])))
+        np.array(np.array([[ 8.95481123e-01, -4.45097925e-01 ,-1.18133284e-03 , 1.89104905e+00],
+ [ 4.45099367e-01,  8.95479712e-01  ,1.62468526e-03 , 1.75086174e+00],
+ [ 3.34715556e-04 ,-1.98068548e-03  ,9.99997982e-01 ,-1.24692339e-01],
+ [ 0.00000000e+00 , 0.00000000e+00  ,0.00000000e+00 , 1.00000000e+00],])))
     TFManagerInstance.register_tf_chain(odin2Base,SE3_map2odin)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # asyncio.create_task(Move.mpc_control_loop())
