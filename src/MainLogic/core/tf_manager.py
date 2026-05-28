@@ -182,7 +182,7 @@ class TFOdin:
 
         self.odin_map_frame = 'map'
         self.odin_odom_frame = 'camera_init'
-        self.odin_base_frame = 'aft_mapped'
+        self.odin_base_frame = 'odin1_base_link'
         
         # map -> slam_init（默认对齐）
         self._mapToBase = Odom(0.0, 0.0, 0.0)
@@ -239,7 +239,7 @@ class TFOdin:
         # 发布 map_odin -> odom_odin
         # self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
         # 发布 odom_odin -> base_link_
-        self.rosBridge.publish_dynamic_tf(self.odom_frame, self.base_frame, baselink)
+        self.rosBridge.publish_dynamic_tf(self.map_frame, self.base_frame, baselink)
         
         self.baseLinkOdom.value = baselink
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([baselink.x, baselink.y, baselink.yaw]))

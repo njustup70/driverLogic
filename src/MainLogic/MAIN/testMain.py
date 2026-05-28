@@ -23,9 +23,9 @@ async def async_main():
     TFManagerInstance=TFOdin()
     odin2Base=Odom(0.310, -0.3515, 0.0)
     SE3_map2odin=SE3(matrix=
-        np.array(np.array([[-0.70536067 , 0.50253659,  4.71256878,  1.90687198],
- [-0.46408736, -0.44636042 , 0.07566856 , 0.2792901 ],
- [ 0.04082741 , 0.03534166  ,1.54259511 , 0.39136196],
+        np.array(np.array([[-0.96348529 , -0.50031332,  -2.50062547,  2.03121702],
+ [0.45047610, 0.908507880 , 0.101089020 , 1.71528424 ],
+ [ -0.002389106 , 0.01138071  ,1.36228514 , -0.191222456],
  [ 0.       ,   0.      ,    0.       ,   1.        ]])))
     TFManagerInstance.register_tf_chain(odin2Base,SE3_map2odin)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
