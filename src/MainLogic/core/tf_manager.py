@@ -176,7 +176,6 @@ class TFOdin:
 
         # 坐标系固定配置（不使用 ROS2 参数）
         self.map_frame = 'rc_map'
-        self.odom_frame = 'odom_odin'
         # map 到 odom 含有Odin 刷新 重定位矩阵 和 固定偏置M矩阵
         self.base_frame = 'base_link'
 
@@ -191,10 +190,13 @@ class TFOdin:
         self._tf_chain_registered = False
         self._has_slam_pose = False
         self._transSE=SE3(np.array([0.0,0.0,0.0]))
-    def register_tf_chain(self,odin2Base: Odom,Trans:SE3):
+    def register_tf_chain(self,Base2odin: Odom,Trans:SE3):
+        '''
+        param Base2odin: 车体中心到odin坐标
+        '''
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
-        assert   odin2Base is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
-        self._odin_to_base = odin2Base
+        assert   Base2odin is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
+        self._odin_to_base = Base2odin.inverse()
         self._transSE=Trans
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
