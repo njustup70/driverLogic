@@ -175,7 +175,7 @@ class TFOdin:
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
 
         # 坐标系固定配置（不使用 ROS2 参数）
-        self.map_frame = 'map'
+        self.map_frame = 'rc_map'
         self.odom_frame = 'odom_odin'
         # map 到 odom 含有Odin 刷新 重定位矩阵 和 固定偏置M矩阵
         self.base_frame = 'base_link'
@@ -199,7 +199,7 @@ class TFOdin:
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
-
+        self.rosBridge.publish_static_tf(self.map_frame, self.odin_odom_frame, self._transSE)
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
     def odom_10ms(self):
