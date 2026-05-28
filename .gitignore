@@ -21,3 +21,4 @@ rosbag2_*/
 result.json
 *.core
 *.csv
+*.npy

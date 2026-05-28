@@ -70,14 +70,13 @@ def align_and_evaluate(src_pts, ref_pts):
     plt.show()
 
     return errors, M
-
 def main():
     # 1. 参考 3D 数据
     ref_pts = np.array([
         [0, 0, 0],
         [0, 6, 0],
-        [10, 0, 0],
-        [10, 6, 0],
+        [9.32-0.155, 0, 0], #绷不住了
+        [9.32, 6, 0], #场地牌有问题
         [12, 0, 0.4]
     ])
 
@@ -112,6 +111,7 @@ def main():
     #     # 如果 SE3 只支持 4x4 乘 4x4，你不能把点当矩阵传进去。
     # except Exception as e:
     #     pass
-
+    npy_path='/home/Elaina/ros2_ws/src/MainLogic/SE_Trans.npy'
+    np.save(npy_path,M)
 if __name__ == '__main__':
     main()
