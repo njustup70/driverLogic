@@ -8,28 +8,37 @@ from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 import numpy as np
 import asyncio
 _enable_mpc=False
-async def mpc_move_to(target,min_distance=0.05):
+async def mpc_move_to_point(target,ref_speed=1.5,min_distance=0.05):
     '''
-    通过 MPC 控制底盘移动到目标位置,(最快速度无参考路径)
+    通过 MPC 控制底盘移动到目标位置
     :param target: 目标位置，格式为 [x, y, yaw]
     '''
     # 这里我们假设已经有一个 MPC 控制器实例，命名为 mpc_controller
     assert _enable_mpc, "MPC控制未启用，请设置mpc_control_loop任务"
     target=np.asarray(target, dtype=float)
-    MPCPathFollowerInstance.set_target_point(target)
+    assert target.shape ==(3,), "目标位置必须是一个包含 x, y, yaw 的数组"
+    #将目标位置和当前位置生成一条路径，传给 MPC 跟随器
+    current_odom = TFManagerInstance.baseLinkOdom.value
+    ref_path=np.asarray([[current_odom.x, current_odom.y], [target[0], target[1]]])
+    MPCPathFollowerInstance.set_path(ref_path, target[2], ref_speed=ref_speed)
+    # MPCPathFollowerInstance.set_target_point(target)
     # 启动一个异步任务来监听 TF 更新，直到接近目标位置
     await _listen_tf(target,min_distance)
 
 async def chassic_move_to(target,min_distance=0.05):
     """
     给底盘发位置指令，底盘实现位置控制
+    :param target: 目标位置，格式为 [x, y, yaw]
     """ 
     target=np.asarray(target, dtype=float)
+    assert target.shape ==(3,), "目标位置必须是一个包含 x, y, yaw 的数组"
     TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes(target.tolist()))
     await _listen_tf(target,min_distance)
 async def mpc_by_path_move(points,yaw,ref_speed=1.5,mindistance=0.05):
     """
-    给底盘发位置指令，底盘实现lujing控制
+    给底盘发位置指令，底盘实现路径
+    :param points: 路径点列表，格式为 [[x1, y1], [x2, y2], ...]
+    :param yaw: 目标航向角，单位为弧度
     """
     assert _enable_mpc, "MPC控制未启用，请设置mpc_control_loop任务"
 

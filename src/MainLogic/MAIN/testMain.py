@@ -27,12 +27,12 @@ async def async_main():
     SE3_map2odin=SE3(matrix=np.load(npy_path))
     TFManagerInstance.register_tf_chain(base2odin,SE3_map2odin)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
-    # asyncio.create_task(Move.mpc_control_loop())
+    asyncio.create_task(Move.mpc_control_loop())
     asyncio.create_task(observer_module.observer_update())
     #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
     await asyncio.sleep(0.0)
     # 固定终点模式
-
+    await Move.mpc_move_to_point([1.0, 1.0, 1.0], ref_speed=1.5)
     while True:
         # 阻塞，无任务
         # from MainLogic.Lib.Visual import PathVisualInstance

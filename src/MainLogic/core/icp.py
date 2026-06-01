@@ -52,23 +52,24 @@ def align_and_evaluate(src_pts, ref_pts):
 
     # 3. 计算误差：仅保留 X, Y 坐标
     errors = np.linalg.norm(transformed_pts[:, :2] - ref_pts[:, :2], axis=1)
+    try:
+        # 4. X-Y 散点图可视化
+        plt.figure(figsize=(6, 6))
+        plt.scatter(ref_pts[:, 0], ref_pts[:, 1], color='red', label='Reference (Target)', marker='o', s=100) #type:ignore
+        plt.scatter(transformed_pts[:, 0], transformed_pts[:, 1], color='blue', label='Transformed (Rigid)', marker='x', s=100) #type:ignore
 
-    # 4. X-Y 散点图可视化
-    plt.figure(figsize=(6, 6))
-    plt.scatter(ref_pts[:, 0], ref_pts[:, 1], color='red', label='Reference (Target)', marker='o', s=100) #type:ignore
-    plt.scatter(transformed_pts[:, 0], transformed_pts[:, 1], color='blue', label='Transformed (Rigid)', marker='x', s=100) #type:ignore
+        for i in range(num_points):
+            plt.plot([ref_pts[i, 0], transformed_pts[i, 0]], [ref_pts[i, 1], transformed_pts[i, 1]], 'k--', alpha=0.5)
 
-    for i in range(num_points):
-        plt.plot([ref_pts[i, 0], transformed_pts[i, 0]], [ref_pts[i, 1], transformed_pts[i, 1]], 'k--', alpha=0.5)
-
-    plt.title('X-Y Plane Alignment Scatter Plot')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.tight_layout()
-    plt.show()
-
+        plt.title('X-Y Plane Alignment Scatter Plot')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.legend()
+        plt.grid(True, linestyle='--', alpha=0.5)
+        plt.tight_layout()
+        plt.show()
+    except:
+        print("\033[95m没有显示环境\033[0m")
     return errors, M
 def main():
     # 1. 参考 3D 数据
