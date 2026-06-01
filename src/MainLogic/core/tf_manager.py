@@ -9,14 +9,13 @@ from typing import cast
 import rclpy.time
 from geometry_msgs.msg import Vector3Stamped,Vector3
 
-from MainLogic.Lib.odomVec import Odom
+from MainLogic.Lib.odomVec import Odom,SE3
 from MainLogic.Lib.bytes import turn_to_bytes
 from MainLogic.Lib.AsyncTools import AsyncVariable
 
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.Lib.Visual import PathVisualInstance
 BASE_LINK_ODOM_TOPIC = '/state/base_link_odom'
-
 
 class TFManager:
     # map->base_link 位姿，由 slam 融合计算得到，供上层异步逻辑使用
@@ -169,46 +168,87 @@ class TFManager:
                 print(e)
             tick_10ms = (tick_10ms + 1) % 10
             await asyncio.sleep(0.01)
+import numpy as np
+class TFOdin:
+    def __init__(self):
+        self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
+        self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
 
+        # 坐标系固定配置（不使用 ROS2 参数）
+        self.map_frame = 'rc_map'
+        # map 到 odom 含有Odin 刷新 重定位矩阵 和 固定偏置M矩阵
+        self.base_frame = 'base_link'
 
+        self.odin_map_frame = 'map'
+        self.odin_odom_frame = 'camera_init'
+        self.odin_base_frame = 'odin1_base_link'
+        
+        # map -> slam_init（默认对齐）
+        self._mapToBase = Odom(0.0, 0.0, 0.0)
 
-async def move_to(x, y, yaw, timeout: float = 0.0):
-    targetOdom = Odom(x, y, yaw)
-    # 给电控发坐标指令
-    assert TFManagerInstance.rosBridge is not None, 'rosBridge is not initialized yet!'
-    TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
-    if timeout > 0.1:
-        start_time = asyncio.get_event_loop().time()
-    while True:
-        if MoveControll.consume_stop():
-            print("move_to 被中断（自动复位）")
-            break
-        TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes([x, y, yaw]))
-        # print("发送移动指令")
-        # 等待 baseLinkOdom 更新
-        current_odom = await TFManagerInstance.baseLinkOdom
-        # print("位置更新完成")
-        dx = targetOdom - current_odom
-        # 距离小于1cm且角度误差小于0.05rad就认为到达目标
-        if dx.dist < 0.01 and abs(dx.yaw) < 0.05:
-            print('Arrived at target!')
-            break
-        await asyncio.sleep(0.01)
-        if timeout > 0.1:
-            if asyncio.get_event_loop().time() - start_time > timeout:
-                print(f"move超时退出，当前距离: {dx.dist:.3f} m, 角度误差: {abs(dx.yaw):.3f} rad")
-                break
+        # 控制标志
+        self._tf_chain_registered = False
+        self._has_slam_pose = False
+        self._transSE=SE3(np.array([0.0,0.0,0.0]))
+    def register_tf_chain(self,Base2odin: Odom,Trans:SE3):
+        '''
+        param Base2odin: 车体中心到odin坐标
+        '''
+        self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
+        assert   Base2odin is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
+        self._odin_to_base = Base2odin.inverse()
+        self._transSE=Trans
+        assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
+        # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
+        # 公式：map->slam_init = map->base_link @ base_link->slam_init
+        self.rosBridge.publish_static_tf(self.odin_map_frame, self.map_frame, self._transSE.inverse())
+        # 注册 Vector3Stamped 发布者
+        self._tf_chain_registered = True
+    def odom_10ms(self):
+        """10ms 更新：发布 odom/base, map/odom, 计算 map/base 并下发到下位机。"""
+        assert self._tf_chain_registered, 'TF chain is not registered yet!'
+        #从slam_odom->slam_base的TF中获取slam_init->base_link
+        try:
+            # tf_reloc_msg = self.rosBridge._tfBuffer.lookup_transform(
+            #     self.odin_map_frame,
+            #     self.odin_odom_frame,
+            #     rclpy.time.Time(),
+            # )
+            # tf_odom_msg = self.rosBridge._tfBuffer.lookup_transform(
+            #     self.odin_odom_frame,
+            #     self.odin_base_frame,
+            #     rclpy.time.Time(),
+            # )
+            tf_map_base_odin=self.rosBridge._tfBuffer.lookup_transform(
+                self.odin_map_frame,
+                self.odin_base_frame,
+                rclpy.time.Time(),
+            )
+        except Exception:
+            return
+        
+        raw_SE3=SE3.from_transform_stamped(tf_map_base_odin)
+        # raw_odom=SE3.from_transform_stamped(tf_odom_msg)
+        #========== 坐标变换逻辑 ============
+        # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系 ——> Odin里程计坐标系 ——> 车体中心坐标系
+        #抓换到ref座标系(地图座标系)
+        # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系
+        ref_SE3=self._transSE@raw_SE3
+        map_to_odin = ref_SE3.to_odom()
 
+        baselink = (map_to_odin @ self._odin_to_base)
+        # ========== 发布 TF 树 ============
+        # 发布 map_odin -> odom_odin
+        # self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
+        # 发布 odom_odin -> base_link_
+        self.rosBridge.publish_dynamic_tf(self.map_frame, self.base_frame, baselink)
+        
+        self.baseLinkOdom.value = baselink
+        self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([baselink.x, baselink.y, baselink.yaw]))
+    async def tf_update_loop(self):
+        """统一更新任务：10ms 执行 odom 更新"""
+        while True:
+            assert self._tf_chain_registered, 'TF chain is not registered yet!'
+            self.odom_10ms()
+            await asyncio.sleep(0.01)
 TFManagerInstance = TFManager()
-
-class MoveControll:
-    stop_flag = AsyncVariable(False)
-    @classmethod
-    def stop(cls):
-        cls.stop_flag.value = True
-    @classmethod
-    def consume_stop(cls) -> bool:
-        if cls.stop_flag.value:
-            cls.stop_flag.value = False
-            return True
-        return False

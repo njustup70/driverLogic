@@ -4,8 +4,8 @@ from typing import NamedTuple
 
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.Lib.AsyncTools import AsyncVariable
-from MainLogic.core.tf_manager import TFManagerInstance, move_to
-from MainLogic.core.tf_manager import MoveControll
+from MainLogic.core.tf_manager import TFManagerInstance
+
 
 class ClimbManager:
 
@@ -60,24 +60,24 @@ class ClimbManager:
     async def _climb_forward(self, distance: float, climb_dir: float):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("向前移动中...")
-        await move_to(
-            current_odom.x + (1 - abs(climb_dir)) * distance,
-            current_odom.y + climb_dir * distance,
-            current_odom.yaw,
-            0.5
-        )
+        # await move_to(
+        #     current_odom.x + (1 - abs(climb_dir)) * distance,
+        #     current_odom.y + climb_dir * distance,
+        #     current_odom.yaw,
+        #     0.5
+        # )
         print("向前移动完成")
 
     async def _climb_stop(self):
         current_odom = await TFManagerInstance.baseLinkOdom
         print("停止移动...")
-        await move_to(current_odom.x, current_odom.y, current_odom.yaw, 0.5)
+        # await move_to(current_odom.x, current_odom.y, current_odom.yaw, 0.5)
 
     async def climb_move(self, type_num, distance: float, climb_dir: int):
         for _ in range(self.max_retries):
             this_type = await self.check_type()
             if this_type == type_num:
-                MoveControll.stop()
+                # MoveControll.stop()
                 print("移动了指定距离，停止移动")
                 break
             await self._climb_forward(self.forward_step, climb_dir)

@@ -4,7 +4,7 @@
 import asyncio
 from MainLogic.Lib.odomVec import Odom
 from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import move_to, TFManagerInstance
+from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.app.climb_manager import climb
 from MainLogic import globalCallback as gcb
 from std_msgs.msg import UInt8MultiArray, String
@@ -32,7 +32,6 @@ async def async_main():
 
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
-    await move_to(1.0,1.0,1.0)
     await climb([0,1], [1,1])
     # await move_to(2.0, 2.5, 1.6) # 矛头位置
     # await move_to(0.5, 0.5, 0.0) # 原点
