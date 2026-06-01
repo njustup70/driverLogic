@@ -171,6 +171,41 @@ def sick_callback(data: bytes): # 0xAA
         except Exception as e:
             print(f"SICK解析错误: {e}")
 
+def sick_callback(data: bytes): # 0xAA
+    """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
+    # sick数据帧：4个float加头3位，尾1位，共20字节
+    _SICK_FRAME_LEN = 20
+    
+    if not data:
+        return
+    
+    if len(data) == _SICK_FRAME_LEN:
+        sick_header = data[0]
+        sick_tail = data[19]
+        sick_valid = sick_header == sick_tail and ((sum(data[1:19]) & 0xFF) == sick_tail)
+        if not sick_valid:
+            print(f"SICK数据校验失败")
+            return
+        
+        # 检查数据长度和格式
+        if len(data) < 2:
+            print(f"✗ SLAM correct 指令格式错误：数据长度不足，期望≥2，实际{len(data)}")
+            return False
+        
+        # 检查脱头后的前两个字节：[0xB2, 0xFF]
+        if data[0] != 0xB2 or data[1] != 0xFF:
+            print(f"✗ SLAM correct 指令格式错误：期望[0xB2, 0xFF]，实际[{data[0]:02x}, {data[1]:02x}]")
+            return False
+        
+        sick_data = data[3:19]
+        try:
+            sick_floats = struct.unpack('<4f', sick_data)
+            distance = 1.0667 * sick_floats[0] - 0.0533
+            TFManagerInstance.sick(float(distance))
+            print(f"SICK数据解析成功: distance={distance:.3f} m")
+        except Exception as e:
+            print(f"SICK解析错误: {e}")
+
 def serial_correct_callback(data: bytes): # 0xB2
     """
     correct纠正指令核心处理函数
