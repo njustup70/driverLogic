@@ -45,6 +45,14 @@ async def async_main():
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # odin定位需要的部分
 
+    asyncio.create_task(Move.mpc_control_loop())
+    asyncio.create_task(observer_module.observer_update())
+    
+    #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
+    await asyncio.sleep(0.0)
+    # 跑到矛头架
+    await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
+
     # 这个回调用来检测build_spear动作是否完成
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback, 0xA3) 
     # 这个回调用来获取二区物块的摆放状态
@@ -55,13 +63,7 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/arucopnp/offset_mm", debug_spear_offset_callback, type=PointStamped)
     # 这个异步函数完成用来矛头对齐
     await build_spear_until_finish()
-    # asyncio.create_task(observer_module.observer_update())
-    asyncio.create_task(Move.mpc_control_loop())
-    asyncio.create_task(observer_module.observer_update())
-    #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
-    await asyncio.sleep(0.0)
-    # 固定终点模式
-    await Move.mpc_move_to_point([1.0, 1.0, 1.0], ref_speed=1.5)
+
     while True:
         # 阻塞，无任务
         # from MainLogic.Lib.Visual import PathVisualInstance
