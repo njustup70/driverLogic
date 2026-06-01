@@ -22,7 +22,7 @@ async def async_main():
     # ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     TFManagerInstance=TFOdin()
     # odin2Base=Odom(-0.310,- 0.3515, 3.14/2)
-    base2odin=Odom(-0.342,0.351,3.1415926/2)
+    base2odin=Odom(-0.371,0.300,3.1415926/2)
     npy_path='/home/Elaina/ros2_ws/src/MainLogic/SE_Trans.npy'
     SE3_map2odin=SE3(matrix=np.load(npy_path))
     TFManagerInstance.register_tf_chain(base2odin,SE3_map2odin)
@@ -36,5 +36,6 @@ async def async_main():
     while True:
         # 阻塞，无任务
         # from MainLogic.Lib.Visual import PathVisualInstance
-        # PathVisualInstance.update("/state/base_link_path",Odom(0.0, 0.0, 0.0))
+        TFManagerInstance.baseLinkOdom.value= Odom(TFManagerInstance.baseLinkOdom.x + 0.1, TFManagerInstance.baseLinkOdom.y, TFManagerInstance.baseLinkOdom.yaw)
+        # TFManagerInstance.baseLinkOdom.value.x+=0.1
         await asyncio.sleep(1)

@@ -244,6 +244,8 @@ class TFOdin:
         self.rosBridge.publish_dynamic_tf(self.map_frame, self.base_frame, baselink)
         
         self.baseLinkOdom.value = baselink
+        odom_msg = Vector3(x=baselink.x, y=baselink.y, z=baselink.yaw)
+        self.rosBridge.publish_ros2(BASE_LINK_ODOM_TOPIC, odom_msg)
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([baselink.x, baselink.y, baselink.yaw]))
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新"""
