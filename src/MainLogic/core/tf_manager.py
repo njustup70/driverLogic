@@ -275,7 +275,7 @@ class TFManager:
         fused_base = self._mapToSlamInit @ self._slamInitToOdom @ wheel_pose
         self._mapToBase = fused_base
         self.baseLinkOdom.value = fused_base
-        # print(f"is:{fused_base.x}")
+        #print(f"is:{fused_base.x}")
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
         # 发布 Vector3Stamped 话题
         odom_raw=Vector3(x=wheel_pose.x, y=wheel_pose.y, z=wheel_pose.yaw)

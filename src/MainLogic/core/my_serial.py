@@ -189,7 +189,7 @@ import time,struct
 # --- 主函数示例 ---
 if __name__ == "__main__":
     # 1. 初始化串口管理器
-    ser = AsyncSerial_t("/dev/serial_ch340", 921600)
+    ser = AsyncSerial_t("/dev/serial_r1", 921600)
 
     # 2. 注册回调
     ser.register_callback(mcu_transmit_callback)
