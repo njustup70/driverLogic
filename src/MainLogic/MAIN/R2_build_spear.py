@@ -2,9 +2,6 @@
 仅执行 build_spear 的精简入口。
 """
 
-import asyncio
-import math
-
 from geometry_msgs.msg import PointStamped
 from std_msgs.msg import String, UInt8MultiArray
 
@@ -13,60 +10,11 @@ from MainLogic.app.actions import (
     BUILD_SPEAR_ACTION_TYPE,
     build_spear_active,
     build_spear_finish,
+    debug_spear_offset_callback,
+    build_spear_until_finish,
 )
-from MainLogic.Lib.bytes import turn_to_bytes
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
-
-
-def debug_spear_offset_callback(msg):
-    if not build_spear_active.value:
-        return
-
-    left_mm = float(msg.point.x)
-    up_mm = float(msg.point.y)
-    if not math.isfinite(left_mm) or not math.isfinite(up_mm):
-        return
-
-    bridge = ros_bridge_module.RosBridgeNodeInstance
-    if bridge is None:
-        return
-
-    payload = gcb.SPEAR_OFFSET_COMMAND + turn_to_bytes([left_mm, up_mm])
-    frame = b'\xFA' + payload
-    bridge.writeBytes(payload)
-    print(
-        "[R2_build_spear] publish serial_tx "
-        f"frame={frame.hex(' ')} "
-        f"left_mm={left_mm:.2f} up_mm={up_mm:.2f}",
-        flush=True,
-    )
-
-
-async def build_spear_until_finish():
-    assert ros_bridge_module.RosBridgeNodeInstance is not None, (
-        "RosBridgeNodeInstance is not initialized yet!"
-    )
-
-    build_spear_finish.value = b""
-    build_spear_active.value = True
-
-    try:
-        while build_spear_finish.value != BUILD_SPEAR_ACTION_TYPE:
-            msg = String()
-            msg.data = "spear_build"
-            ros_bridge_module.RosBridgeNodeInstance.publish_ros2("/update_exec_req", msg)
-            print("[R2_build_spear] publish /update_exec_req spear_build", flush=True)
-
-            try:
-                result = await asyncio.wait_for(build_spear_finish, timeout=1.0)
-            except asyncio.TimeoutError:
-                continue
-            if result == BUILD_SPEAR_ACTION_TYPE:
-                print("[R2_build_spear] build_spear finished by lower controller A3", flush=True)
-                return
-    finally:
-        build_spear_active.value = False
 
 
 async def async_main():
