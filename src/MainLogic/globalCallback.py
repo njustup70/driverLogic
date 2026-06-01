@@ -186,17 +186,7 @@ def sick_callback(data: bytes): # 0xAA
         if not sick_valid:
             print(f"SICK数据校验失败")
             return
-        
-        # 检查数据长度和格式
-        if len(data) < 2:
-            print(f"✗ SLAM correct 指令格式错误：数据长度不足，期望≥2，实际{len(data)}")
-            return False
-        
-        # 检查脱头后的前两个字节：[0xB2, 0xFF]
-        if data[0] != 0xB2 or data[1] != 0xFF:
-            print(f"✗ SLAM correct 指令格式错误：期望[0xB2, 0xFF]，实际[{data[0]:02x}, {data[1]:02x}]")
-            return False
-        
+      
         sick_data = data[3:19]
         try:
             sick_floats = struct.unpack('<4f', sick_data)

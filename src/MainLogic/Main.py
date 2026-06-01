@@ -49,7 +49,7 @@ def _report_async_future_result(fut):
 
 def main():
     parser = argparse.ArgumentParser(description='MainLogic entry selector')
-    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'R2n_Main'))
+    parser.add_argument('--main-module', default=os.getenv('MAIN_MODULE', 'R1n_Main'))
     parser.add_argument('--main-func', default=os.getenv('MAIN_FUNC', 'async_main'))
     args, _ = parser.parse_known_args()
 
