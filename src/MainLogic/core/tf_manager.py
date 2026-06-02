@@ -168,6 +168,7 @@ class TFManager:
                 print(e)
             tick_10ms = (tick_10ms + 1) % 10
             await asyncio.sleep(0.01)
+
 import numpy as np
 class TFOdin:
     def __init__(self):
@@ -189,21 +190,71 @@ class TFOdin:
         # 控制标志
         self._tf_chain_registered = False
         self._has_slam_pose = False
+        self._is_relocalization = False
         self._transSE=SE3(np.array([0.0,0.0,0.0]))
-    def register_tf_chain(self,Base2odin: Odom,Trans:SE3):
+
+        # sick 修正缓存
+        self.sick_lateral_offset = 0.0
+        self.sick_buffer_size = 10
+        self.sick_buffer: list[float] = []
+
+        # 存储了sick修正增量的变量，用于连续修正时的撤销与更新逻辑
+        self._sickYawCorrection = 0.0
+
+    def register_tf_chain(self,Base2odin: Odom,Base2sick: Odom,Map2Base: Odom,Trans:SE3):
         '''
         param Base2odin: 车体中心到odin坐标
         '''
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
-        assert   Base2odin is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
+        assert Base2odin is not None and Base2sick is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
         self._odin_to_base = Base2odin.inverse()
+        self._sick_to_base = Base2sick.inverse()
+        self._map_to_base = Map2Base
         self._transSE=Trans
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
+        self._mapToOdinInit = self._map_to_base @ Base2odin
+        self._sickYawCorrection = 0.0
         self.rosBridge.publish_static_tf(self.odin_map_frame, self.map_frame, self._transSE.inverse())
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
+
+    def sick(self, sick_y: float):
+        """SICK 数据入口：输入侧向测距值（单位米）。"""
+        self.sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
+        if len(self.sick_buffer) > self.sick_buffer_size:
+            self.sick_buffer.pop(0)
+
+    def apply_sick_initial_yaw_correction(self) -> bool:
+        """使用 sick 缓存值修正 map->slam_init 的初始 yaw（增量更新，可撤销前次修正）。"""
+        if not self.sick_buffer:
+            return False
+        sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
+
+        # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
+        base_without_prev = Odom(
+            self.baseLinkOdom.value.x,
+            self.baseLinkOdom.value.y,
+            self.baseLinkOdom.value.yaw - self._sickYawCorrection,
+        )
+        sick_pose = base_without_prev @ self._sick_to_base
+        new_yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
+
+        # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
+        nominal_yaw = self._mapToOdinInit.yaw - self._sickYawCorrection
+        self._mapToOdinInit = Odom(
+            self._mapToOdinInit.x,
+            self._mapToOdinInit.y,
+            nominal_yaw + new_yaw_correction,
+        )
+        self._sickYawCorrection = new_yaw_correction
+
+        if self.rosBridge is not None:
+            pass
+        self.sick_buffer.clear()
+        return True
+    
     def odom_10ms(self):
         """10ms 更新：发布 odom/base, map/odom, 计算 map/base 并下发到下位机。"""
         assert self._tf_chain_registered, 'TF chain is not registered yet!'
@@ -224,25 +275,43 @@ class TFOdin:
                 self.odin_base_frame,
                 rclpy.time.Time(),
             )
+            self._is_relocalization = True
+        except Exception:
+            self._is_relocalization = False
+            return
+        # 若未能成功获取重定位完整TF，则为SLAM模式
+        try:
+            tf_odom_base_odin = self.rosBridge._tfBuffer.lookup_transform(
+                self.odin_odom_frame,
+                self.odin_base_frame,
+                rclpy.time.Time(),
+            )
         except Exception:
             return
         
-        raw_SE3=SE3.from_transform_stamped(tf_map_base_odin)
-        # raw_odom=SE3.from_transform_stamped(tf_odom_msg)
-        #========== 坐标变换逻辑 ============
-        # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系 ——> Odin里程计坐标系 ——> 车体中心坐标系
-        #抓换到ref座标系(地图座标系)
-        # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系
-        ref_SE3=self._transSE@raw_SE3
-        map_to_odin = ref_SE3.to_odom()
+        if(self._is_relocalization):
+            raw_SE3=SE3.from_transform_stamped(tf_map_base_odin)
+            # raw_odom=SE3.from_transform_stamped(tf_odom_msg)
+            #========== 坐标变换逻辑 ============
+            # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系 ——> Odin里程计坐标系 ——> 车体中心坐标系
+            #抓换到ref座标系(地图座标系)
+            # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系
+            ref_SE3=self._transSE@raw_SE3
+            map_to_odin = ref_SE3.to_odom()
 
-        baselink = (map_to_odin @ self._odin_to_base)
-        # ========== 发布 TF 树 ============
-        # 发布 map_odin -> odom_odin
-        # self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
-        # 发布 odom_odin -> base_link_
-        self.rosBridge.publish_dynamic_tf(self.map_frame, self.base_frame, baselink)
+            baselink = (map_to_odin @ self._odin_to_base)
+            # ========== 发布 TF 树 ============
+            # 发布 map_odin -> odom_odin
+            # self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)
+            # 发布 odom_odin -> base_link_
+
+
+        else:
+            raw_SE3=SE3.from_transform_stamped(tf_odom_base_odin)
+            odom_to_base = raw_SE3.to_odom()
+            baselink = self._mapToOdinInit @ odom_to_base @ self._odin_to_base
         
+        self.rosBridge.publish_dynamic_tf(self.map_frame, self.base_frame, baselink)
         self.baseLinkOdom.value = baselink
         odom_msg = Vector3(x=baselink.x, y=baselink.y, z=baselink.yaw)
         self.rosBridge.publish_ros2(BASE_LINK_ODOM_TOPIC, odom_msg)
