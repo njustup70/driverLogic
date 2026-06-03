@@ -34,6 +34,8 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
     TFManagerInstance=TFOdin()
     base2odin=Odom(-0.371,0.300,3.1415926/2)
+    Base2sick=Odom(0.0,0.0,0.0)
+    Map2Base=Odom(0.0,0.0,0.0)
     npy_path='/home/Elaina/ros2_ws/src/MainLogic/SE_Trans.npy'
     # 如果没有预先计算好的SE，先跑一遍对应的标定代码
     import os
@@ -41,18 +43,14 @@ async def async_main():
         import MainLogic.core.icp as icp
         icp.main()
     SE3_map2odin=SE3(matrix=np.load(npy_path))
-    TFManagerInstance.register_tf_chain(base2odin,SE3_map2odin)
+    TFManagerInstance.register_tf_chain(base2odin,Base2sick,Map2Base,SE3_map2odin)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # odin定位需要的部分
 
     asyncio.create_task(Move.mpc_control_loop())
     asyncio.create_task(observer_module.observer_update())
-    
-    #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
-    await asyncio.sleep(0.0)
-    # 跑到矛头架
-    await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
 
+ # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
     # 这个回调用来检测build_spear动作是否完成
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback, 0xA3) 
     # 这个回调用来获取二区物块的摆放状态
@@ -61,6 +59,13 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("spear_status", gcb.spear_callback, type=UInt8MultiArray) 
     # 订阅这个话题给下位机发送矛头偏移
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/arucopnp/offset_mm", debug_spear_offset_callback, type=PointStamped)
+
+    #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
+    await asyncio.sleep(0.0)
+    # 跑到矛头架
+    await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
+
+
     # 这个异步函数完成用来矛头对齐
     await build_spear_until_finish()
 

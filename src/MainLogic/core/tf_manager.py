@@ -181,7 +181,7 @@ class TFOdin:
         self.base_frame = 'base_link'
 
         self.odin_map_frame = 'map'
-        self.odin_odom_frame = 'camera_init'
+        self.odin_odom_frame = 'odin1/odom'
         self.odin_base_frame = 'odin1_base_link'
         
         # map -> slam_init（默认对齐）
@@ -278,7 +278,7 @@ class TFOdin:
             self._is_relocalization = True
         except Exception:
             self._is_relocalization = False
-            return
+            # return
         # 若未能成功获取重定位完整TF，则为SLAM模式
         try:
             tf_odom_base_odin = self.rosBridge._tfBuffer.lookup_transform(
