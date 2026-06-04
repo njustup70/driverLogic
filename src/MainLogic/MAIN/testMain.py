@@ -63,7 +63,7 @@ async def async_main():
     #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
     await asyncio.sleep(0.0)
     # 跑到矛头架
-    await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
+    # await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
 
 
     # 这个异步函数完成用来矛头对齐

@@ -181,7 +181,7 @@ class TFOdin:
         self.base_frame = 'base_link'
 
         self.odin_map_frame = 'map'
-        self.odin_odom_frame = 'odin1/odom'
+        self.odin_odom_frame = 'odom'
         self.odin_base_frame = 'odin1_base_link'
         
         # map -> slam_init（默认对齐）

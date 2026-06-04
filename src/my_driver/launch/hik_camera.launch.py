@@ -12,8 +12,8 @@ def generate_launch_description():
         parameters=[
             {'serial_number': 'DA4976553'},
             {'camera_topic': '/hik_camera/image_raw'},
-            {'exposure_time': 15000},
-            {'gain': 10.0},
+            {'exposure_time': 30000},
+            {'gain': 0.0},
             {'acquisition_frame_rate': 50.0},
             {'pixel_format': 'BayerGB8'},
         ],
