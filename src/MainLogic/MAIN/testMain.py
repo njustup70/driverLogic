@@ -33,7 +33,7 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, 0xAA)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
     TFManagerInstance=TFOdin()
-    base2odin=Odom(-0.371,0.300,3.1415926/2)
+    base2odin=Odom(-0.336,0.371,3.1415926/2)
     Base2sick=Odom(0.0,0.0,0.0)
     Map2Base=Odom(0.0,0.0,0.0)
     npy_path='/home/Elaina/ros2_ws/src/MainLogic/SE_Trans.npy'
