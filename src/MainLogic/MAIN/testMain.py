@@ -1,3 +1,11 @@
+'''
+Author: Nagisa 2964793117@qq.com
+Date: 2026-03-24 18:33:24
+LastEditors: Nagisa 2964793117@qq.com
+LastEditTime: 2026-06-08 17:05:56
+FilePath: \driverLogic\src\MainLogic\MAIN\testMain.py
+Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+'''
 from MainLogic import globalCallback as gcb
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
@@ -31,6 +39,7 @@ async def async_main():
 
     # odin定位需要的部分
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, 0xAA)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, 0xB3)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
     TFManagerInstance=TFOdin()
     base2odin=Odom(-0.336,0.371,3.1415926/2)
