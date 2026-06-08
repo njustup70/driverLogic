@@ -44,7 +44,7 @@ async def async_main():
     TFManagerInstance=TFOdin()
     base2odin=Odom(-0.336,0.371,3.1415926/2)
     Base2sick=Odom(0.0,0.0,0.0)
-    Map2Base=Odom(0.0,0.0,0.0)
+    Map2Base=Odom(0.41,4.6,0.0)
     npy_path='/home/Elaina/ros2_ws/src/MainLogic/SE_Trans.npy'
     # 如果没有预先计算好的SE，先跑一遍对应的标定代码
     import os
