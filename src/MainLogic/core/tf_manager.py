@@ -280,14 +280,15 @@ class TFOdin:
             self._is_relocalization = False
             # return
         # 若未能成功获取重定位完整TF，则为SLAM模式
-        try:
-            tf_odom_base_odin = self.rosBridge._tfBuffer.lookup_transform(
-                self.odin_odom_frame,
-                self.odin_base_frame,
-                rclpy.time.Time(),
-            )
-        except Exception:
-            return
+        if not self._is_relocalization:
+            try:
+                tf_odom_base_odin = self.rosBridge._tfBuffer.lookup_transform(
+                    self.odin_odom_frame,
+                    self.odin_base_frame,
+                    rclpy.time.Time(),
+                )
+            except Exception:
+                return
         
         if(self._is_relocalization):
             raw_SE3=SE3.from_transform_stamped(tf_map_base_odin)
