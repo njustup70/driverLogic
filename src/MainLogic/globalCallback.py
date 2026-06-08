@@ -12,7 +12,7 @@ from MainLogic.app.actions import (
 )
 from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import TFManagerInstance
+from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
 from MainLogic.Lib.bytes import turn_to_bytes
 
 
@@ -82,6 +82,7 @@ def serial_correct_callback(data: bytes): # 0xB2
         return False
     try:
         result = TFManagerInstance.apply_sick_initial_yaw_correction()
+        result = TFOdinInstance.apply_sick_initial_yaw_correction()
         if result:
             print("✓ SLAM correct 纠正指令已触发，SICK yaw 纠正成功")
         else:
