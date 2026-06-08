@@ -18,7 +18,8 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, b'\xB3')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
-    sick2Base=Odom(0.0, 0.390, 0.0) # sick底盘
+    #sick2Base=Odom(-0.3125, -0.495, 0.0) # sick底盘(sick位于底盘的左侧,但在右半场启动)
+    sick2Base=Odom(-0.3125, 0.360, 0.0) # sick底盘(sick位于底盘的右侧,在右半场启动)
     map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)

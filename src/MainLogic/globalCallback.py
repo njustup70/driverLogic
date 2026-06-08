@@ -132,7 +132,7 @@ def mcu_transmit_callback(data: bytes):
 
 
 def sick_callback(data: bytes): # 0xAA
-    """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
+    """下位机串口数据帧回调"""
     # sick数据帧：4个float加头3位，尾1位，共20字节
     # print(f"回调函数收到串口数据:{data.hex()}")
     _SICK_FRAME_LEN = 20
@@ -203,7 +203,7 @@ def serial_correct_callback(data: bytes): # 0xB2
     """
     # 检查数据长度和格式
     if len(data) < 2:
-        # print(f"✗ SLAM correct 指令格式错误：数据长度不足，期望≥2，实际{len(data)}")
+        print(f"✗ SLAM correct 指令格式错误：数据长度不足，期望≥2，实际{len(data)}")
         return False
     # 检查脱头后的前两个字节：[0xB2, 0xFF]
     if data[0] != 0xB2 or data[1] != 0xFF:
