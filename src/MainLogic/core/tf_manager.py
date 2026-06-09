@@ -254,7 +254,18 @@ class TFOdin:
             pass
         self.sick_buffer.clear()
         return True
-    
+    def sickInitYCorrect(self):
+        '''
+        sick初始值修正，直接把sick测量的y值作为车体中心到地图原点的y偏移，适用于车体中心在地图原点的情况
+        '''
+        if not self.sick_buffer:
+            return False
+        sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
+        #先堆屎，sick装左边的情况下场地有一个12cm的初始偏移
+        map2sick_y=sick_y+0.12
+        self._mapToOdinInit = Odom(
+            self._mapToOdinInit.x,map2sick_y+self._sick_to_base.y,self._mapToOdinInit.yaw)
+        
     def odom_10ms(self):
         """10ms 更新：发布 odom/base, map/odom, 计算 map/base 并下发到下位机。"""
         assert self._tf_chain_registered, 'TF chain is not registered yet!'
