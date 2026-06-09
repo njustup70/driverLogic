@@ -506,8 +506,8 @@ class TFOdin:
             raw_SE3=SE3.from_transform_stamped(tf_odom_base_odin)
             odom_to_base = raw_SE3.to_odom()
             baselink = self._mapToOdinInit @ odom_to_base @ self._odin_to_base
-            if(self._mapToOdinInit!=Odom(0.0,0.0,0.0)):
-                print(f"mapToOdinInit: x={self._mapToOdinInit.x:.3f}, y={self._mapToOdinInit.y:.3f}, yaw={self._mapToOdinInit.yaw:.3f}")
+            # if(self._mapToOdinInit!=Odom(0.0,0.0,0.0)):
+            #     print(f"mapToOdinInit: x={self._mapToOdinInit.x:.3f}, y={self._mapToOdinInit.y:.3f}, yaw={self._mapToOdinInit.yaw:.3f}")
                 
         self.rosBridge.publish_dynamic_tf(self.map_frame, self.base_frame, baselink)
         self.baseLinkOdom.value = baselink
