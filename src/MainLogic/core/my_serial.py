@@ -137,7 +137,8 @@ class AsyncSerial_t:
                 
                 # 提取 payload
                 payload = buffer[2:total_frame_len]
-                
+                if length not in [3,13,21]:
+                    print(payload.hex(' '))                
                 if self.callback:
                     # 传入 callback 的数据依然建议转回 bytes 保证数据安全性
                     self.callback(b'\xFF' + payload)
