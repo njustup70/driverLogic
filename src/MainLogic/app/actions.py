@@ -64,14 +64,14 @@ async def build_spear_until_finish():
             msg = String()
             msg.data = "spear_build"
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2("/update_exec_req", msg)
-            print("[build_spear] publish /update_exec_req spear_build", flush=True)
+            # print("[build_spear] publish /update_exec_req spear_build", flush=True)
 
             try:
                 result = await asyncio.wait_for(build_spear_finish, timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             if result == BUILD_SPEAR_ACTION_TYPE:
-                print("[build_spear] build_spear finished by lower controller A3", flush=True)
+                # print("[build_spear] build_spear finished by lower controller A3", flush=True)
                 return
     finally:
         build_spear_active.value = False
