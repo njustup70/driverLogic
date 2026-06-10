@@ -6,11 +6,12 @@ LastEditTime: 2026-06-08 17:05:56
 FilePath: \driverLogic\src\MainLogic\MAIN\testMain.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
-from MainLogic import globalCallback as gcb
+
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
 import asyncio
 from MainLogic.core.tf_manager import TFManagerInstance,TFOdin
+import MainLogic.core.tf_manager as tf_manager
 import MainLogic.core.nav.observer as observer_module
 from MainLogic.Lib.odomVec import Odom,SE3
 import MainLogic.core.nav.mpc as mpc
@@ -18,7 +19,6 @@ import MainLogic.core.Move as Move
 import numpy as np
 from geometry_msgs.msg import PointStamped
 from std_msgs.msg import String, UInt8MultiArray
-
 from MainLogic import globalCallback as gcb
 from MainLogic.app.actions import (
     BUILD_SPEAR_ACTION_TYPE,
@@ -41,9 +41,15 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, 0xAA)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, 0xB3)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
-    TFManagerInstance=TFOdin()
+    # tf_manager.TFManagerInstance=tf_manager.TFOdin()
+
+    tf_manager.TFManagerInstance=tf_manager.TFOdin()
+    # print(id(TFManagerInstance))
+    TFManagerInstance=tf_manager.TFManagerInstance
+    print(id(TFManagerInstance))
+    # TFManagerInstance=tf_manager.TFManagerInstance
     base2odin=Odom(-0.336,0.371,3.1415926/2)
-    Base2sick=Odom(0.0,0.0,0.0)
+    Base2sick=Odom(0.0,0.37116,0.0)
     Map2Base=Odom(0.41,4.6,0.0)
     npy_path='/home/Elaina/ros2_ws/src/MainLogic/SE_Trans.npy'
     # 如果没有预先计算好的SE，先跑一遍对应的标定代码
@@ -56,7 +62,7 @@ async def async_main():
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # odin定位需要的部分
 
-    asyncio.create_task(Move.mpc_control_loop())
+    # asyncio.create_task(Move.mpc_control_loop())
     asyncio.create_task(observer_module.observer_update())
 
  # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
@@ -70,7 +76,9 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/arucopnp/offset_mm", debug_spear_offset_callback, type=PointStamped)
 
     #重要await，让上面的任务先运行起来，等它们都准备好了之后再继续往下走
+    # await asyncio.sleep(0.5)
     await asyncio.sleep(0.5)
+    # await asyncio.sleep(1.5)
     # 跑到矛头架
     # await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
     print("等待 SICK 数据接入...")
