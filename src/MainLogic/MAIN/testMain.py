@@ -73,6 +73,14 @@ async def async_main():
     await asyncio.sleep(0.5)
     # 跑到矛头架
     # await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
+    print("等待 SICK 数据接入...")
+    while len(TFManagerInstance.sick_buffer) == 0:
+        await asyncio.sleep(0.1)  # 短暂让出控制权，不阻塞其他协程
+    
+    # 可选：再等 0.5 秒让 buffer 填满（因为你的 buffer_size 是 10，取均值更准）
+    await asyncio.sleep(0.5) 
+    
+    print("SICK 数据就绪，执行初始 Y 轴修正")
     TFManagerInstance.sickInitYCorrect()
 
     # 这个异步函数完成用来矛头对齐
