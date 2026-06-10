@@ -18,10 +18,23 @@ from MainLogic.Lib.Visual import PathVisualInstance
 BASE_LINK_ODOM_TOPIC = '/state/base_link_odom'
 
 class TFManager:
+    _instance = None  # 存放唯一实例的私有类属性
     # map->base_link 位姿，由 slam 融合计算得到，供上层异步逻辑使用
-    
+    def __new__(cls, *args, **kwargs):
+        # 如果实例不存在，则创建一个新的
+        if cls._instance is None:
+            # 调用父类的 __new__ 来分配内存
+            cls._instance = super().__new__(cls)
+            # 在这里可以加一个初始化标志，防止 __init__ 被重复调用
+            cls._instance._is_initialized = False 
+        # 如果实例已存在，直接返回旧的内存地址
+        return cls._instance
 
     def __init__(self):
+        if getattr(self, '_is_initialized', False):
+                    return
+        self._is_initialized = True
+
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
         # 坐标系固定配置（不使用 ROS2 参数）
@@ -171,7 +184,23 @@ class TFManager:
 
 import numpy as np
 class TFOdin:
+    _instance = None  # 存放唯一实例的私有类属性
+    def __new__(cls, *args, **kwargs):
+        # 如果实例不存在，则创建一个新的
+        if cls._instance is None:
+            # 调用父类的 __new__ 来分配内存
+            cls._instance = super().__new__(cls)
+            # 在这里可以加一个初始化标志，防止 __init__ 被重复调用
+            cls._instance._is_initialized = False 
+        # 如果实例已存在，直接返回旧的内存地址
+        return cls._instance
+
+        
     def __init__(self):
+        if getattr(self, '_is_initialized', False):
+                    return
+        self._is_initialized = True
+
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
 
