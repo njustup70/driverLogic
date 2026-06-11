@@ -5,7 +5,8 @@
 import asyncio
 import math
 from typing import cast
-
+import numpy as np
+from scipy.optimize import fsolve
 import rclpy.time
 from geometry_msgs.msg import Vector3Stamped,Vector3
 
@@ -34,7 +35,8 @@ class TFManager:
         if getattr(self, '_is_initialized', False):
                     return
         self._is_initialized = True
-
+        # sick纠正场地分类Flag
+        self.flag = 0 #（0表示红场，1表示蓝场）
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
         # 坐标系固定配置（不使用 ROS2 参数）
@@ -107,8 +109,12 @@ class TFManager:
             self._mapToBase.yaw - self._sickYawCorrection,
         )
         sick_pose = base_without_prev @ self.sickToBaseLink
-        new_yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
-
+        if self.flag==0:
+            # 解超越方程tan（new_yaw_correction） = （sick_pose.y-（a/sin（new_yaw_correction）-sick_y））/sick_pose.x 
+            new_yaw_correction = fsolve(lambda theta: np.tan(theta) - (sick_pose.y - (6 / np.sin(theta) - sick_y)) / sick_pose.x, 0.01)[0]
+        if self.flag==1:
+            
+            new_yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
         self._mapToSlamInit = Odom(
@@ -201,6 +207,8 @@ class TFOdin:
                     return
         self._is_initialized = True
 
+        # sick纠正场地分类Flag
+        self.flag = 0 #（0表示红场，1表示蓝场）
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
 
