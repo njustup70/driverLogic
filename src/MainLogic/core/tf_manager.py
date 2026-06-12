@@ -113,7 +113,10 @@ class TFManager:
             new_yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
-        self._mapToSlamInit = Odom(0,0,new_yaw_correction) @ self._mapToSlamInit 
+        print(self._mapToSlamInit.x,self._mapToSlamInit.y,self._mapToSlamInit.yaw)
+        self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
+        print(self._mapToSlamInit.x,self._mapToSlamInit.y,self._mapToSlamInit.yaw)
+
         self._sickYawCorrection = new_yaw_correction
 
         if self.rosBridge is not None:
