@@ -61,7 +61,7 @@ def sick_callback(data: bytes): # 0xAA
         sick_data = data[3:19]
         try:
             sick_floats = struct.unpack('<4f', sick_data)
-            distance = 1.0667 * sick_floats[0] - 0.0533
+            distance = sick_floats[0]
             # print(id(TFManagerInstance), id(TFOdinInstance))
             TFManagerInstance.sick(float(distance))
             TFOdinInstance.sick(float(distance))

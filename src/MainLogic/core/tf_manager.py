@@ -103,25 +103,17 @@ class TFManager:
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
 
         # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
-        base_without_prev = Odom(
-            self._mapToBase.x,
-            self._mapToBase.y,
-            self._mapToBase.yaw - self._sickYawCorrection,
-        )
-        sick_pose = base_without_prev @ self.sickToBaseLink
+        base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
+        sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
+        print(sick_pose.x,sick_pose.y,sick_pose.yaw)
         if self.flag==0:
             # 解超越方程tan（new_yaw_correction） = （sick_pose.y-（a/sin（new_yaw_correction）-sick_y））/sick_pose.x 
-            new_yaw_correction = fsolve(lambda theta: np.tan(theta) - (sick_pose.y - (6 / np.sin(theta) - sick_y)) / sick_pose.x, 0.01)[0]
+            new_yaw_correction = fsolve(lambda theta: np.tan(theta) - (sick_pose.y - (6 / np.cos(theta) - sick_y)) / sick_pose.x, 0.01)[0]
         if self.flag==1:
-            
             new_yaw_correction = math.atan2(sick_pose.y - sick_y, sick_pose.x)
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
-        self._mapToSlamInit = Odom(
-            self._mapToSlamInit.x,
-            self._mapToSlamInit.y,
-            nominal_yaw + new_yaw_correction,
-        )
+        self._mapToSlamInit = Odom(0,0,new_yaw_correction) @ self._mapToSlamInit 
         self._sickYawCorrection = new_yaw_correction
 
         if self.rosBridge is not None:
@@ -299,7 +291,7 @@ class TFOdin:
             return False
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
         #先堆屎，sick装左边的情况下场地有一个12cm的初始偏移
-        map2sick_y=sick_y+0.12
+        map2sick_y=6.0-sick_y-0.12
         self._mapToOdinInit = Odom(
             self._mapToOdinInit.x,map2sick_y+self._sick_to_base.y,self._mapToOdinInit.yaw)
         
@@ -359,8 +351,8 @@ class TFOdin:
             raw_SE3=SE3.from_transform_stamped(tf_odom_base_odin)
             odom_to_base = raw_SE3.to_odom()
             baselink = self._mapToOdinInit @ odom_to_base @ self._odin_to_base
-            # if(self._mapToOdinInit!=Odom(0.0,0.0,0.0)):
-            #     print(f"mapToOdinInit: x={self._mapToOdinInit.x:.3f}, y={self._mapToOdinInit.y:.3f}, yaw={self._mapToOdinInit.yaw:.3f}")
+            if(self._mapToOdinInit!=Odom(0.0,0.0,0.0)):
+                print(f"mapToOdinInit: x={self._mapToOdinInit.x:.3f}, y={self._mapToOdinInit.y:.3f}, yaw={self._mapToOdinInit.yaw:.3f}")
                 
         self.rosBridge.publish_dynamic_tf(self.map_frame, self.base_frame, baselink)
         self.baseLinkOdom.value = baselink

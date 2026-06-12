@@ -23,7 +23,7 @@ register_keys:
   sendrgbundistort: 1     # 0: off; 1: on.
 
   # IMU data
-  sendimu: 1              # 0: off; 1: on
+  sendimu: 0              # 0: off; 1: on
     # SDK IMU smooth sending feature
   # When enabled, SDK will send IMU data at precise intervals (default 400Hz) 
   # using a dedicated high-priority thread to reduce jitter and timing variance
@@ -40,7 +40,7 @@ register_keys:
   send_odom_baselink_tf: 1 # 0: off; 1: on.
 
   # raw dtof data
-  senddtof: 1             # 0: off; 1: on
+  senddtof: 0             # 0: off; 1: on
   cloud_raw_confidence_threshold: 35 # please refer to readme for more details
   
   # dtof sensor frame rate. Supported values: 100 (10fps) or 145 (14.5fps)
