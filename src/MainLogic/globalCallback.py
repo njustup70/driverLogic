@@ -7,8 +7,9 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.app.merlin_map_solver_debug import run_solver_on_states
 from MainLogic.core.tf_manager import TFManagerInstance
 from typing import List
-_MEILIN_MAP_FRAME_PREFIX = b'\xFF\xA2'
-_MEILIN_MAP_FRAME_LEN = 14
+from MainLogic.core.zone2_model.zone2_sender import send_path_result_to_mcu
+_MEILIN_MAP_FRAME_PREFIX = b'\xff\x0d\xa2'
+_MEILIN_MAP_FRAME_LEN = 15
 
 
 def _decode_meilin_map_states(data: bytes) -> List[str]:
@@ -18,8 +19,8 @@ def _decode_meilin_map_states(data: bytes) -> List[str]:
     """
     if len(data) != _MEILIN_MAP_FRAME_LEN:
         raise ValueError(f"梅林地图编码帧长度错误: 期望 {_MEILIN_MAP_FRAME_LEN}，实际 {len(data)}")       
-    if data[:2] != _MEILIN_MAP_FRAME_PREFIX:
-        raise ValueError(f"梅林地图编码帧头错误: 期望 {_MEILIN_MAP_FRAME_PREFIX.hex()}，实际 {data[:2].hex()}")
+    if data[:3] != _MEILIN_MAP_FRAME_PREFIX:
+        raise ValueError(f"梅林地图编码帧头错误: 期望 {_MEILIN_MAP_FRAME_PREFIX.hex()}，实际 {data[:3].hex()}")
     code_to_name = {
         0: "EMPTY",  # 空
         1: "R1",     # R1
@@ -27,7 +28,7 @@ def _decode_meilin_map_states(data: bytes) -> List[str]:
         3: "FAKE",   # 假块 (对应你说的假块)
     }
     states = []
-    for stake_idx, byte_value in enumerate(data[2:], start=1):
+    for stake_idx, byte_value in enumerate(data[3:], start=1):
         if byte_value not in code_to_name:
             raise ValueError(f"KFS_{stake_idx} 包含未知的状态代码: {byte_value}")        
         states.append(code_to_name[byte_value])
@@ -40,10 +41,13 @@ def _decode_meilin_map_states(data: bytes) -> List[str]:
 
 def meilin_map_frame_callback(data: bytes):
     """梅林地图编码帧回调：解析 14 字节 FF A2 KFS_1..KFS_12 帧并触发重算。"""
+
+    print(f"{data.hex()}")
+
     if not data:
         return False
 
-    meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN and data[:2] == _MEILIN_MAP_FRAME_PREFIX
+    meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN and data[:3] == _MEILIN_MAP_FRAME_PREFIX
     if not meilin_map_valid:
         return False
     
@@ -56,8 +60,9 @@ def meilin_map_frame_callback(data: bytes):
         return False
 
     try:
-        run_solver_on_states(meilin_states, render_map=False)
+        result = run_solver_on_states(meilin_states, render_map=True)
         print("梅林地图编码帧已解析并调用新入口完成求解")
+        send_path_result_to_mcu(result)
         return True
     except Exception as e:
         print(f"梅林地图编码帧处理错误: {e}")
