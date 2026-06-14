@@ -74,6 +74,7 @@ class Zone2ModelAPI:
         turn_cost: Optional[float] = None,
         r1_remove_cost: Optional[float] = None,
         turn_free_rules: Optional[set[str]] = None,
+        map_frame: Optional[Any] = None,
         map_data: Optional[dict] = None,
     ) -> Dict[str, Any]:
         use_normal_cost = self.MOVE_COST if normal_cost is None else normal_cost
@@ -92,6 +93,7 @@ class Zone2ModelAPI:
             turn_cost=use_turn_cost,
             r1_remove_cost=use_r1_remove_cost,
             turn_free_rules=turn_free_rules,
+            map_frame=map_frame,
             map_data=map_data,
         )
 

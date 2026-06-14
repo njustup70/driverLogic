@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import argparse
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from MainLogic.core.zone2_model import (
     dijkstra_min_cost_path,
@@ -25,6 +25,73 @@ from MainLogic.core.zone2_model import (
 )
 from MainLogic.core.zone2_model.merlin_map import load_saved_merlin_map_by_filename
 from MainLogic.core.zone2_model.zone2_format import print_path_debug_info
+
+
+_STATE_TO_BLOCK = {
+    "EMPTY": "empty",
+    "empty": "empty",
+    "R1": "R1",
+    "r1": "R1",
+    "R2": "R2",
+    "r2": "R2",
+    "FAKE": "fake",
+    "fake": "fake",
+}
+
+
+def _build_fixed_adjacency() -> Dict[Any, List[Any]]:
+    """构造梅林 4x3 固定邻接关系，和地图状态无关。"""
+    adjacency: Dict[Any, List[Any]] = {i: [] for i in range(1, 13)}
+
+    rows, cols = 4, 3
+
+    def rc_to_id(r: int, c: int) -> int:
+        return r * cols + c + 1
+
+    for r in range(rows):
+        for c in range(cols):
+            cur = rc_to_id(r, c)
+            if r > 0:
+                adjacency[cur].append(rc_to_id(r - 1, c))
+            if r < rows - 1:
+                adjacency[cur].append(rc_to_id(r + 1, c))
+            if c > 0:
+                adjacency[cur].append(rc_to_id(r, c - 1))
+            if c < cols - 1:
+                adjacency[cur].append(rc_to_id(r, c + 1))
+
+    adjacency["start"] = [1, 2, 3]
+    adjacency["end"] = [10, 11, 12]
+
+    for n in (1, 2, 3):
+        adjacency[n].append("start")
+    for n in (10, 11, 12):
+        adjacency[n].append("end")
+
+    return adjacency
+
+
+def build_map_data_from_states(states12: List[str], *, map_id: Optional[str] = None, seed: Optional[int] = None) -> dict:
+    """把解析后的 12 个桩位状态组装成求解器需要的 map_data。"""
+    if len(states12) != 12:
+        raise ValueError(f"状态数量必须是 12 个，当前是 {len(states12)} 个")
+
+    blocks: Dict[int, str] = {}
+    for idx, state in enumerate(states12, start=1):
+        block = _STATE_TO_BLOCK.get(str(state))
+        if block is None:
+            raise ValueError(f"未知的桩位状态: index={idx}, value={state!r}")
+        blocks[idx] = block
+
+    return {
+        "name": "merlin",
+        "shape": {"rows": 4, "cols": 3},
+        "nodes": ["start"] + list(range(1, 13)) + ["end"],
+        "adjacency": _build_fixed_adjacency(),
+        "blocks": blocks,
+        "map_id": map_id,
+        "seed": seed,
+    }
 
 
 def _print_map_entries() -> None:
@@ -95,6 +162,40 @@ def run_solver_on_saved_map(
         f"collected_r2_count={result.get('collected_r2_count')} | collected_r2={result.get('collected_r2')}",
         flush=True,
     )
+
+    print_path_debug_info(result)
+
+    if save_image:
+        image_path = draw_merlin_model(
+            save_path=save_image,
+            show=False,
+            show_bidirectional_white_arrows=True,
+            show_base_edges=True,
+            show_optimal_path=True,
+            show_turn_markers=True,
+            map_data=map_data,
+            path_result=result,
+        )
+        print(f"\n[merlin_map_debug] 图像已保存到: {image_path}", flush=True)
+
+    return result
+
+
+def run_solver_on_states(
+    states12: List[str],
+    render_map: bool = True,
+    save_image: Optional[str] = None,
+    map_id: Optional[str] = None,
+    seed: Optional[int] = None,
+) -> dict:
+    """直接把 12 个状态组装成 map_data 后求解。"""
+    map_data = build_map_data_from_states(states12, map_id=map_id, seed=seed)
+    result = dijkstra_min_cost_path(map_data=map_data)
+    result["map_data"] = map_data
+
+    if render_map:
+        print("\n[merlin_map_debug] 地图内容：", flush=True)
+        print_merlin_map(map_data)
 
     print_path_debug_info(result)
 

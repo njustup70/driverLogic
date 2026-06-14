@@ -4,8 +4,61 @@
 import struct
 from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
-from MainLogic.app.meilin_manager import MeilinManagerInstance
+from MainLogic.app.merlin_map_solver_debug import run_solver_on_states
 from MainLogic.core.tf_manager import TFManagerInstance
+_MEILIN_MAP_FRAME_PREFIX = b'\xFF\xA2'
+_MEILIN_MAP_FRAME_LEN = 14
+
+
+def _decode_meilin_map_states(data: bytes) -> List[str]:
+    """解析 14 字节梅林地图编码帧，返回 12 个桩位状态。
+    
+    协议格式：[0xFF] [0xA2] [KFS_1] [KFS_2] ... [KFS_12] (共 14 字节)
+    """
+    if len(data) != _MEILIN_MAP_FRAME_LEN:
+        raise ValueError(f"梅林地图编码帧长度错误: 期望 {_MEILIN_MAP_FRAME_LEN}，实际 {len(data)}")       
+    if data[:2] != _MEILIN_MAP_FRAME_PREFIX:
+        raise ValueError(f"梅林地图编码帧头错误: 期望 {_MEILIN_MAP_FRAME_PREFIX.hex()}，实际 {data[:2].hex()}")
+    code_to_name = {
+        0: "EMPTY",  # 空
+        1: "R1",     # R1
+        2: "R2",     # R2
+        3: "FAKE",   # 假块 (对应你说的假块)
+    }
+    states = []
+    for stake_idx, byte_value in enumerate(data[2:], start=1):
+        if byte_value not in code_to_name:
+            raise ValueError(f"KFS_{stake_idx} 包含未知的状态代码: {byte_value}")        
+        states.append(code_to_name[byte_value])
+
+    if len(states) != 12:
+        raise ValueError(f"梅林地图编码帧解析结果长度错误: {len(states)}")
+        
+    return states
+
+
+def meilin_map_frame_callback(data: bytes):
+    """梅林地图编码帧回调：解析 14 字节 FF A2 KFS_1..KFS_12 帧并触发重算。"""
+    if not data:
+        return False
+
+    meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN and data[:2] == _MEILIN_MAP_FRAME_PREFIX
+    if not meilin_map_valid:
+        return False
+
+    try:
+        meilin_states = _decode_meilin_map_states(data)
+    except Exception as e:
+        print(f"梅林地图编码帧解析错误: {e}")
+        return False
+
+    try:
+        run_solver_on_states(meilin_states, render_map=False)
+        print("梅林地图编码帧已解析并调用新入口完成求解")
+        return True
+    except Exception as e:
+        print(f"梅林地图编码帧处理错误: {e}")
+        return False
 
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
@@ -65,8 +118,10 @@ def mcu_transmit_callback(data: bytes):
         meilin_cmd_tail = data[4] == 0xFF
         meilin_cmd_valid = meilin_cmd_header and meilin_cmd_byte and meilin_cmd_checksum and meilin_cmd_tail
 
+    meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN and data[:2] == _MEILIN_MAP_FRAME_PREFIX
+
     # 检查帧类型互斥性
-    frame_count = sum([odom_valid, sick_valid, correct_valid, meilin_state_valid, meilin_cmd_valid])
+    frame_count = sum([odom_valid, sick_valid, correct_valid, meilin_state_valid, meilin_cmd_valid, meilin_map_valid])
     if frame_count == 0:
         return
     
@@ -88,27 +143,6 @@ def mcu_transmit_callback(data: bytes):
         serial_correct_callback(data)
         return
 
-    if meilin_state_valid:
-        try:
-            meilin_states = []
-            payload = data[2:5]
-            for byte_index in range(3):
-                value = payload[byte_index]
-                for bit_pair_index in range(4):
-                    state_code = (value >> (bit_pair_index * 2)) & 0x03
-                    meilin_states.append(_MEILIN_STATE_CODE_TO_NAME[state_code])
-            MeilinManagerInstance.update_pile_states(meilin_states)
-        except Exception as e:
-            print(f"梅林状态帧解析错误: {e}")
-        return
-
-    if meilin_cmd_valid:
-        try:
-            MeilinManagerInstance.request_solve()
-            print("梅林重算请求已触发")
-        except Exception as e:
-            print(f"梅林重算命令处理错误: {e}")
-        return
 
     try:
         sick_payload = data[3:19]
