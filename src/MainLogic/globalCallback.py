@@ -6,6 +6,7 @@ from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.app.merlin_map_solver_debug import run_solver_on_states
 from MainLogic.core.tf_manager import TFManagerInstance
+from typing import List
 _MEILIN_MAP_FRAME_PREFIX = b'\xFF\xA2'
 _MEILIN_MAP_FRAME_LEN = 14
 
@@ -45,6 +46,8 @@ def meilin_map_frame_callback(data: bytes):
     meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN and data[:2] == _MEILIN_MAP_FRAME_PREFIX
     if not meilin_map_valid:
         return False
+    
+    print(f"{data.hex()}")
 
     try:
         meilin_states = _decode_meilin_map_states(data)
