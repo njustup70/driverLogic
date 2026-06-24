@@ -7,7 +7,7 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.app.merlin_map_solver_debug import run_solver_on_states
 from MainLogic.core.tf_manager import TFManagerInstance
 from typing import List
-from MainLogic.core.zone2_model.zone2_sender import generate_actions_from_result
+from MainLogic.core.zone2_model.zone2_sender import generate_actions_from_result,determine_start_position
 _MEILIN_MAP_FRAME_PREFIX = b'\xff\x0d\xa2'
 _MEILIN_MAP_FRAME_LEN = 15
 
@@ -64,6 +64,8 @@ def meilin_map_frame_callback(data: bytes):
         print("梅林地图编码帧已解析并调用新入口完成求解")
         actions = generate_actions_from_result(result)
         print(f"生成动作序列: {actions}")
+        start_pos = determine_start_position(actions, approach_distance=500)
+        print(f"起始坐标: x={start_pos[0]:.1f}, y={start_pos[1]:.1f}")
         return True
     except Exception as e:
         print(f"梅林地图编码帧处理错误: {e}")

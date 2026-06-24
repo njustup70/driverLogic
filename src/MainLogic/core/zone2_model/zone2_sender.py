@@ -1,5 +1,4 @@
-from typing import List, Dict, Optional, Any
-
+from typing import List, Dict, Optional, Any,Tuple
 # ---------- 三维坐标常量（与之前一致）----------
 STAKE_3D_INFO: Dict[int, Dict[str, float]] = {
     1:  {"x": 3800, "y": 1800, "base_height": 400},
@@ -129,3 +128,44 @@ def generate_actions_from_result(
             })
 
     return actions
+
+def determine_start_position(
+    actions: List[Dict[str, any]],
+    approach_distance: float = 500.0
+) -> Tuple[float, float]:
+    """
+    根据动作序列确定机器人的起始坐标（仅 x, y）。
+    起始点位于第一个目标桩的正前方（x轴负方向）approach_distance 处。
+    支持：
+    - 第一步是 move（from="start"） → 提取 to 字段
+    - 第一步是 pick（from="start"） → 提取 target 字段
+    - 目标为衍生节点（如 D_1_to_2） → 自动解析出主桩号 1
+    """
+    first_target = None
+    for act in actions:
+        if act.get("type") == "move" and str(act.get("from")) == "start":
+            first_target = str(act["to"])
+            break
+        if act.get("type") == "pick" and str(act.get("from")) == "start":
+            first_target = str(act["target"])
+            break
+    if first_target is None:
+        return (0.0, 0.0)   # 无有效起始动作，返回原点
+    # 解析目标桩号（处理衍生节点）
+    if first_target.startswith("D_"):
+        parts = first_target.split("_")
+        if len(parts) >= 2 and parts[1].isdigit():
+            stake_id = int(parts[1])
+        else:
+            return (0.0, 0.0)
+    elif first_target.isdigit():
+        stake_id = int(first_target)
+    else:
+        return (0.0, 0.0)
+    stake = STAKE_3D_INFO.get(stake_id)
+    if stake is None:
+        return (0.0, 0.0)
+    # 前方：x 坐标减小（可根据实际场地改为 y 方向）
+    start_x = stake["x"] - approach_distance
+    start_y = stake["y"]
+    return (start_x, start_y)
