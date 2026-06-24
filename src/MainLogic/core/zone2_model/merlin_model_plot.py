@@ -7,8 +7,9 @@
 """
 
 from typing import Dict, Tuple, List, Set, Any
+import os
 from MainLogic.core.zone2_model.merlin_model import build_merlin_model
-from MainLogic.core.zone2_model.path_solver import dijkstra_min_cost_path
+from MainLogic.core.zone2_model.path_solver import solve_route
 import math
 
 
@@ -348,6 +349,10 @@ def draw_merlin_model(
 ) -> str:
     try:
         import networkx as nx  # type: ignore[reportMissingImports]
+        if (not show) or (not os.environ.get("DISPLAY")):
+            import matplotlib
+
+            matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt  # type: ignore[reportMissingImports]
     except ImportError as e:
         raise RuntimeError("缺少依赖，请先安装: pip3 install networkx matplotlib") from e
@@ -481,10 +486,14 @@ def draw_merlin_model(
         )
         _set_edge_artists_zorder(artists, edge_z)
 
-    # 最优路径叠加高亮（Dijkstra: start -> end）
+    # 最优路径叠加高亮（按 solver_strategy 选择）
     if show_optimal_path:
         if path_result is None:
-            path_result = dijkstra_min_cost_path(start="start", end="end", map_data=map_data)
+            path_result = solve_route(
+                start="start",
+                end="end",
+                map_data=map_data,
+            )
         if path_result.get("found"):
             turn_nodes: Set[str] = set()
             if show_turn_markers:
@@ -534,8 +543,9 @@ def draw_merlin_model(
                     linewidths=2.8,
                 )
 
+            resolved_strategy = str(path_result.get("solver_strategy", "unknown"))
             plt.title(
-                f"Merlin Directed Graph (Fixed Layout) | Cost: {path_result.get('cost', 0.0):.2f} "
+                f"Merlin Directed Graph (Fixed Layout) | Strategy: {resolved_strategy} | Cost: {path_result.get('cost', 0.0):.2f} "
                 f"| Turn: {path_result.get('total_turn_cost', 0.0):.2f} "
                 f"| Move: {path_result.get('total_move_cost', 0.0):.2f} "
                 f"| Pick: {path_result.get('total_pick_cost', 0.0):.2f}"

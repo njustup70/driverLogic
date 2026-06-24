@@ -22,6 +22,7 @@ from MainLogic.core.zone2_model import (
     list_saved_merlin_maps,
     load_saved_merlin_map,
     print_merlin_map,
+    solve_route,
 )
 from MainLogic.core.zone2_model.merlin_map import load_saved_merlin_map_by_filename
 from MainLogic.core.zone2_model.zone2_format import print_path_debug_info
@@ -143,7 +144,7 @@ def run_solver_on_saved_map(
         map_data = load_saved_merlin_map_by_filename(filename)
     else:
         map_data = load_saved_merlin_map(index=index)
-    result = dijkstra_min_cost_path(map_data=map_data)
+    result = solve_route(strategy="dijkstra", map_data=map_data)
     result["map_data"] = map_data
 
     print(
@@ -190,7 +191,7 @@ def run_solver_on_states(
 ) -> dict:
     """直接把 12 个状态组装成 map_data 后求解。"""
     map_data = build_map_data_from_states(states12, map_id=map_id, seed=seed)
-    result = dijkstra_min_cost_path(map_data=map_data)
+    result = solve_route(strategy="dijkstra", map_data=map_data)
     result["map_data"] = map_data
 
     if render_map:

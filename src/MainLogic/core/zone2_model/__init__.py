@@ -33,6 +33,9 @@ from .path_solver import (
     classify_edge_by_arrow_property,
     dijkstra_min_cost_path,
     extract_edges_by_arrow_property,
+    get_straight_line_route,
+    choose_straight_line_column,
+    solve_route,
 )
 
 __all__ = [
@@ -61,6 +64,9 @@ __all__ = [
     'classify_edge_by_arrow_property',
     'dijkstra_min_cost_path',
     'extract_edges_by_arrow_property',
+    'choose_straight_line_column',
+    'get_straight_line_route',
+    'solve_route',
 ]
 
 

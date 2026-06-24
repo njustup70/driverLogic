@@ -56,6 +56,7 @@ from typing import Dict, List, Optional, Tuple, Any, Set
 import heapq
 import math
 
+from MainLogic.core.zone2_model.merlin_map import get_merlin_map
 from MainLogic.core.zone2_model.merlin_model import build_merlin_model
 
 
@@ -67,10 +68,10 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 # normal: 非“指向衍生节点”的边（对应 plot 中红色箭头性质）
 # to_derived: 指向衍生节点的边（对应 plot 中紫色箭头性质）
 # 这里先把它们作为“基础动作代价”使用，真正的转向代价在状态搜索中单独叠加。
-MOVE_COST: float = 2.0   # 红色边基础代价
+MOVE_COST: float = 10.0   # 红色边基础代价
 PICK_COST: float = 2.0   # 紫色边基础代价
 TURN_COST: float = 1.0            # 转向代价（与边基础代价分离）
-REQUIRED_R2_COUNT: int = 3        # 到达 end 前至少获取的不同 R2 数量（默认 3）
+REQUIRED_R2_COUNT: int = 2        # 到达 end 前至少获取的不同 R2 数量（默认 3）
 R1_REMOVE_COST: float = 0.01      # R1物块消除代价
 
 
@@ -134,6 +135,220 @@ def _build_layout_positions(model: dict) -> Dict[str, Tuple[float, float]]:
         pos[str(node_id)] = (mx + bx * 0.18, my + by * 0.18)
 
     return pos
+
+
+_COLUMN_NODES: Dict[int, List[int]] = {
+    0: [1, 4, 7, 10],
+    1: [2, 5, 8, 11],
+    2: [3, 6, 9, 12],
+}
+
+
+def _column_stats(col: int, blocks: Dict[int, str]) -> Tuple[int, int, int, int]:
+    """返回一列的统计信息：顶排R2数、R2数、R1数、fake标记。"""
+    top_node = _COLUMN_NODES[col][0]
+    top_has_r2 = 1 if blocks.get(top_node) == "R2" else 0
+    r2_count = 0
+    r1_count = 0
+    fake_count = 0
+    for node_id in _COLUMN_NODES[col]:
+        block_type = blocks.get(node_id, "empty")
+        if block_type == "R2":
+            r2_count += 1
+        elif block_type == "R1":
+            r1_count += 1
+        elif block_type == "fake":
+            fake_count = 1
+    return top_has_r2, r2_count, r1_count, fake_count
+
+
+def _choose_best_column_by_priority(cols: List[int], blocks: Dict[int, str]) -> int:
+    fake_col: Optional[int] = None
+    for node_id, block_type in blocks.items():
+        if block_type == "fake":
+            fake_col = (node_id - 1) % 3
+            break
+
+    def _score_col(col: int) -> Tuple[int, int, int, int]:
+        top_has_r2, r2_count, r1_count, fake_count = _column_stats(col, blocks)
+        not_fake_col = 1 if col != fake_col else 0
+        return (top_has_r2, not_fake_col, r2_count, -r1_count - fake_count)
+
+    return max(cols, key=_score_col)
+
+
+def _get_fake_column(blocks: Dict[int, str]) -> Optional[int]:
+    """返回 fake 物块所在的列索引，若不存在则返回 None。"""
+    for node_id, block_type in blocks.items():
+        if block_type == "fake":
+            return (node_id - 1) % 3
+    return None
+
+
+def choose_straight_line_column(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> int:
+    """选择直线策略要走的列。
+
+    规则：
+    - 顶排（1/2/3）有 >=2 个 R2：在顶排 R2 列中优先选非 fake 且 R2 多的列。
+    - 顶排有 0 或 1 个 R2：在所有列中选整体最优列（R2 多、R1 少、非 fake 优先）。
+    """
+    if map_data is not None:
+        blocks = map_data["blocks"]
+    elif blocks is None:
+        blocks = get_merlin_map()["blocks"]
+
+    candidate_cols = [0, 1, 2]
+    top_r2_cols = [col for col in candidate_cols if blocks.get(_COLUMN_NODES[col][0]) == "R2"]
+
+    if len(top_r2_cols) >= 2:
+        # 多个顶排 R2：在顶排 R2 列中选最优（非 fake 优先，R2 多优先）
+        return _choose_best_column_by_priority(top_r2_cols, blocks)
+
+    # 0 或 1 个顶排 R2：全局选最优列
+    return _choose_best_column_by_priority(candidate_cols, blocks)
+
+
+def get_straight_line_route(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> List[int]:
+    """返回直线策略的节点序列。
+
+    规则：
+    1) 顶排（1/2/3）没有 R2：选最优列，沿该列直线走到底。
+    2) 顶排只有 1 个 R2：先取该 R2，然后排除 fake 列，选一个 R2 多且 R1 少的列直线走到底。
+       若最优列恰好就是该 R2 所在列，则直接沿该列走整列。
+    3) 顶排有 >=2 个 R2：优先选不在 fake 列且 R2 多的那一列的顶排 R2，
+       然后沿该列直线走到底（不再切换列）。
+    """
+    if map_data is not None:
+        blocks = map_data["blocks"]
+    elif blocks is None:
+        blocks = get_merlin_map()["blocks"]
+
+    candidate_cols = [0, 1, 2]
+    top_r2_cols = [col for col in candidate_cols if blocks.get(_COLUMN_NODES[col][0]) == "R2"]
+    top_r2_count = len(top_r2_cols)
+    fake_col = _get_fake_column(blocks)
+
+    # ---- 情况 1：顶排没有 R2 ----
+    if top_r2_count == 0:
+        best_col = _choose_best_column_by_priority(candidate_cols, blocks)
+        return list(_COLUMN_NODES[best_col])
+
+    # ---- 情况 2：顶排只有 1 个 R2 ----
+    if top_r2_count == 1:
+        r2_col = top_r2_cols[0]
+        # 排除 fake 列，在剩余列中选 R2 多且 R1 少的列
+        non_fake_cols = [c for c in candidate_cols if c != fake_col]
+        if not non_fake_cols:
+            # 所有列都是 fake（极端情况），退回全局选列
+            non_fake_cols = candidate_cols
+        best_col = _choose_best_column_by_priority(non_fake_cols, blocks)
+
+        if best_col == r2_col:
+            # 最优列就是 R2 所在列，直接走整列
+            return list(_COLUMN_NODES[r2_col])
+        else:
+            # 先取顶排 R2，再切到最优列直线走到底
+            return [_COLUMN_NODES[r2_col][0]] + list(_COLUMN_NODES[best_col])
+
+    # ---- 情况 3：顶排有 >=2 个 R2 ----
+    # 在顶排 R2 列中选最优：非 fake 优先，R2 多优先，沿该列直线走到底
+    best_col = _choose_best_column_by_priority(top_r2_cols, blocks)
+    return list(_COLUMN_NODES[best_col])
+
+
+def _build_straight_line_result(
+    *,
+    start: str,
+    end: str,
+    normal_cost: float,
+    to_derived_cost: float,
+    turn_cost: float,
+    map_data: Optional[dict],
+    turn_free_rules: Optional[Set[str]],
+    enforce_top_entry_after_one_pick: bool,
+) -> Dict[str, Any]:
+    model = build_merlin_model(map_data=map_data)
+    graph_nodes: Dict[str, dict] = model["graph_nodes"]
+    stake_kinds: Dict[int, str] = model.get("stake_kinds", {})
+    layout_pos = _build_layout_positions(model)
+    turn_free_rules = set() if turn_free_rules is None else set(turn_free_rules)
+
+    column_nodes = [str(n) for n in get_straight_line_route(map_data=map_data)]
+    path_nodes: List[str] = [start, *column_nodes, end]
+
+    path_edges: List[Tuple[str, str, float, str, ArrowClass]] = []
+    path_steps: List[Dict[str, Any]] = []
+
+    prev_heading: Optional[str] = None
+    total_turn_cost = 0.0
+    total_move_cost = 0.0
+    total_pick_cost = 0.0
+
+    for idx in range(len(path_nodes) - 1):
+        u = path_nodes[idx]
+        v = path_nodes[idx + 1]
+        edge_heading = _edge_heading(u, v, layout_pos)
+
+        u_meta = graph_nodes.get(str(u), {})
+        v_meta = graph_nodes.get(str(v), {})
+        u_is_start_derived = u_meta.get("kind") == "derived" and str(u_meta.get("owner")) == "start"
+        v_is_start_derived = v_meta.get("kind") == "derived" and str(v_meta.get("owner")) == "start"
+        if str(u) == "start" or u_is_start_derived or v_is_start_derived:
+            edge_heading = "down"
+
+        if str(u) in {"10", "11", "12"} and str(v) == "end":
+            edge_heading = "down"
+
+        step_turn_cost = 0.0
+        if prev_heading is not None and prev_heading != edge_heading:
+            if "straight_line" not in turn_free_rules:
+                step_turn_cost = turn_cost
+
+        base_cost = normal_cost
+        step_cost = base_cost + step_turn_cost
+        rule = "straight_line_start" if idx == 0 else ("straight_line_exit" if idx == len(path_nodes) - 2 else "straight_line_column")
+
+        path_edges.append((u, v, step_cost, rule, "normal"))
+        path_steps.append({
+            "from": u,
+            "to": v,
+            "step_cost": step_cost,
+            "base_cost": base_cost,
+            "turn_cost": step_turn_cost,
+            "rule": rule,
+            "edge_class": "normal",
+            "heading_in": prev_heading,
+            "heading_out": edge_heading,
+        })
+
+        prev_heading = edge_heading
+        total_turn_cost += step_turn_cost
+        total_move_cost += base_cost
+
+    r1_nodes_on_path = [str(node_id) for node_id in range(1, 13) if str(node_id) in path_nodes and stake_kinds.get(node_id) == "R1"]
+
+    return {
+        "found": True,
+        "start": start,
+        "end": end,
+        "cost": total_move_cost + total_turn_cost + total_pick_cost,
+        "path": path_nodes,
+        "path_edges": path_edges,
+        "path_steps": path_steps,
+        "costs": {
+            "normal": normal_cost,
+            "to_derived": to_derived_cost,
+        },
+        "required_r2_count": 0,
+        "collected_r2_count": 0,
+        "collected_r2": [],
+        "r1_nodes_on_path": r1_nodes_on_path,
+        "total_turn_cost": total_turn_cost,
+        "total_move_cost": total_move_cost,
+        "total_pick_cost": total_pick_cost,
+        "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and any(stake_kinds.get(i) == "R2" for i in (1, 2, 3))),
+        "solver_strategy": "straight_line",
+    }
 
 
 def _edge_heading(src: str, dst: str, pos: Dict[str, Tuple[float, float]]) -> str:
@@ -245,6 +460,56 @@ def build_weighted_adjacency(
 	return adj
 
 
+def solve_route(
+    strategy: str = "straight",
+    start: str = "start",
+    end: str = "end",
+    normal_cost: Optional[float] = None,
+    to_derived_cost: Optional[float] = None,
+    required_r2_count: int = REQUIRED_R2_COUNT,
+    enforce_top_entry_after_one_pick: bool = True,
+    turn_cost: Optional[float] = None,
+    r1_remove_cost: Optional[float] = None,
+    turn_free_rules: Optional[Set[str]] = None,
+    map_frame: Optional[Any] = None,
+    map_data: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """统一的梅林路径求解入口。"""
+    print(f"求解策略: {strategy}")
+    strategy_key = str(strategy).strip().lower()
+    if strategy_key in {"dijkstra", "min_cost", "minimum_cost", "mincost"}:
+        return dijkstra_min_cost_path(
+            start=start,
+            end=end,
+            normal_cost=normal_cost,
+            to_derived_cost=to_derived_cost,
+            required_r2_count=required_r2_count,
+            enforce_top_entry_after_one_pick=enforce_top_entry_after_one_pick,
+            turn_cost=turn_cost,
+            r1_remove_cost=r1_remove_cost,
+            turn_free_rules=turn_free_rules,
+            map_frame=map_frame,
+            map_data=map_data,
+        )
+
+    if strategy_key in {"straight_line", "straight", "line"}:
+        normal_cost_value = MOVE_COST if normal_cost is None else normal_cost
+        to_derived_cost_value = PICK_COST if to_derived_cost is None else to_derived_cost
+        turn_cost_value = TURN_COST if turn_cost is None else turn_cost
+        return _build_straight_line_result(
+            start=str(start),
+            end=str(end),
+            normal_cost=normal_cost_value,
+            to_derived_cost=to_derived_cost_value,
+            turn_cost=turn_cost_value,
+            map_data=map_data,
+            turn_free_rules=turn_free_rules,
+            enforce_top_entry_after_one_pick=enforce_top_entry_after_one_pick,
+        )
+
+    raise ValueError(f"未知的求解策略: {strategy!r}")
+
+
 # 兼容旧参数名（red/purple），但内部仍按“箭头性质”分类。
 def build_weighted_edges_by_plot_semantic(
     red_cost: Optional[float] = None,
@@ -268,6 +533,7 @@ def dijkstra_min_cost_path(
     turn_cost: Optional[float] = None,
     r1_remove_cost: Optional[float] = None,
     turn_free_rules: Optional[Set[str]] = None,
+    map_frame: Optional[Any] = None,
     map_data: Optional[dict] = None,
 ) -> Dict[str, Any]:
     """
@@ -463,6 +729,7 @@ def dijkstra_min_cost_path(
             "total_move_cost": 0.0,
             "total_pick_cost": 0.0,
             "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and top_has_r2),
+            "solver_strategy": "dijkstra",
         }
 
     # 回溯路径
@@ -525,5 +792,6 @@ def dijkstra_min_cost_path(
         "total_move_cost": total_move_cost,
         "total_pick_cost": total_pick_cost,
         "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and top_has_r2),
+        "solver_strategy": "dijkstra",
     }
 

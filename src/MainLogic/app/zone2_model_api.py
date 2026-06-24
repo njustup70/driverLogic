@@ -25,6 +25,7 @@ from MainLogic.core.zone2_model import (
     dijkstra_min_cost_path,
     draw_merlin_model,
     get_merlin_map,
+    solve_route,
 )
 
 from MainLogic.core.zone2_model.zone2_helpers import *
@@ -83,7 +84,44 @@ class Zone2ModelAPI:
         use_turn_cost = self.TURN_COST if turn_cost is None else turn_cost
         use_r1_remove_cost = self.R1_REMOVE_COST if r1_remove_cost is None else r1_remove_cost
 
-        return dijkstra_min_cost_path(
+        return solve_route(
+            strategy="dijkstra",
+            start=start,
+            end=end,
+            normal_cost=use_normal_cost,
+            to_derived_cost=use_to_derived_cost,
+            required_r2_count=use_required_r2_count,
+            enforce_top_entry_after_one_pick=enforce_top_entry_after_one_pick,
+            turn_cost=use_turn_cost,
+            r1_remove_cost=use_r1_remove_cost,
+            turn_free_rules=turn_free_rules,
+            map_frame=map_frame,
+            map_data=map_data,
+        )
+
+    def solve_route(
+        self,
+        strategy: str = "dijkstra",
+        start: str = "start",
+        end: str = "end",
+        normal_cost: Optional[float] = None,
+        to_derived_cost: Optional[float] = None,
+        required_r2_count: Optional[int] = None,
+        enforce_top_entry_after_one_pick: bool = True,
+        turn_cost: Optional[float] = None,
+        r1_remove_cost: Optional[float] = None,
+        turn_free_rules: Optional[set[str]] = None,
+        map_frame: Optional[Any] = None,
+        map_data: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        use_normal_cost = self.MOVE_COST if normal_cost is None else normal_cost
+        use_to_derived_cost = self.PICK_COST if to_derived_cost is None else to_derived_cost
+        use_required_r2_count = self.REQUIRED_R2_COUNT if required_r2_count is None else required_r2_count
+        use_turn_cost = self.TURN_COST if turn_cost is None else turn_cost
+        use_r1_remove_cost = self.R1_REMOVE_COST if r1_remove_cost is None else r1_remove_cost
+
+        return solve_route(
+            strategy=strategy,
             start=start,
             end=end,
             normal_cost=use_normal_cost,
@@ -110,7 +148,8 @@ class Zone2ModelAPI:
     ) -> Dict[str, Any]:
         """一键示例：随机生成地图、求解，并把地图和 path 一起画出来。"""
         map_data = self.get_merlin_map(force_refresh=True, seed=seed)
-        result = self.dijkstra_min_cost_path(
+        result = self.solve_route(
+            strategy="dijkstra",
             map_data=map_data,
             normal_cost=move_cost,
             to_derived_cost=pick_cost,
