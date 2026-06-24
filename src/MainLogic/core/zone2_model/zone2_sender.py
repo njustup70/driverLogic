@@ -1,129 +1,131 @@
-"""zone2_sender 模块作用：
+from typing import List, Dict, Optional, Any
 
-负责把已经编码好的帧写入 `RosBridgeNodeInstance`。
+# ---------- 三维坐标常量（与之前一致）----------
+STAKE_3D_INFO: Dict[int, Dict[str, float]] = {
+    1:  {"x": 3800, "y": 1800, "base_height": 400},
+    2:  {"x": 3800, "y": 3000, "base_height": 200},
+    3:  {"x": 3800, "y": 4200, "base_height": 400},
+    4:  {"x": 5000, "y": 1800, "base_height": 200},
+    5:  {"x": 5000, "y": 3000, "base_height": 400},
+    6:  {"x": 5000, "y": 4200, "base_height": 600},
+    7:  {"x": 6200, "y": 1800, "base_height": 400},
+    8:  {"x": 6200, "y": 3000, "base_height": 600},
+    9:  {"x": 6200, "y": 4200, "base_height": 400},
+    10: {"x": 7400, "y": 1800, "base_height": 200},
+    11: {"x": 7400, "y": 3000, "base_height": 400},
+    12: {"x": 7400, "y": 4200, "base_height": 200},
+}
+R2_HEIGHT = 200  # R2物块额外高度
 
-本模块只负责"发送"和最少量日志，不负责路径计算和二进制编码。
-"""
-from __future__ import annotations
+# ---------- 辅助函数 ----------
+def _get_node_total_height(node_str: str, blocks: Dict[int, str]) -> float:
+    """
+    计算任意节点（主桩/衍生节点/门户）的总高度（mm）。
+    - 主桩：base_height + (R2_HEIGHT if R2 else 0)
+    - 衍生节点：继承其 owner 的高度
+    - 门户：0
+    """
+    if node_str in ("start", "end"):
+        return 0.0
 
-from MainLogic.core.zone2_model.zone2_encoder import encode_path_frame, encode_mcu_action_frame, MCU_ACTION_TYPE_TURN, MCU_ACTION_TYPE_PICK, MCU_ACTION_TYPE_MOVE
-from MainLogic.core.zone2_model.zone2_format import extract_r1_nodes_on_path
-from MainLogic.core.zone2_model.zone2_helpers import (
-    _is_derived_node,
-    _extract_pick_target_from_derived_node,
-    _turn_action_from_headings,
-)
+    # 衍生节点：格式 D_{owner}_to_{r2}
+    if node_str.startswith("D_"):
+        parts = node_str.split("_")
+        owner = parts[1]  # 例如 "5"
+        if owner.isdigit():
+            return _get_node_total_height(owner, blocks)
+        else:
+            return 0.0  # owner 为 start/end 时高度为0
+
+    # 主桩节点
+    if node_str.isdigit():
+        stake_id = int(node_str)
+        base = STAKE_3D_INFO[stake_id]["base_height"]
+        if blocks.get(stake_id) == "R2":
+            return base + R2_HEIGHT
+        return base
+
+    return 0.0
 
 
-def _get_ros_bridge_module():
-    from MainLogic.core import ros_bridge_node as ros_bridge_module
+def generate_actions_from_result(
+    result: dict,
+    blocks: Optional[Dict[int, str]] = None
+) -> List[Dict[str, Any]]:
+    """
+    根据路径结果和桩类型配置，生成完整的动作序列（包含升降、移动、转向、取货）。
+    
+    :param result: 路径求解结果字典，需包含 "path_steps" 字段
+    :param blocks: 桩类型配置 {桩号: "R2"/"fake"/"R1"/"empty"}，默认空（全部为 empty）
+    :return: 动作列表，每个动作为字典，格式如：
+        {"type": "move", "from": "1", "to": "4"}
+        {"type": "lift", "from": "1", "delta_z": -200}   # 负值下降，正值上升
+        {"type": "turn", "from": "1", "code": 1}         # 转向码由 zone2_helpers 定义
+        {"type": "pick", "from": "1", "target": 2}       # 取货目标桩号
+    """
+    if blocks is None:
+        blocks = {}
 
-    return ros_bridge_module
-
-
-# ========== 方法1：从result中逐个提取动作并分别发送 ==========
-def send_mcu_action_frame_to_mcu_batch(result: dict) -> None:
-    """从路径结果中逐个提取动作并分别发送到下位机（一个result对应多个帧）。"""
-    ros_bridge_module = _get_ros_bridge_module()
-    assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
+    actions: List[Dict[str, Any]] = []
 
     if not result.get("found"):
-        ros_bridge_module.RosBridgeNodeInstance.writeBytes(bytes([0xB8, 0x00]))
-        print("[zone2_model_api] 没有找到可用路径，已发送空动作帧", flush=True)
-        return
+        return actions  # 无路径，返回空列表
 
-    path_steps = list(result.get("path_steps", []))
+    path_steps = result.get("path_steps", [])
     if not path_steps:
-        ros_bridge_module.RosBridgeNodeInstance.writeBytes(bytes([0xB8, 0x00]))
-        print("[zone2_model_api] 没有动作步骤，已发送空动作帧", flush=True)
-        return
+        return actions
 
-    action_count = 0
+    # 导入转向解析函数（假设已存在于 zone2_helpers）
+    from MainLogic.core.zone2_model.zone2_helpers import (
+        _is_derived_node,
+        _extract_pick_target_from_derived_node,
+        _turn_action_from_headings,
+    )
+
     for step in path_steps:
         u = step.get("from")
         v = step.get("to")
         edge_class = str(step.get("edge_class", ""))
         turn_action = _turn_action_from_headings(step.get("heading_in"), step.get("heading_out"))
         turn_cost = float(step.get("turn_cost", 0.0))
-        pick_target = _extract_pick_target_from_derived_node(v) if edge_class == "to_derived" or _is_derived_node(v) else 0
+        pick_target = _extract_pick_target_from_derived_node(v) if (
+            edge_class == "to_derived" or _is_derived_node(v)
+        ) else 0
 
-        # 转向动作
+        # 1. 转向动作（起点除外）
         if turn_cost > 0.0 and turn_action != 0 and str(u) != "start":
-            frame = encode_mcu_action_frame(MCU_ACTION_TYPE_TURN, str(u), turn_action)
-            ros_bridge_module.RosBridgeNodeInstance.writeBytes(frame)
-            action_count += 1
+            actions.append({
+                "type": "turn",
+                "from": str(u),
+                "code": turn_action,
+            })
 
-        # 取货或移动动作
+        # 2. 取货或移动
         is_pick_step = edge_class == "to_derived" or _is_derived_node(v)
         if is_pick_step:
-            frame = encode_mcu_action_frame(MCU_ACTION_TYPE_PICK, str(u), pick_target)
-            ros_bridge_module.RosBridgeNodeInstance.writeBytes(frame)
-            action_count += 1
+            actions.append({
+                "type": "pick",
+                "from": str(u),
+                "target": pick_target,
+            })
         else:
-            frame = encode_mcu_action_frame(MCU_ACTION_TYPE_MOVE, str(u), str(v))
-            ros_bridge_module.RosBridgeNodeInstance.writeBytes(frame)
-            action_count += 1
+            # 移动步骤：先处理高度差
+            h_u = _get_node_total_height(str(u), blocks)
+            h_v = _get_node_total_height(str(v), blocks)
+            delta_z = h_v - h_u  # 正值为上升，负值为下降
 
-    print(f"[zone2_model_api] 已发送 {action_count} 个动作到下位机", flush=True)
+            if abs(delta_z) > 0.001:
+                actions.append({
+                    "type": "lift",
+                    "from": str(u),
+                    "delta_z": int(round(delta_z)),  # 毫米
+                })
 
+            # 水平移动
+            actions.append({
+                "type": "move",
+                "from": str(u),
+                "to": str(v),
+            })
 
-# ========== 方法2：直接接受单个动作参数并发送 ==========
-def send_mcu_action_frame_to_mcu(action_type: int, from_node: str, to_or_code) -> None:
-    """发送单个 MCU 动作帧到串口/桥接节点。
-    
-    参数：
-        action_type: 0x01(转向), 0x02(取货), 0x03(移动)
-        from_node: 当前节点编码
-        to_or_code: 目标节点编码或动作码
-    """
-    ros_bridge_module = _get_ros_bridge_module()
-    assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
-
-    frame = encode_mcu_action_frame(action_type, from_node, to_or_code)
-    ros_bridge_module.RosBridgeNodeInstance.writeBytes(frame)
-    
-    action_name = {
-        MCU_ACTION_TYPE_TURN: "转向",
-        MCU_ACTION_TYPE_PICK: "取货",
-        MCU_ACTION_TYPE_MOVE: "移动",
-    }.get(action_type, "未知")
-    
-    print(
-        f"[zone2_model_api] 已发送{action_name}动作到下位机: "
-        f"from_node={from_node}, to_or_code={to_or_code}, "
-        f"frame_hex={' '.join(f'{b:02X}' for b in frame)}",
-        flush=True,
-    )
-
-
-def send_path_result_to_mcu(result: dict) -> None:
-    """发送完整路径帧到串口/桥接节点。"""
-    ros_bridge_module = _get_ros_bridge_module()
-    assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
-
-    if not result.get("found"):
-        ros_bridge_module.RosBridgeNodeInstance.writeBytes(bytes([0xB5, 0x00, 0x04, 0x00]))
-        print("[zone2_model_api] 没有找到可用路径，已发送空路径帧", flush=True)
-        return
-
-    # 从result中提取路径节点列表（根据实际数据结构调整）
-    path_nodes = result.get("path", [])
-    if not path_nodes:
-        ros_bridge_module.RosBridgeNodeInstance.writeBytes(bytes([0xB5, 0x00, 0x04, 0x00]))
-        print("[zone2_model_api] 路径为空，已发送空路径帧", flush=True)
-        return
-    
-    frame = encode_path_frame(path_nodes, result)
-    ros_bridge_module.RosBridgeNodeInstance.writeBytes(frame)
-    
-    r1_nodes = extract_r1_nodes_on_path(result)
-    r1_text = "无" if not r1_nodes else ", ".join(f"{n}号" for n in r1_nodes)
-    
-    print(
-        f"[zone2_model_api] 已发送路径帧到下位机: "
-        f"path_length={len(path_nodes)}, "
-        f"frame_bytes={len(frame)}, "
-        f"R1节点={r1_text}, "
-        f"frame_hex={' '.join(f'{b:02X}' for b in frame[:min(30, len(frame))])}{'...' if len(frame) > 30 else ''}",
-        flush=True,
-    )
+    return actions

@@ -162,21 +162,6 @@ def _column_stats(col: int, blocks: Dict[int, str]) -> Tuple[int, int, int, int]
     return top_has_r2, r2_count, r1_count, fake_count
 
 
-def _choose_best_column_by_priority(cols: List[int], blocks: Dict[int, str]) -> int:
-    fake_col: Optional[int] = None
-    for node_id, block_type in blocks.items():
-        if block_type == "fake":
-            fake_col = (node_id - 1) % 3
-            break
-
-    def _score_col(col: int) -> Tuple[int, int, int, int]:
-        top_has_r2, r2_count, r1_count, fake_count = _column_stats(col, blocks)
-        not_fake_col = 1 if col != fake_col else 0
-        return (top_has_r2, not_fake_col, r2_count, -r1_count - fake_count)
-
-    return max(cols, key=_score_col)
-
-
 def _get_fake_column(blocks: Dict[int, str]) -> Optional[int]:
     """返回 fake 物块所在的列索引，若不存在则返回 None。"""
     for node_id, block_type in blocks.items():
@@ -188,9 +173,12 @@ def _get_fake_column(blocks: Dict[int, str]) -> Optional[int]:
 def choose_straight_line_column(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> int:
     """选择直线策略要走的列。
 
-    规则：
-    - 顶排（1/2/3）有 >=2 个 R2：在顶排 R2 列中优先选非 fake 且 R2 多的列。
-    - 顶排有 0 或 1 个 R2：在所有列中选整体最优列（R2 多、R1 少、非 fake 优先）。
+    新规则（基于顶排 1/2/3 的 R2 情况）：
+    1) 顶排无 R2：排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列。
+    2) 顶排仅 1 个 R2 且不与 fake 同列：直接走该 R2 所在列。
+    3) 顶排仅 1 个 R2 且与 fake 同列：先获取该 R2（由 start 衍生节点完成），
+       然后排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列。
+    4) 顶排有 >=2 个 R2：选一个与 fake 不同列的顶排 R2 列，且 R2 多 R1 少。
     """
     if map_data is not None:
         blocks = map_data["blocks"]
@@ -198,25 +186,54 @@ def choose_straight_line_column(map_data: Optional[dict] = None, blocks: Optiona
         blocks = get_merlin_map()["blocks"]
 
     candidate_cols = [0, 1, 2]
+    fake_col = _get_fake_column(blocks)
     top_r2_cols = [col for col in candidate_cols if blocks.get(_COLUMN_NODES[col][0]) == "R2"]
+    top_r2_count = len(top_r2_cols)
 
-    if len(top_r2_cols) >= 2:
-        # 多个顶排 R2：在顶排 R2 列中选最优（非 fake 优先，R2 多优先）
-        return _choose_best_column_by_priority(top_r2_cols, blocks)
+    def _score_col(col: int) -> Tuple[int, int]:
+        _, r2_count, r1_count, _ = _column_stats(col, blocks)
+        return (r2_count, -r1_count)
 
-    # 0 或 1 个顶排 R2：全局选最优列
-    return _choose_best_column_by_priority(candidate_cols, blocks)
+    if top_r2_count == 0:
+        # 情况1：顶排无 R2，排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列
+        non_fake_cols = [c for c in candidate_cols if c != fake_col]
+        if not non_fake_cols:
+            non_fake_cols = candidate_cols
+        return max(non_fake_cols, key=_score_col)
+
+    if top_r2_count == 1:
+        r2_col = top_r2_cols[0]
+        if r2_col != fake_col:
+            # 情况2：顶排仅 1 个 R2 且不与 fake 同列，直接走该列
+            return r2_col
+        else:
+            # 情况3：顶排仅 1 个 R2 且与 fake 同列
+            # 先获取该 R2（由 start 衍生节点完成），然后排除 fake 列，从剩下两列中选最优
+            non_fake_cols = [c for c in candidate_cols if c != fake_col]
+            if not non_fake_cols:
+                non_fake_cols = candidate_cols
+            return max(non_fake_cols, key=_score_col)
+
+    # 情况4：顶排有 >=2 个 R2，选一个与 fake 不同列的顶排 R2 列，R2 多且 R1 少
+    non_fake_top_r2_cols = [c for c in top_r2_cols if c != fake_col]
+    if not non_fake_top_r2_cols:
+        # 所有顶排 R2 列都是 fake 列（极端情况），退化为排除 fake 后选最优
+        non_fake_cols = [c for c in candidate_cols if c != fake_col]
+        if not non_fake_cols:
+            non_fake_cols = candidate_cols
+        return max(non_fake_cols, key=_score_col)
+    return max(non_fake_top_r2_cols, key=_score_col)
 
 
 def get_straight_line_route(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> List[int]:
-    """返回直线策略的节点序列。
+    """返回直线策略的物理列节点序列。
 
-    规则：
-    1) 顶排（1/2/3）没有 R2：选最优列，沿该列直线走到底。
-    2) 顶排只有 1 个 R2：先取该 R2，然后排除 fake 列，选一个 R2 多且 R1 少的列直线走到底。
-       若最优列恰好就是该 R2 所在列，则直接沿该列走整列。
-    3) 顶排有 >=2 个 R2：优先选不在 fake 列且 R2 多的那一列的顶排 R2，
-       然后沿该列直线走到底（不再切换列）。
+    新规则（基于顶排 1/2/3 的 R2 情况）：
+    1) 顶排无 R2：排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列，沿该列直线走到底。
+    2) 顶排仅 1 个 R2 且不与 fake 同列：直接沿该 R2 所在列直线走到底。
+    3) 顶排仅 1 个 R2 且与 fake 同列：先获取该 R2（由 start 衍生节点 D_start_to_X 完成），
+       然后排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列走到底。
+    4) 顶排有 >=2 个 R2：选一个与 fake 不同列的顶排 R2 列，且 R2 多 R1 少，沿该列走到底。
     """
     if map_data is not None:
         blocks = map_data["blocks"]
@@ -224,35 +241,46 @@ def get_straight_line_route(map_data: Optional[dict] = None, blocks: Optional[Di
         blocks = get_merlin_map()["blocks"]
 
     candidate_cols = [0, 1, 2]
+    fake_col = _get_fake_column(blocks)
     top_r2_cols = [col for col in candidate_cols if blocks.get(_COLUMN_NODES[col][0]) == "R2"]
     top_r2_count = len(top_r2_cols)
-    fake_col = _get_fake_column(blocks)
 
-    # ---- 情况 1：顶排没有 R2 ----
+    def _score_col(col: int) -> Tuple[int, int]:
+        _, r2_count, r1_count, _ = _column_stats(col, blocks)
+        return (r2_count, -r1_count)
+
     if top_r2_count == 0:
-        best_col = _choose_best_column_by_priority(candidate_cols, blocks)
-        return list(_COLUMN_NODES[best_col])
-
-    # ---- 情况 2：顶排只有 1 个 R2 ----
-    if top_r2_count == 1:
-        r2_col = top_r2_cols[0]
-        # 排除 fake 列，在剩余列中选 R2 多且 R1 少的列
+        # 情况1：顶排无 R2，排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列
         non_fake_cols = [c for c in candidate_cols if c != fake_col]
         if not non_fake_cols:
-            # 所有列都是 fake（极端情况），退回全局选列
             non_fake_cols = candidate_cols
-        best_col = _choose_best_column_by_priority(non_fake_cols, blocks)
+        best_col = max(non_fake_cols, key=_score_col)
+        return list(_COLUMN_NODES[best_col])
 
-        if best_col == r2_col:
-            # 最优列就是 R2 所在列，直接走整列
+    if top_r2_count == 1:
+        r2_col = top_r2_cols[0]
+        if r2_col != fake_col:
+            # 情况2：顶排仅 1 个 R2 且不与 fake 同列，直接走该列
             return list(_COLUMN_NODES[r2_col])
         else:
-            # 先取顶排 R2，再切到最优列直线走到底
-            return [_COLUMN_NODES[r2_col][0]] + list(_COLUMN_NODES[best_col])
+            # 情况3：顶排仅 1 个 R2 且与 fake 同列
+            # 先获取该 R2（由 start 衍生节点完成），然后排除 fake 列，从剩下两列中选最优
+            non_fake_cols = [c for c in candidate_cols if c != fake_col]
+            if not non_fake_cols:
+                non_fake_cols = candidate_cols
+            best_col = max(non_fake_cols, key=_score_col)
+            return list(_COLUMN_NODES[best_col])
 
-    # ---- 情况 3：顶排有 >=2 个 R2 ----
-    # 在顶排 R2 列中选最优：非 fake 优先，R2 多优先，沿该列直线走到底
-    best_col = _choose_best_column_by_priority(top_r2_cols, blocks)
+    # 情况4：顶排有 >=2 个 R2，选一个与 fake 不同列的顶排 R2 列，R2 多且 R1 少
+    non_fake_top_r2_cols = [c for c in top_r2_cols if c != fake_col]
+    if not non_fake_top_r2_cols:
+        # 所有顶排 R2 列都是 fake 列（极端情况），退化为排除 fake 后选最优
+        non_fake_cols = [c for c in candidate_cols if c != fake_col]
+        if not non_fake_cols:
+            non_fake_cols = candidate_cols
+        best_col = max(non_fake_cols, key=_score_col)
+        return list(_COLUMN_NODES[best_col])
+    best_col = max(non_fake_top_r2_cols, key=_score_col)
     return list(_COLUMN_NODES[best_col])
 
 
@@ -267,15 +295,30 @@ def _build_straight_line_result(
     turn_free_rules: Optional[Set[str]],
     enforce_top_entry_after_one_pick: bool,
 ) -> Dict[str, Any]:
+    """直线策略：先由 get_straight_line_route 决定物理列路线，再按模型邻接表逐跳展开每一步。
+
+    与 Dijkstra 使用同一套图结构（build_weighted_adjacency），
+    但路线选择由 get_straight_line_route 的列选择逻辑决定，不依赖全局最短路搜索。
+    """
     model = build_merlin_model(map_data=map_data)
     graph_nodes: Dict[str, dict] = model["graph_nodes"]
     stake_kinds: Dict[int, str] = model.get("stake_kinds", {})
     layout_pos = _build_layout_positions(model)
     turn_free_rules = set() if turn_free_rules is None else set(turn_free_rules)
 
-    column_nodes = [str(n) for n in get_straight_line_route(map_data=map_data)]
-    path_nodes: List[str] = [start, *column_nodes, end]
+    adj = build_weighted_adjacency(
+        normal_cost=normal_cost,
+        to_derived_cost=to_derived_cost,
+        map_data=map_data,
+    )
 
+    blocks = map_data["blocks"] if map_data is not None else get_merlin_map()["blocks"]
+    column_route = get_straight_line_route(map_data=map_data)  # 物理列节点序列，如 [2, 5, 8, 11]
+
+    # 构建物理路点列表：start → 列节点 → end
+    waypoints: List[str] = [start] + [str(n) for n in column_route] + [end]
+
+    path_nodes: List[str] = []
     path_edges: List[Tuple[str, str, float, str, ArrowClass]] = []
     path_steps: List[Dict[str, Any]] = []
 
@@ -283,10 +326,10 @@ def _build_straight_line_result(
     total_turn_cost = 0.0
     total_move_cost = 0.0
     total_pick_cost = 0.0
+    collected_r2: List[str] = []
 
-    for idx in range(len(path_nodes) - 1):
-        u = path_nodes[idx]
-        v = path_nodes[idx + 1]
+    def _record_step(u: str, v: str, edge_class: ArrowClass, rule: str, base_cost: float) -> None:
+        nonlocal prev_heading, total_turn_cost, total_move_cost, total_pick_cost
         edge_heading = _edge_heading(u, v, layout_pos)
 
         u_meta = graph_nodes.get(str(u), {})
@@ -295,7 +338,6 @@ def _build_straight_line_result(
         v_is_start_derived = v_meta.get("kind") == "derived" and str(v_meta.get("owner")) == "start"
         if str(u) == "start" or u_is_start_derived or v_is_start_derived:
             edge_heading = "down"
-
         if str(u) in {"10", "11", "12"} and str(v) == "end":
             edge_heading = "down"
 
@@ -304,11 +346,8 @@ def _build_straight_line_result(
             if "straight_line" not in turn_free_rules:
                 step_turn_cost = turn_cost
 
-        base_cost = normal_cost
         step_cost = base_cost + step_turn_cost
-        rule = "straight_line_start" if idx == 0 else ("straight_line_exit" if idx == len(path_nodes) - 2 else "straight_line_column")
-
-        path_edges.append((u, v, step_cost, rule, "normal"))
+        path_edges.append((u, v, step_cost, rule, edge_class))
         path_steps.append({
             "from": u,
             "to": v,
@@ -316,14 +355,69 @@ def _build_straight_line_result(
             "base_cost": base_cost,
             "turn_cost": step_turn_cost,
             "rule": rule,
-            "edge_class": "normal",
+            "edge_class": edge_class,
             "heading_in": prev_heading,
             "heading_out": edge_heading,
         })
-
         prev_heading = edge_heading
         total_turn_cost += step_turn_cost
-        total_move_cost += base_cost
+        if edge_class == "to_derived":
+            total_pick_cost += base_cost
+        else:
+            total_move_cost += base_cost
+
+    def _find_model_path(u: str, target: str) -> List[Tuple[str, float, str, ArrowClass]]:
+        """在模型邻接表中查找从 u 到 target 的路径（最多 2 跳）。
+
+        返回 [(node, cost, rule, edge_class), ...] 序列，不含起点 u。
+        优先走衍生节点（拾取 R2），其次走直连边。
+        """
+        neighbors = adj.get(u, [])
+
+        # 1) 直连边
+        for nxt, cost, rule, edge_class in neighbors:
+            if nxt == target:
+                return [(nxt, cost, rule, edge_class)]
+
+        # 2) 通过衍生节点中转：u → D_u_to_X → target
+        for nxt, cost, rule, edge_class in neighbors:
+            nxt_meta = graph_nodes.get(str(nxt), {})
+            if nxt_meta.get("kind") != "derived":
+                continue
+            derived_neighbors = adj.get(nxt, [])
+            for dnxt, dcost, drule, dedge_class in derived_neighbors:
+                if dnxt == target:
+                    return [
+                        (nxt, cost, rule, edge_class),
+                        (target, dcost, drule, dedge_class),
+                    ]
+
+        # 3) 兜底：直接走 target（用 normal 代价）
+        return [(target, normal_cost, "straight_line_fallback", "normal")]
+
+    # ---- 逐对路点展开 ----
+    for i in range(len(waypoints) - 1):
+        u = waypoints[i]
+        target = waypoints[i + 1]
+
+        if i == 0:
+            # 第一个节点是 start，直接加入
+            path_nodes.append(u)
+
+        if u == target:
+            continue
+
+        steps = _find_model_path(u, target)
+        for nxt, cost, rule, edge_class in steps:
+            _record_step(u, nxt, edge_class, rule, cost)
+            path_nodes.append(nxt)
+            # 检查是否经过衍生节点拾取了 R2
+            nxt_meta = graph_nodes.get(str(nxt), {})
+            if nxt_meta.get("kind") == "derived" and nxt_meta.get("target_r2") is not None:
+                r2_key = str(nxt_meta["target_r2"])
+                if r2_key not in collected_r2:
+                    collected_r2.append(r2_key)
+            u = nxt
 
     r1_nodes_on_path = [str(node_id) for node_id in range(1, 13) if str(node_id) in path_nodes and stake_kinds.get(node_id) == "R1"]
 
@@ -340,8 +434,8 @@ def _build_straight_line_result(
             "to_derived": to_derived_cost,
         },
         "required_r2_count": 0,
-        "collected_r2_count": 0,
-        "collected_r2": [],
+        "collected_r2_count": len(collected_r2),
+        "collected_r2": collected_r2,
         "r1_nodes_on_path": r1_nodes_on_path,
         "total_turn_cost": total_turn_cost,
         "total_move_cost": total_move_cost,
