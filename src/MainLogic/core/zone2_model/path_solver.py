@@ -170,15 +170,15 @@ def _get_fake_column(blocks: Dict[int, str]) -> Optional[int]:
     return None
 
 
-def choose_straight_line_column(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> int:
-    """选择直线策略要走的列。
+def choose_straight_line_route(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> List[str]:
+    """选择直线策略要走的节点序列（可包含衍生节点）。
 
     新规则（基于顶排 1/2/3 的 R2 情况）：
-    1) 顶排无 R2：排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列。
-    2) 顶排仅 1 个 R2 且不与 fake 同列：直接走该 R2 所在列。
-    3) 顶排仅 1 个 R2 且与 fake 同列：先获取该 R2（由 start 衍生节点完成），
-       然后排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列。
-    4) 顶排有 >=2 个 R2：选一个与 fake 不同列的顶排 R2 列，且 R2 多 R1 少。
+    1) 顶排无 R2：排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列，走单列直线。
+    2) 顶排仅 1 个 R2 且不与 fake 同列：直接走该 R2 所在列，走单列直线。
+    3) 顶排仅 1 个 R2 且与 fake 同列：先通过 D_start_to_X 取 R2，
+       再登上最优非 fake 列走直线。
+    4) 顶排有 >=2 个 R2：选一个与 fake 不同列的顶排 R2 列，且 R2 多 R1 少，走单列直线。
     """
     if map_data is not None:
         blocks = map_data["blocks"]
@@ -194,94 +194,94 @@ def choose_straight_line_column(map_data: Optional[dict] = None, blocks: Optiona
         _, r2_count, r1_count, _ = _column_stats(col, blocks)
         return (r2_count, -r1_count)
 
+    def _best_non_fake() -> int:
+        non_fake = [c for c in candidate_cols if c != fake_col]
+        if not non_fake:
+            non_fake = candidate_cols
+        return max(non_fake, key=_score_col)
+
     if top_r2_count == 0:
-        # 情况1：顶排无 R2，排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列
-        non_fake_cols = [c for c in candidate_cols if c != fake_col]
-        if not non_fake_cols:
-            non_fake_cols = candidate_cols
-        return max(non_fake_cols, key=_score_col)
+        # 情况1：顶排无 R2，排除 fake 列，选最优列
+        return [str(n) for n in _COLUMN_NODES[_best_non_fake()]]
 
     if top_r2_count == 1:
         r2_col = top_r2_cols[0]
+        r2_node = _COLUMN_NODES[r2_col][0]
         if r2_col != fake_col:
             # 情况2：顶排仅 1 个 R2 且不与 fake 同列，直接走该列
-            return r2_col
-        else:
-            # 情况3：顶排仅 1 个 R2 且与 fake 同列
-            # 先获取该 R2（由 start 衍生节点完成），然后排除 fake 列，从剩下两列中选最优
-            non_fake_cols = [c for c in candidate_cols if c != fake_col]
-            if not non_fake_cols:
-                non_fake_cols = candidate_cols
-            return max(non_fake_cols, key=_score_col)
+            return [str(n) for n in _COLUMN_NODES[r2_col]]
+        # 情况3：顶排仅 1 个 R2 且与 fake 同列
+        # 先通过 start → D_start_to_X 取 R2，再登上最优非 fake 列走直线。
+        # waypoints 必须包含衍生节点 D_start_to_X，否则 _find_model_path 会走直连边 start→r2_node 跳过拾取。
+        derived = f"D_start_to_{r2_node}"
+        best_col_nodes = [str(n) for n in _COLUMN_NODES[_best_non_fake()]]
+        return [derived] + best_col_nodes
 
-    # 情况4：顶排有 >=2 个 R2，选一个与 fake 不同列的顶排 R2 列，R2 多且 R1 少
-    non_fake_top_r2_cols = [c for c in top_r2_cols if c != fake_col]
-    if not non_fake_top_r2_cols:
-        # 所有顶排 R2 列都是 fake 列（极端情况），退化为排除 fake 后选最优
-        non_fake_cols = [c for c in candidate_cols if c != fake_col]
-        if not non_fake_cols:
-            non_fake_cols = candidate_cols
-        return max(non_fake_cols, key=_score_col)
-    return max(non_fake_top_r2_cols, key=_score_col)
+    # 情况4：顶排有 >=2 个 R2，选一个与 fake 不同列的顶排 R2 列
+    non_fake_top = [c for c in top_r2_cols if c != fake_col]
+    if not non_fake_top:
+        return [str(n) for n in _COLUMN_NODES[_best_non_fake()]]
+    return [str(n) for n in _COLUMN_NODES[max(non_fake_top, key=_score_col)]]
 
 
-def get_straight_line_route(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> List[int]:
-    """返回直线策略的物理列节点序列。
+def _override_edge_heading(
+    u: str,
+    v: str,
+    graph_nodes: Dict[str, dict],
+    raw_heading: str,
+) -> str:
+    """覆写特殊边的朝向，避免误计转向。
 
-    新规则（基于顶排 1/2/3 的 R2 情况）：
-    1) 顶排无 R2：排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列，沿该列直线走到底。
-    2) 顶排仅 1 个 R2 且不与 fake 同列：直接沿该 R2 所在列直线走到底。
-    3) 顶排仅 1 个 R2 且与 fake 同列：先获取该 R2（由 start 衍生节点 D_start_to_X 完成），
-       然后排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列走到底。
-    4) 顶排有 >=2 个 R2：选一个与 fake 不同列的顶排 R2 列，且 R2 多 R1 少，沿该列走到底。
+    - start 及其衍生节点链路 → 强制 "down"
+    - 底排(10/11/12) → end → 强制 "down"
     """
-    if map_data is not None:
-        blocks = map_data["blocks"]
-    elif blocks is None:
-        blocks = get_merlin_map()["blocks"]
+    if str(u) == "start":
+        return "down"
+    u_meta = graph_nodes.get(str(u), {})
+    v_meta = graph_nodes.get(str(v), {})
+    if u_meta.get("kind") == "derived" and str(u_meta.get("owner")) == "start":
+        return "down"
+    if v_meta.get("kind") == "derived" and str(v_meta.get("owner")) == "start":
+        return "down"
+    if str(u) in {"10", "11", "12"} and str(v) == "end":
+        return "down"
+    return raw_heading
 
-    candidate_cols = [0, 1, 2]
-    fake_col = _get_fake_column(blocks)
-    top_r2_cols = [col for col in candidate_cols if blocks.get(_COLUMN_NODES[col][0]) == "R2"]
-    top_r2_count = len(top_r2_cols)
 
-    def _score_col(col: int) -> Tuple[int, int]:
-        _, r2_count, r1_count, _ = _column_stats(col, blocks)
-        return (r2_count, -r1_count)
+def _find_model_path(
+    u: str,
+    target: str,
+    adj: Dict[str, List[Tuple[str, float, str, ArrowClass]]],
+    graph_nodes: Dict[str, dict],
+    normal_cost: float,
+) -> List[Tuple[str, float, str, ArrowClass]]:
+    """在模型邻接表中查找从 u 到 target 的路径（最多 2 跳）。
 
-    if top_r2_count == 0:
-        # 情况1：顶排无 R2，排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列
-        non_fake_cols = [c for c in candidate_cols if c != fake_col]
-        if not non_fake_cols:
-            non_fake_cols = candidate_cols
-        best_col = max(non_fake_cols, key=_score_col)
-        return list(_COLUMN_NODES[best_col])
+    返回 [(node, cost, rule, edge_class), ...] 序列，不含起点 u。
+    优先走衍生节点（拾取 R2），其次走直连边。
+    """
+    neighbors = adj.get(u, [])
 
-    if top_r2_count == 1:
-        r2_col = top_r2_cols[0]
-        if r2_col != fake_col:
-            # 情况2：顶排仅 1 个 R2 且不与 fake 同列，直接走该列
-            return list(_COLUMN_NODES[r2_col])
-        else:
-            # 情况3：顶排仅 1 个 R2 且与 fake 同列
-            # 先获取该 R2（由 start 衍生节点完成），然后排除 fake 列，从剩下两列中选最优
-            non_fake_cols = [c for c in candidate_cols if c != fake_col]
-            if not non_fake_cols:
-                non_fake_cols = candidate_cols
-            best_col = max(non_fake_cols, key=_score_col)
-            return list(_COLUMN_NODES[best_col])
+    # 1) 直连边
+    for nxt, cost, rule, edge_class in neighbors:
+        if nxt == target:
+            return [(nxt, cost, rule, edge_class)]
 
-    # 情况4：顶排有 >=2 个 R2，选一个与 fake 不同列的顶排 R2 列，R2 多且 R1 少
-    non_fake_top_r2_cols = [c for c in top_r2_cols if c != fake_col]
-    if not non_fake_top_r2_cols:
-        # 所有顶排 R2 列都是 fake 列（极端情况），退化为排除 fake 后选最优
-        non_fake_cols = [c for c in candidate_cols if c != fake_col]
-        if not non_fake_cols:
-            non_fake_cols = candidate_cols
-        best_col = max(non_fake_cols, key=_score_col)
-        return list(_COLUMN_NODES[best_col])
-    best_col = max(non_fake_top_r2_cols, key=_score_col)
-    return list(_COLUMN_NODES[best_col])
+    # 2) 通过衍生节点中转：u → D_u_to_X → target
+    for nxt, cost, rule, edge_class in neighbors:
+        nxt_meta = graph_nodes.get(str(nxt), {})
+        if nxt_meta.get("kind") != "derived":
+            continue
+        derived_neighbors = adj.get(nxt, [])
+        for dnxt, dcost, drule, dedge_class in derived_neighbors:
+            if dnxt == target:
+                return [
+                    (nxt, cost, rule, edge_class),
+                    (target, dcost, drule, dedge_class),
+                ]
+
+    # 3) 兜底：直接走 target（用 normal 代价）
+    return [(target, normal_cost, "straight_line_fallback", "normal")]
 
 
 def _build_straight_line_result(
@@ -295,11 +295,7 @@ def _build_straight_line_result(
     turn_free_rules: Optional[Set[str]],
     enforce_top_entry_after_one_pick: bool,
 ) -> Dict[str, Any]:
-    """直线策略：先由 get_straight_line_route 决定物理列路线，再按模型邻接表逐跳展开每一步。
-
-    与 Dijkstra 使用同一套图结构（build_weighted_adjacency），
-    但路线选择由 get_straight_line_route 的列选择逻辑决定，不依赖全局最短路搜索。
-    """
+    """直线策略：先由 choose_straight_line_route 决定物理节点路线，再按模型邻接表逐跳展开每一步。"""
     model = build_merlin_model(map_data=map_data)
     graph_nodes: Dict[str, dict] = model["graph_nodes"]
     stake_kinds: Dict[int, str] = model.get("stake_kinds", {})
@@ -312,10 +308,7 @@ def _build_straight_line_result(
         map_data=map_data,
     )
 
-    blocks = map_data["blocks"] if map_data is not None else get_merlin_map()["blocks"]
-    column_route = get_straight_line_route(map_data=map_data)  # 物理列节点序列，如 [2, 5, 8, 11]
-
-    # 构建物理路点列表：start → 列节点 → end
+    column_route = choose_straight_line_route(map_data=map_data)
     waypoints: List[str] = [start] + [str(n) for n in column_route] + [end]
 
     path_nodes: List[str] = []
@@ -328,90 +321,45 @@ def _build_straight_line_result(
     total_pick_cost = 0.0
     collected_r2: List[str] = []
 
-    def _record_step(u: str, v: str, edge_class: ArrowClass, rule: str, base_cost: float) -> None:
-        nonlocal prev_heading, total_turn_cost, total_move_cost, total_pick_cost
-        edge_heading = _edge_heading(u, v, layout_pos)
-
-        u_meta = graph_nodes.get(str(u), {})
-        v_meta = graph_nodes.get(str(v), {})
-        u_is_start_derived = u_meta.get("kind") == "derived" and str(u_meta.get("owner")) == "start"
-        v_is_start_derived = v_meta.get("kind") == "derived" and str(v_meta.get("owner")) == "start"
-        if str(u) == "start" or u_is_start_derived or v_is_start_derived:
-            edge_heading = "down"
-        if str(u) in {"10", "11", "12"} and str(v) == "end":
-            edge_heading = "down"
-
-        step_turn_cost = 0.0
-        if prev_heading is not None and prev_heading != edge_heading:
-            if "straight_line" not in turn_free_rules:
-                step_turn_cost = turn_cost
-
-        step_cost = base_cost + step_turn_cost
-        path_edges.append((u, v, step_cost, rule, edge_class))
-        path_steps.append({
-            "from": u,
-            "to": v,
-            "step_cost": step_cost,
-            "base_cost": base_cost,
-            "turn_cost": step_turn_cost,
-            "rule": rule,
-            "edge_class": edge_class,
-            "heading_in": prev_heading,
-            "heading_out": edge_heading,
-        })
-        prev_heading = edge_heading
-        total_turn_cost += step_turn_cost
-        if edge_class == "to_derived":
-            total_pick_cost += base_cost
-        else:
-            total_move_cost += base_cost
-
-    def _find_model_path(u: str, target: str) -> List[Tuple[str, float, str, ArrowClass]]:
-        """在模型邻接表中查找从 u 到 target 的路径（最多 2 跳）。
-
-        返回 [(node, cost, rule, edge_class), ...] 序列，不含起点 u。
-        优先走衍生节点（拾取 R2），其次走直连边。
-        """
-        neighbors = adj.get(u, [])
-
-        # 1) 直连边
-        for nxt, cost, rule, edge_class in neighbors:
-            if nxt == target:
-                return [(nxt, cost, rule, edge_class)]
-
-        # 2) 通过衍生节点中转：u → D_u_to_X → target
-        for nxt, cost, rule, edge_class in neighbors:
-            nxt_meta = graph_nodes.get(str(nxt), {})
-            if nxt_meta.get("kind") != "derived":
-                continue
-            derived_neighbors = adj.get(nxt, [])
-            for dnxt, dcost, drule, dedge_class in derived_neighbors:
-                if dnxt == target:
-                    return [
-                        (nxt, cost, rule, edge_class),
-                        (target, dcost, drule, dedge_class),
-                    ]
-
-        # 3) 兜底：直接走 target（用 normal 代价）
-        return [(target, normal_cost, "straight_line_fallback", "normal")]
-
-    # ---- 逐对路点展开 ----
     for i in range(len(waypoints) - 1):
         u = waypoints[i]
         target = waypoints[i + 1]
 
         if i == 0:
-            # 第一个节点是 start，直接加入
             path_nodes.append(u)
-
         if u == target:
             continue
 
-        steps = _find_model_path(u, target)
+        steps = _find_model_path(u, target, adj, graph_nodes, normal_cost)
         for nxt, cost, rule, edge_class in steps:
-            _record_step(u, nxt, edge_class, rule, cost)
+            edge_heading = _override_edge_heading(u, nxt, graph_nodes, _edge_heading(u, nxt, layout_pos))
+
+            step_turn_cost = 0.0
+            if prev_heading is not None and prev_heading != edge_heading:
+                if "straight_line" not in turn_free_rules:
+                    step_turn_cost = turn_cost
+
+            step_cost = cost + step_turn_cost
+            path_edges.append((u, nxt, step_cost, rule, edge_class))
+            path_steps.append({
+                "from": u,
+                "to": nxt,
+                "step_cost": step_cost,
+                "base_cost": cost,
+                "turn_cost": step_turn_cost,
+                "rule": rule,
+                "edge_class": edge_class,
+                "heading_in": prev_heading,
+                "heading_out": edge_heading,
+            })
+            prev_heading = edge_heading
+            total_turn_cost += step_turn_cost
+            if edge_class == "to_derived":
+                total_pick_cost += cost
+            else:
+                total_move_cost += cost
+
             path_nodes.append(nxt)
-            # 检查是否经过衍生节点拾取了 R2
             nxt_meta = graph_nodes.get(str(nxt), {})
             if nxt_meta.get("kind") == "derived" and nxt_meta.get("target_r2") is not None:
                 r2_key = str(nxt_meta["target_r2"])
@@ -710,32 +658,12 @@ def dijkstra_min_cost_path(
         rule: str,
     ) -> Tuple[float, int, int, str, float]:
         """返回在当前 mask 下经过边 u->v 的实际代价、新的 r2_mask、新的 r1_mask、当前朝向、转向代价。"""
-        edge_heading = _edge_heading(u, v, layout_pos)
-
-        # start 顶排取块约束：
-        # 从 start 出发取 1/2/3（含 start 的衍生节点链路）默认都视为朝向 end，
-        # 避免把这段动作误计为转向。
-        u_meta = graph_nodes.get(str(u), {})
-        v_meta = graph_nodes.get(str(v), {})
-        u_is_start_derived = u_meta.get("kind") == "derived" and str(u_meta.get("owner")) == "start"
-        v_is_start_derived = v_meta.get("kind") == "derived" and str(v_meta.get("owner")) == "start"
-        if str(u) == "start" or u_is_start_derived or v_is_start_derived:
-            edge_heading = "down"
+        raw_heading = _edge_heading(u, v, layout_pos)
+        edge_heading = _override_edge_heading(u, v, graph_nodes, raw_heading)
 
         step_turn_cost = 0.0
-        
-        # 判断：如果在底排（10/11/12）并且进入 end，则把这条边视为朝下。
-        # 这样 10/11/12 -> end 不会因为图布局里的斜线几何而误计为转向。
-        u_in_bottom_row = str(u) in {"10", "11", "12"}
-        v_is_end = str(v) == "end"
-        if u_in_bottom_row and v_is_end:
-            edge_heading = "down"
-
-        is_bottom_to_end_straight = u_in_bottom_row and v_is_end and prev_heading == "down" and edge_heading == "down"
-        
         if prev_heading is not None and prev_heading != edge_heading and rule not in turn_free_rules:
-            if not is_bottom_to_end_straight:
-                step_turn_cost = turn_cost
+            step_turn_cost = turn_cost
 
         # R1 节点访问成本
         r1_cost = 0.0

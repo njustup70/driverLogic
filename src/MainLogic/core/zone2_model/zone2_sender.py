@@ -169,3 +169,58 @@ def determine_start_position(
     start_x = stake["x"] - approach_distance
     start_y = stake["y"]
     return (start_x, start_y)
+
+
+
+from typing import List, Dict, Any, Callable
+import time
+
+def execute_actions(
+    actions: List[Dict[str, Any]],
+    blocks: Dict[int, str],
+    send_lift: Callable[[int], None],      # 发送升降指令，参数为 delta_z (mm)
+    send_turn: Callable[[int], None],      # 发送转向指令，参数为转向码
+    send_pick: Callable[[int], None],      # 发送取块指令，参数为目标桩号
+    send_move: Callable[[float, float, float], None],  # 发送移动指令，参数为 (x, y, z)
+    recv_ack: Callable[[float], bool],     # 接收确认，参数为超时时间(秒)，返回是否成功
+) -> bool:
+    """
+    依次执行动作列表，每个动作发送后等待确认。
+    
+    参数:
+        actions: 动作列表
+        blocks: 桩类型配置
+        send_lift: 发送升降指令的函数
+        send_turn: 发送转向指令的函数
+        send_pick: 发送取块指令的函数
+        send_move: 发送移动指令的函数
+        recv_ack: 接收确认的函数，超时返回 False
+    
+    返回:
+        True 全部成功，False 中途失败
+    """
+    for i, act in enumerate(actions):
+        print(f"执行动作 {i+1}/{len(actions)}: {act}")
+        
+        # 1. 根据类型发送指令
+        if act["type"] == "lift":
+            send_lift(act["delta_z"])
+        elif act["type"] == "turn":
+            send_turn(act["code"])
+        elif act["type"] == "pick":
+            send_pick(act["target"])
+        elif act["type"] == "move":
+            x, y, z = get_node_coordinates(act["to"], blocks)
+            send_move(x, y, z)
+        else:
+            print(f"未知动作类型: {act['type']}")
+            return False
+        
+        # 2. 等待接收确认（超时时间可调整）
+        if not recv_ack(timeout=5.0):
+            print(f"动作 {act} 未收到确认")
+            return False
+        
+        print(f"动作 {act} 完成")
+    
+    return True
