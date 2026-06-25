@@ -117,9 +117,9 @@ class TFManager:
         # print(sick_pose.x,sick_pose.y,sick_pose.yaw)
         if self.flag==0:
             # 解超越方程
-            new_yaw_correction = - fsolve(lambda theta:-(6-sick_y*math.cos(theta+self._slamBaseOdom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._slamBaseOdom.yaw))+self._slamBaseOdom.x*math.sin(theta)+self._slamBaseOdom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            new_yaw_correction = - fsolve(lambda theta:-(6-sick_y*math.cos(theta+self._baseinitodom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
         if self.flag==1:
-            new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._slamBaseOdom.yaw)+self._slamBaseOdom.x*math.sin(theta)+self._slamBaseOdom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
         print(self._mapToSlamInit.x,self._mapToSlamInit.y,self._mapToSlamInit.yaw)
@@ -168,6 +168,8 @@ class TFManager:
         # slam_init->base_link = slam_init->laser @ laser->base
         slam_base_pose = slam_sensor_pose @ self.laser_to_base
         self._slamBaseOdom = slam_base_pose
+        
+        self._baseinitodom = self.laser_to_base.inverse() @ slam_sensor_pose @ self.laser_to_base
         self._has_slam_pose = True
         wheel_pose = cast(Odom, self._odomToBase)
         # slam_init->odom = slam_init->base_link @ base_link->odom
