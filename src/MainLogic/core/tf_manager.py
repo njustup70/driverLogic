@@ -110,7 +110,8 @@ class TFManager:
         if not self.sick_buffer or not self._has_slam_pose:
             return False
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
-
+        #先干掉纠正
+        self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,0.0)
         # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
         # base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
         # sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
@@ -121,14 +122,15 @@ class TFManager:
 
         if self.flag==1:
             new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
-
+        
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
-        print(self._mapToSlamInit.x,self._mapToSlamInit.y,self._mapToSlamInit.yaw)
-        self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
-        print(self._mapToSlamInit.x,self._mapToSlamInit.y,self._mapToSlamInit.yaw)
+        print(self._mapToSlamInit)
+        # self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
+        self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,new_yaw_correction)
+        print(self._mapToSlamInit)
 
-        self._sickYawCorrection = new_yaw_correction
+        # self._sickYawCorrection = new_yaw_correction
 
         if self.rosBridge is not None:
             self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
