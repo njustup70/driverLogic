@@ -165,8 +165,8 @@ class TFManager:
             return
         # slam_init->laser
         slam_sensor_pose = Odom.from_transform_stamped(tf_msg)
-        # slam_init->base_link = slam_init->laser @ tf_msg @ laser->base_link
-        slam_base_pose = self.laser_to_base.inverse() @ slam_sensor_pose @ self.laser_to_base
+        # slam_init->base_link = slam_init->laser @ laser->base
+        slam_base_pose = slam_sensor_pose @ self.laser_to_base
         self._slamBaseOdom = slam_base_pose
         self._has_slam_pose = True
         wheel_pose = cast(Odom, self._odomToBase)
