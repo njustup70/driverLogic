@@ -76,6 +76,15 @@ class TFManager:
         self.laser_to_base = laser2Base
         self.mapToBaseInit = map2BaseInit
         self.sickToBaseLink = sick2Base
+        # 计算 sick 相对车体中心 (base_link) 的坐标和 yaw 角
+        # sick2Base 是 sick->base_link 的变换，取逆得到 base_link->sick
+        BaseLinktoSick = sick2Base.inverse()
+        self.sick_x_in_base = BaseLinktoSick.x
+        self.sick_y_in_base = BaseLinktoSick.y
+        # sick 坐标向量在右手系下相对于 x 轴正方向的旋转角度
+        self.sick_yaw_in_base = math.atan2(BaseLinktoSick.y, BaseLinktoSick.x)
+        self.sick_dist_to_base = math.sqrt(BaseLinktoSick.x ** 2 + BaseLinktoSick.y ** 2)
+        print(f'{self.sick_x_in_base},{self.sick_y_in_base},{self.sick_yaw_in_base}')
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
@@ -108,7 +117,7 @@ class TFManager:
         # print(sick_pose.x,sick_pose.y,sick_pose.yaw)
         if self.flag==0:
             # 解超越方程
-            new_yaw_correction = - fsolve(lambda theta:-(6-sick_y*math.cos(theta+self._slamBaseOdom.yaw))+self._slamBaseOdom.x*math.sin(theta)+self._slamBaseOdom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            new_yaw_correction = - fsolve(lambda theta:-(6-sick_y*math.cos(theta+self._slamBaseOdom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._slamBaseOdom.yaw))+self._slamBaseOdom.x*math.sin(theta)+self._slamBaseOdom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
         if self.flag==1:
             new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._slamBaseOdom.yaw)+self._slamBaseOdom.x*math.sin(theta)+self._slamBaseOdom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
