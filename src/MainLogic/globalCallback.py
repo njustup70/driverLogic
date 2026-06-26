@@ -7,7 +7,7 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.app.merlin_map_solver_debug import run_solver_on_states
 from MainLogic.core.tf_manager import TFManagerInstance
 from typing import List
-from MainLogic.core.zone2_model.zone2_sender import generate_actions_from_result,determine_start_position,encode_action_sequence,send_actions,send_r1_nodes,extract_r1_nodes_on_path
+from MainLogic.app.zone2_model_api import generate_actions_from_result, determine_start_position, encode_action_sequence, send_actions, send_r1_nodes, extract_r1_nodes_on_path
 _MEILIN_MAP_FRAME_PREFIX = b'\xff\x0d\xa2'
 _MEILIN_MAP_FRAME_LEN = 15
 

@@ -25,8 +25,12 @@ from MainLogic.core.zone2_model import (
     dijkstra_min_cost_path,
     draw_merlin_model,
     get_merlin_map,
+    list_saved_merlin_maps,
+    load_saved_merlin_map,
+    print_merlin_map,
     solve_route,
 )
+from MainLogic.core.zone2_model.merlin_map import load_saved_merlin_map_by_filename
 
 from MainLogic.core.zone2_model.zone2_helpers import *
 from MainLogic.core.zone2_model.zone2_format import *
@@ -208,4 +212,17 @@ __all__ = [
     "build_path_step_records",
     "format_action_chain",
     "format_chronological_steps",
+    "generate_actions_from_result",
+    "determine_start_position",
+    "encode_action_sequence",
+    "send_actions",
+    "send_r1_nodes",
+    "extract_r1_nodes_on_path",
+    "list_saved_merlin_maps",
+    "load_saved_merlin_map",
+    "load_saved_merlin_map_by_filename",
+    "print_merlin_map",
+    "dijkstra_min_cost_path",
+    "draw_merlin_model",
+    "solve_route",
 ]

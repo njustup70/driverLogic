@@ -16,16 +16,16 @@ from __future__ import annotations
 import argparse
 from typing import Any, Dict, List, Optional
 
-from MainLogic.core.zone2_model import (
+from MainLogic.app.zone2_model_api import (
     dijkstra_min_cost_path,
     draw_merlin_model,
     list_saved_merlin_maps,
     load_saved_merlin_map,
+    load_saved_merlin_map_by_filename,
     print_merlin_map,
+    print_path_debug_info,
     solve_route,
 )
-from MainLogic.core.zone2_model.merlin_map import load_saved_merlin_map_by_filename
-from MainLogic.core.zone2_model.zone2_format import print_path_debug_info
 
 
 _STATE_TO_BLOCK = {
