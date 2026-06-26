@@ -23,8 +23,11 @@ limitations under the License.
 #include <memory>
 #include <opencv2/opencv.hpp>
 #include <deque> 
+#include <queue>
 #include <unistd.h> 
 #include <cstdlib>
+#include <sched.h>
+#include <pthread.h>
 #include <cstring>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -46,9 +49,9 @@ limitations under the License.
     #include <ros/package.h>
     #include <ros/ros.h> 
 #endif
-#define ros_driver_version "0.9.0"
+#define ros_driver_version "0.10.4"
 #define required_firmware_version_major 0
-#define required_firmware_version_minor 10
+#define required_firmware_version_minor 11
 #define required_firmware_version_patch 0
 
 // Global variable declarations
@@ -57,6 +60,7 @@ static std::atomic<bool> deviceConnected(false);
 static std::atomic<bool> deviceDisconnected(false);  // Device disconnection flag
 static std::mutex device_mutex;                      // Device operation mutex lock
 static std::atomic<bool> g_connection_timeout(false);
+static std::atomic<bool> g_map_transfer_in_progress(false);  // True while a map file transfer is running
 static std::atomic<bool> g_usb_version_error(false);
 static std::atomic<bool> g_shutdown_requested(false);  // Signal handler flag
 #ifdef ROS2
@@ -85,12 +89,20 @@ static std::shared_ptr<rawCloudRender> g_renderer = nullptr;
 std::string calib_file_ = "";
 static std::shared_ptr<odin_ros_driver::YamlParser> g_parser = nullptr;
 
-static constexpr size_t PTP_SMOOTH_WINDOW_SIZE = 30;
+static constexpr size_t PTP_SMOOTH_WINDOW_SIZE = 300;
 static std::mutex g_ptp_mutex;
 static std::deque<double> g_ptp_delay_buf;
 static std::deque<double> g_ptp_offset_buf;
 static std::atomic<double> g_ptp_delay_smooth{0.0};
 static std::atomic<double> g_ptp_offset_smooth{0.0};
+
+// IMU dedicated processing thread
+static std::atomic<bool> g_imu_thread_running(false);
+static std::thread g_imu_thread;
+static std::queue<imu_convert_data_t> g_imu_queue;
+static std::mutex g_imu_queue_mutex;
+static std::condition_variable g_imu_queue_cv;
+static const size_t IMU_QUEUE_MAX_SIZE = 200;
 
 double get_ptp_smoothed_delay() {
     return g_ptp_delay_smooth.load(std::memory_order_relaxed);
@@ -109,6 +121,10 @@ int g_sendimu = 1;
 int g_senddtof = 1;
 int g_sendodom = 1;
 int g_send_odom_baselink_tf = 0;
+
+// SDK IMU smooth sending configuration
+int g_enable_imu_smooth = 0;
+int g_imu_smooth_frequency = 400;
 int g_sendcloudslam = 0;
 int g_sendcloudrender = 0;
 int g_sendrgb_compressed = 0;
@@ -131,6 +147,11 @@ bool g_relocalization_success_msg_printed = false;
 std::string g_relocalization_map_abs_path = "";
 std::string g_mapping_result_dest_dir = "";
 std::string g_mapping_result_file_name = "";
+
+int g_send_image_mask = 0;
+std::string g_image_mask_abs_path = "";
+
+int g_reset_algo = 0;
 
 const char* DEV_STATUS_CSV_FILE = "dev_status.csv";
 FILE* dev_status_csv_file = nullptr;
@@ -269,6 +290,7 @@ void collect_children(pid_t pid, std::vector<pid_t>& all) {
 }
 
 void clear_all_queues();
+static void stop_imu_thread();
 
 static bool convert_calib_to_cam_in_ex(const std::string& calib_path, const std::filesystem::path& out_path);
 
@@ -282,6 +304,9 @@ static void signal_handler(int signum) {
         #endif
 
         g_shutdown_requested = true;
+
+        // Stop IMU dedicated thread
+        stop_imu_thread();
 
         // Stop custom parameter monitoring thread
         g_param_monitor_running = false;
@@ -351,79 +376,15 @@ static void signal_handler(int signum) {
 }
 
 // Custom parameter monitoring function
+// Note: Map transfer is now triggered directly in process_command_file() when save_map=1 is set,
+// so this monitor no longer needs to detect state changes. It's kept for potential future use
+// or for monitoring other parameters.
 static void custom_parameter_monitor() {
-    int last_save_map_val = -1;
     while (g_param_monitor_running && deviceConnected) {
-        if (odinDevice) {
-            if (g_custom_map_mode == 1) {
-                int value = 0;
-                int result = lidar_get_custom_parameter(odinDevice, "save_map", &value);
-
-                if (result == 0) {
-                    // #ifdef ROS2
-                    //     RCLCPP_INFO(rclcpp::get_logger("param_monitor"), "save_map = %d", value);
-                    // #else
-                    //     ROS_INFO("save_map = %d", value);
-                    // #endif
-
-                    if (last_save_map_val == 1 && value == 0) {
-                        auto now = std::chrono::system_clock::now();
-                        std::time_t t = std::chrono::system_clock::to_time_t(now);
-                        std::tm tm{};
-                        #ifdef _WIN32
-                            localtime_s(&tm, &t);
-                        #else
-                            localtime_r(&t, &tm);
-                        #endif
-                        char map_save_time[32];
-                        std::strftime(map_save_time, sizeof(map_save_time), "%Y%m%d_%H%M%S", &tm);
-
-                        std::string map_dir = g_mapping_result_dest_dir != "" ? g_mapping_result_dest_dir : map_root_dir_.string();
-                        std::string map_name = g_mapping_result_file_name != "" ? g_mapping_result_file_name : "map_" + std::string(map_save_time) + ".bin";
-                        #ifdef ROS2
-                            RCLCPP_INFO(rclcpp::get_logger("param_monitor"), "Map is saved on device, now transfering to [%s/%s]", map_dir.c_str(), map_name.c_str());
-                        #else
-                            ROS_INFO("Map is saved on device, now transfering to [%s/%s]", map_dir.c_str(), map_name.c_str());
-                        #endif
-                        int ret = lidar_get_mapping_result(odinDevice, map_dir.c_str(), map_name.c_str());
-                        if (ret < 0 ) {
-                            #ifdef ROS2
-                                RCLCPP_WARN(rclcpp::get_logger("param_monitor"), "Failed to get mapping result");
-                            #else
-                                ROS_WARN("Failed to get mapping result");
-                            #endif
-                        } else if (ret == 0) {
-                            #ifdef ROS2
-                                RCLCPP_INFO(rclcpp::get_logger("param_monitor"), "map get start success, now transfering...");
-                            #else
-                                ROS_INFO("map get start success, now transfering...");
-                            #endif
-                        } else {
-                            #ifdef ROS2
-                                RCLCPP_WARN(rclcpp::get_logger("param_monitor"), "Failed to get mapping result, error code: %d", ret);
-                            #else
-                                ROS_WARN("Failed to get mapping result, error code: %d", ret);
-                            #endif
-                        }
-                    }
-                    last_save_map_val = value;
-
-                } else if (result == -2) {
-                    #ifdef ROS2
-                        RCLCPP_INFO(rclcpp::get_logger("param_monitor"),"file transfering, try again later...");
-                    #else
-                        ROS_INFO("file transfering, try again later...");
-                    #endif
-                } else {
-                    #ifdef ROS2
-                        RCLCPP_WARN(rclcpp::get_logger("param_monitor"),"Failed to get save_map parameter, error: %d", result);
-                    #else
-                        ROS_WARN("Failed to get save_map parameter, error: %d", result);
-                    #endif
-                }
-            }
-        }
-
+        // Currently no active monitoring needed since map transfer is triggered directly
+        // in process_command_file() when save_map=1 is set.
+        // This loop is kept for potential future parameter monitoring needs.
+        
         // Sleep for 1 second (1Hz)
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
@@ -473,14 +434,107 @@ static void process_command_file() {
             
             try {
                 int value = std::stoi(value_str);
-                int result = lidar_set_custom_parameter(odinDevice, param_name.c_str(), &value, sizeof(int));
+                
+                // Early reject: if a map transfer is already running, ignore new save_map=1 requests
+                // to avoid spurious "Successfully set save_map = 1" followed by background failure.
+                if (param_name == "save_map" && value == 1 && g_map_transfer_in_progress.load()) {
+                    #ifdef ROS2
+                        RCLCPP_WARN(rclcpp::get_logger("command_processor"),
+                                    "Map transfer already in progress, ignoring this save_map=1 request. Please wait for current transfer to complete.");
+                    #else
+                        ROS_WARN("Map transfer already in progress, ignoring this save_map=1 request. Please wait for current transfer to complete.");
+                    #endif
+                    return;
+                }
 
+                // Special handling for "save_map = 1": delegate the entire flow (set -> poll
+                // -> fetch) to the SDK's unified lidar_save_map() API. We deliberately skip
+                // the generic lidar_set_custom_parameter() call here, because lidar_save_map()
+                // already issues that set internally; doing it twice could re-trigger map
+                // generation on the device side after it already completed once.
+                if (param_name == "save_map" && value == 1) {
+                    #ifdef ROS2
+                        RCLCPP_INFO(rclcpp::get_logger("command_processor"),
+                                    "Successfully set %s = %d", param_name.c_str(), value);
+                    #else
+                        ROS_INFO("Successfully set %s = %d", param_name.c_str(), value);
+                    #endif
+                    {
+                        auto now = std::chrono::system_clock::now();
+                        std::time_t t = std::chrono::system_clock::to_time_t(now);
+                        std::tm tm{};
+                        #ifdef _WIN32
+                            localtime_s(&tm, &t);
+                        #else
+                            localtime_r(&t, &tm);
+                        #endif
+                        char map_save_time[32];
+                        std::strftime(map_save_time, sizeof(map_save_time), "%Y%m%d_%H%M%S", &tm);
+
+                        std::string map_dir = g_mapping_result_dest_dir != "" ? g_mapping_result_dest_dir : map_root_dir_.string();
+                        std::string map_name = g_mapping_result_file_name != "" ? g_mapping_result_file_name : "map_" + std::string(map_save_time) + ".bin";
+                        
+                        #ifdef ROS2
+                            RCLCPP_INFO(rclcpp::get_logger("command_processor"), 
+                                       "Map save triggered, will transfer to [%s/%s]", map_dir.c_str(), map_name.c_str());
+                        #else
+                            ROS_INFO("Map save triggered, will transfer to [%s/%s]", map_dir.c_str(), map_name.c_str());
+                        #endif
+                        
+                        // Mark transfer as in-progress BEFORE spawning the thread to avoid
+                        // race conditions with subsequent set save_map=1 calls.
+                        g_map_transfer_in_progress.store(true);
+                        
+                        // Run save-map in a background thread so we don't block the command processor.
+                        // All the orchestration (trigger -> poll -> fetch) is now handled inside
+                        // the SDK's lidar_save_map() one-shot API, so this side just blocks on it
+                        // and reports the final outcome.
+                        std::thread([map_dir, map_name]() {
+                            // 0 = use SDK default generation timeout (120s).
+                            int ret = lidar_save_map(odinDevice, map_dir.c_str(), map_name.c_str(), 0);
+                            // Always clear the in-progress flag when this thread exits
+                            g_map_transfer_in_progress.store(false);
+                            
+                            if (ret == 0) {
+                                #ifdef ROS2
+                                    RCLCPP_INFO(rclcpp::get_logger("map_transfer"), "Map transfer completed: %s/%s", map_dir.c_str(), map_name.c_str());
+                                #else
+                                    ROS_INFO("Map transfer completed: %s/%s", map_dir.c_str(), map_name.c_str());
+                                #endif
+                            } else if (ret == -2) {
+                                #ifdef ROS2
+                                    RCLCPP_WARN(rclcpp::get_logger("map_transfer"), "Map transfer skipped: device is busy with another transfer");
+                                #else
+                                    ROS_WARN("Map transfer skipped: device is busy with another transfer");
+                                #endif
+                            } else {
+                                #ifdef ROS2
+                                    RCLCPP_WARN(rclcpp::get_logger("map_transfer"), "Map transfer failed, error code: %d", ret);
+                                #else
+                                    ROS_WARN("Map transfer failed, error code: %d", ret);
+                                #endif
+                            }
+                        }).detach();
+                    }
+                    return;  // save_map=1 handled, skip the generic set path below
+                }
+
+                // Generic path for all other parameters (and save_map=0 / save_map=N>1).
+                int result = lidar_set_custom_parameter(odinDevice, param_name.c_str(), &value, sizeof(int));
                 if (result == 0) {
                     #ifdef ROS2
-                        RCLCPP_INFO(rclcpp::get_logger("command_processor"), 
+                        RCLCPP_INFO(rclcpp::get_logger("command_processor"),
                                    "Successfully set %s = %d", param_name.c_str(), value);
                     #else
                         ROS_INFO("Successfully set %s = %d", param_name.c_str(), value);
+                    #endif
+                } else if (result == -2) {
+                    // Device is transferring file, this is expected if user triggers save_map again
+                    #ifdef ROS2
+                        RCLCPP_INFO(rclcpp::get_logger("command_processor"), 
+                                   "Device is busy transferring file, please wait for current transfer to complete");
+                    #else
+                        ROS_INFO("Device is busy transferring file, please wait for current transfer to complete");
                     #endif
                 } else {
                     #ifdef ROS2
@@ -764,6 +818,109 @@ void clear_all_queues() {
     g_latest_bgr.reset();
     g_latest_rgb_timestamp = 0;
     g_has_rgb = false;
+    
+    // Clear IMU queue
+    {
+        std::lock_guard<std::mutex> lock(g_imu_queue_mutex);
+        while (!g_imu_queue.empty()) {
+            g_imu_queue.pop();
+        }
+    }
+}
+
+// IMU dedicated processing thread routine
+static void imu_thread_routine()
+{
+    // Try to set higher thread priority for IMU processing
+    pthread_t this_thread = pthread_self();
+    struct sched_param param;
+    param.sched_priority = 70;
+    
+    int ret = pthread_setschedparam(this_thread, SCHED_FIFO, &param);
+    if (ret != 0) {
+        ret = pthread_setschedparam(this_thread, SCHED_RR, &param);
+    }
+    
+    #ifdef ROS2
+        RCLCPP_INFO(rclcpp::get_logger("imu_thread"), "IMU dedicated thread started (priority: %d)", param.sched_priority);
+    #else
+        ROS_INFO("IMU dedicated thread started (priority: %d)", param.sched_priority);
+    #endif
+    
+    while (g_imu_thread_running) {
+        std::unique_lock<std::mutex> lock(g_imu_queue_mutex);
+        
+        // Wait for IMU data
+        g_imu_queue_cv.wait(lock, []() {
+            return !g_imu_queue.empty() || !g_imu_thread_running;
+        });
+        
+        if (!g_imu_thread_running) {
+            break;
+        }
+        
+        // Process all pending IMU data
+        while (!g_imu_queue.empty() && g_imu_thread_running) {
+            imu_convert_data_t imu_data = g_imu_queue.front();
+            g_imu_queue.pop();
+            lock.unlock();
+            
+            // Publish IMU data
+            if (g_ros_object && g_sendimu) {
+                g_ros_object->publishImu(&imu_data);
+            }
+            
+            lock.lock();
+        }
+    }
+    
+    #ifdef ROS2
+        RCLCPP_INFO(rclcpp::get_logger("imu_thread"), "IMU dedicated thread exiting");
+    #else
+        ROS_INFO("IMU dedicated thread exiting");
+    #endif
+}
+
+// Start IMU dedicated thread
+static void start_imu_thread()
+{
+    if (!g_imu_thread_running) {
+        // 先确保之前的线程已经结束，避免 terminate called without an active exception
+        if (g_imu_thread.joinable()) {
+            g_imu_thread.join();
+        }
+        g_imu_thread_running = true;
+        g_imu_thread = std::thread(imu_thread_routine);
+        #ifdef ROS2
+            RCLCPP_INFO(rclcpp::get_logger("imu_thread"), "IMU dedicated thread created");
+        #else
+            ROS_INFO("IMU dedicated thread created");
+        #endif
+    }
+}
+
+// Stop IMU dedicated thread
+static void stop_imu_thread()
+{
+    if (g_imu_thread_running) {
+        g_imu_thread_running = false;
+        g_imu_queue_cv.notify_all();
+        if (g_imu_thread.joinable()) {
+            g_imu_thread.join();
+        }
+        
+        // Clear queue
+        std::lock_guard<std::mutex> lock(g_imu_queue_mutex);
+        while (!g_imu_queue.empty()) {
+            g_imu_queue.pop();
+        }
+        
+        #ifdef ROS2
+            RCLCPP_INFO(rclcpp::get_logger("imu_thread"), "IMU dedicated thread stopped");
+        #else
+            ROS_INFO("IMU dedicated thread stopped");
+        #endif
+    }
 }
 
 // Lidar data callback
@@ -771,6 +928,11 @@ static void lidar_data_callback(const lidar_data_t *data, void *user_data)
 {
     // If device is not connected, ignore all data
     if (!deviceConnected) {
+        return;
+    }
+    
+    // Check g_ros_object before using it
+    if (!g_ros_object) {
         return;
     }
     
@@ -800,7 +962,15 @@ static void lidar_data_callback(const lidar_data_t *data, void *user_data)
         case LIDAR_DT_RAW_IMU:
             if (g_sendimu) {
                 imudata = (imu_convert_data_t *)data->stream.imageList[0].pAddr;
-                g_ros_object->publishImu(imudata);
+                // Enqueue IMU data for dedicated thread processing
+                {
+                    std::lock_guard<std::mutex> lock(g_imu_queue_mutex);
+                    if (g_imu_queue.size() >= IMU_QUEUE_MAX_SIZE) {
+                        g_imu_queue.pop();  // Drop oldest if full
+                    }
+                    g_imu_queue.push(*imudata);
+                }
+                g_imu_queue_cv.notify_one();
             }
             update_count(&imu_rx_fps);
             break;
@@ -999,6 +1169,9 @@ static void lidar_data_callback(const lidar_data_t *data, void *user_data)
             break;
             case LIDAR_DT_SLAM_WIWC:
             {
+                // Always publish WIWC data for real-time extrinsics
+                g_ros_object->publishWiwc((capture_Image_List_t *)&data->stream);
+                
                 if(g_record_data ) {
                     g_ros_object->recordrotate((capture_Image_List_t *)&data->stream);
                 }
@@ -1432,8 +1605,30 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
                 #endif
             } 
         } else if (g_custom_map_mode == 2) {
-            if (g_relocalization_map_abs_path != "" && std::filesystem::exists(g_relocalization_map_abs_path) && 
-                lidar_set_relocalization_map(odinDevice, g_relocalization_map_abs_path.c_str()) == 0) {
+            bool result = false;
+            int retryTime = 3;
+            if (g_relocalization_map_abs_path != "" && std::filesystem::exists(g_relocalization_map_abs_path)) {
+                while(retryTime-- > 0)
+                {
+                    result = (lidar_set_relocalization_map(odinDevice, g_relocalization_map_abs_path.c_str()) == 0);
+                    if(result)
+                    {
+                        break;
+                    }
+                    #ifdef ROS2
+                        RCLCPP_INFO(rclcpp::get_logger("device_cb"), "Relocalization map set retry...,%d",retryTime);
+                    #else
+                        ROS_INFO("Relocalization map set retry...,%d",retryTime);
+                    #endif
+                }
+            } else {
+                #ifdef ROS2
+                    RCLCPP_ERROR(rclcpp::get_logger("device_cb"), "Relocalization map invlalid");
+                #else
+                    ROS_ERROR("Relocalization map invlalid");
+                #endif
+            }
+            if (result) {
                 #ifdef ROS2
                     RCLCPP_INFO(rclcpp::get_logger("device_cb"), "Relocalization map set successfully");
                 #else
@@ -1449,6 +1644,51 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
                 lidar_destory_device(odinDevice);
                 odinDevice = nullptr;
                 return;
+            }
+        }
+
+        // Transfer image mask if enabled
+        if (g_send_image_mask == 1) {
+            if (g_image_mask_abs_path != "" && std::filesystem::exists(g_image_mask_abs_path)) {
+                int ret = lidar_set_image_mask(odinDevice, g_image_mask_abs_path.c_str());
+                if (ret == 0) {
+                    #ifdef ROS2
+                        RCLCPP_INFO(rclcpp::get_logger("device_cb"), "Image mask set successfully: %s", g_image_mask_abs_path.c_str());
+                    #else
+                        ROS_INFO("Image mask set successfully: %s", g_image_mask_abs_path.c_str());
+                    #endif
+                } else {
+                    #ifdef ROS2
+                        RCLCPP_ERROR(rclcpp::get_logger("device_cb"), "Failed to set image mask: %s, error: %d", g_image_mask_abs_path.c_str(), ret);
+                    #else
+                        ROS_ERROR("Failed to set image mask: %s, error: %d", g_image_mask_abs_path.c_str(), ret);
+                    #endif
+                }
+            } else {
+                #ifdef ROS2
+                    RCLCPP_WARN(rclcpp::get_logger("device_cb"), "Image mask path not set or file not found: %s", g_image_mask_abs_path.c_str());
+                #else
+                    ROS_WARN("Image mask path not set or file not found: %s", g_image_mask_abs_path.c_str());
+                #endif
+            }
+        }
+
+        // Send algo_reset command if enabled
+        if (g_reset_algo == 1) {
+            int reset_value = 1;
+            int ret = lidar_set_custom_parameter(odinDevice, "algo_reset", &reset_value, sizeof(int));
+            if (ret == 0) {
+                #ifdef ROS2
+                    RCLCPP_INFO(rclcpp::get_logger("device_cb"), "Algo reset command sent successfully");
+                #else
+                    ROS_INFO("Algo reset command sent successfully");
+                #endif
+            } else {
+                #ifdef ROS2
+                    RCLCPP_ERROR(rclcpp::get_logger("device_cb"), "Failed to send algo reset command, error: %d", ret);
+                #else
+                    ROS_ERROR("Failed to send algo reset command, error: %d", ret);
+                #endif
             }
         }
  
@@ -1512,27 +1752,55 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
             g_rosNodeControlImpl.setDtofSubframeODR(dtof_subframe_odr);
         }
         
+        // 根据配置激活或关闭流类型
+        #ifdef ROS2
+            RCLCPP_INFO(rclcpp::get_logger("device_cb"), 
+                "Stream config: RGB=%d, IMU=%d, ODOM=%d, DTOF=%d, CLOUD_SLAM=%d",
+                g_sendrgb, g_sendimu, g_sendodom, g_senddtof, g_sendcloudslam);
+        #else
+            ROS_INFO("Stream config: RGB=%d, IMU=%d, ODOM=%d, DTOF=%d, CLOUD_SLAM=%d",
+                g_sendrgb, g_sendimu, g_sendodom, g_senddtof, g_sendcloudslam);
+        #endif
+        
         if (g_sendrgb) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_RAW_RGB);
+        } else {
+            lidar_deactivate_stream_type(odinDevice, LIDAR_DT_RAW_RGB);
         }
         if (g_sendimu) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_RAW_IMU);
+        } else {
+            lidar_deactivate_stream_type(odinDevice, LIDAR_DT_RAW_IMU);
         }
         if (g_sendodom) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_SLAM_ODOMETRY);
+        } else {
+            lidar_deactivate_stream_type(odinDevice, LIDAR_DT_SLAM_ODOMETRY);
         }
         if (g_senddtof) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_RAW_DTOF);
+        } else {
+            lidar_deactivate_stream_type(odinDevice, LIDAR_DT_RAW_DTOF);
         }
         if (g_sendcloudslam) {
             lidar_activate_stream_type(odinDevice, LIDAR_DT_SLAM_CLOUD);
+        } else {
+            lidar_deactivate_stream_type(odinDevice, LIDAR_DT_SLAM_CLOUD);
         }
         
         software_connect_timing = false;
         deviceConnected = true;
         deviceDisconnected = false;
         
+        // Start IMU dedicated thread
+        start_imu_thread();
+        
         // Start custom parameter monitoring thread
+        // 先确保之前的线程已经结束，避免 terminate called without an active exception
+        if (g_param_monitor_thread.joinable()) {
+            g_param_monitor_running = false;
+            g_param_monitor_thread.join();
+        }
         g_param_monitor_running = true;
         g_param_monitor_thread = std::thread(custom_parameter_monitor);
         
@@ -1566,6 +1834,9 @@ static void lidar_device_callback(const lidar_device_info_t* device, bool attach
 
         deviceConnected = false;
         deviceDisconnected = true;
+        
+        // Stop IMU dedicated thread
+        stop_imu_thread();
         
         // Stop custom parameter monitoring thread
         g_param_monitor_running = false;
@@ -1647,6 +1918,10 @@ int main(int argc, char *argv[])
         g_sendrgb       = get_key_value("sendrgb", 1);
         g_sendimu       = get_key_value("sendimu", 1);
         g_senddtof      = get_key_value("senddtof", 1);
+        
+        // SDK IMU smooth sending configuration
+        g_enable_imu_smooth = get_key_value("enable_imu_smooth", 0);
+        g_imu_smooth_frequency = get_key_value("imu_smooth_frequency", 400);
         g_cloud_raw_confidence_threshold = get_key_value("cloud_raw_confidence_threshold", 35);
         g_rosNodeControlImpl.setCloudRawConfidenceThreshold(g_cloud_raw_confidence_threshold);
         g_dtof_fps      = get_key_value("dtof_fps", 145);  // Read DTOF frame rate from config (100=10fps, 145=14.5fps)
@@ -1679,7 +1954,10 @@ int main(int argc, char *argv[])
         g_relocalization_map_abs_path = get_key_str_value("relocalization_map_abs_path", "");
         g_mapping_result_dest_dir = get_key_str_value("mapping_result_dest_dir", "");
         g_mapping_result_file_name = get_key_str_value("mapping_result_file_name", "");
+        g_image_mask_abs_path = get_key_str_value("image_mask_abs_path", "");
 
+        g_send_image_mask = get_key_value("sendimagemask", 0);
+        g_reset_algo = get_key_value("resetalgo", 0);
         g_custom_map_mode = g_parser->getCustomMapMode(2);
 
         lidar_log_set_level(LIDAR_LOG_INFO);
@@ -1745,6 +2023,24 @@ int main(int argc, char *argv[])
                 ROS_ERROR("Lidar system init failed");
             #endif
             return -1;
+        }
+        
+        // Configure SDK IMU smooth sending AFTER lidar_system_init
+        // SDK now defaults to disabled, only enable if configured
+        if (g_enable_imu_smooth) {
+            lidar_enable_imu_smooth_sending(1);
+            lidar_set_imu_smooth_frequency(g_imu_smooth_frequency);
+            #ifdef ROS2
+                RCLCPP_INFO(node->get_logger(), "Enabling SDK IMU smooth sending at %d Hz", g_imu_smooth_frequency);
+            #else
+                ROS_INFO("Enabling SDK IMU smooth sending at %d Hz", g_imu_smooth_frequency);
+            #endif
+        } else {
+            #ifdef ROS2
+                RCLCPP_INFO(node->get_logger(), "SDK IMU smooth sending disabled");
+            #else
+                ROS_INFO("SDK IMU smooth sending disabled");
+            #endif
         }
         
 

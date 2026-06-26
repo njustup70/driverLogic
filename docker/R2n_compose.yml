@@ -1,4 +1,4 @@
-version: "3.8"
+name: driver
 
 x-common-env: &common_env
   DISPLAY: ${DISPLAY}
@@ -50,43 +50,24 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /dev:/dev
     working_dir: "/home/Elaina/ros2_ws"
-    # entrypoint:
-    #   - /bin/bash
-    #   - -i
-    #   - -c
-    #   - |
-    #     source ~/.bashrc
-    #     source /opt/ros/humble/setup.bash
-    #     if [ -f /home/Elaina/ros2_ws/install/setup.bash ]; then
-    #       source /home/Elaina/ros2_ws/install/setup.bash
-    #     fi
-    #     export PYTHONPATH=/home/Elaina/ros2_ws/src:$$PYTHONPATH
-
-    #     ros2 launch my_driver hik_camera.launch.py &
-    #     camera_pid=$$!
-    #     python3 -m MainLogic.Main --main-module R2_build_spear &
-    #     mainlogic_pid=$$!
-
-    #     trap 'kill "$$camera_pid" "$$mainlogic_pid" 2>/dev/null || true' INT TERM EXIT
-    #     wait -n "$$camera_pid" "$$mainlogic_pid"
-  opencv_service:
-    image: elainasuki/rc2026:yolo-ros
-    container_name: opencv_runtime
+    entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch rc_bringup R2n.launch.py"]
+  voxel_service:
+    image: elainasuki/rc2026:voxel_slam_ros2
+    container_name: voxel_slam_ros2_runtime
     restart: always
     <<: *common
     environment:
       <<: *common_env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - opencv_volume:/home/Elaina/yolo
-      - /dev:/dev
-    working_dir: "/home/Elaina/yolo"
-    entrypoint: ["/bin/bash", "-i", "-c", "python3 ~/yolo/spear/ros2_arucopnp_serial_node.py"]
-
+      - voxel_ros2_volume:/home/Elaina/ros2_ws
+    working_dir: "/home/Elaina/slam/VoxelSlam"
+    entrypoint: ["/bin/bash", "-i", "-c", "source ~/ros2_ws/install/setup.bash && ros2 launch voxel_slam vxlm_airy.launch.py"]
 volumes:
   driverLogic_volume:
     external: true
     name: driverLogic_volume
-  opencv_volume:
+  voxel_ros2_volume:
     external: true
-    name: ros2_opencv_volume
+    name: voxel_ros2_volume
+

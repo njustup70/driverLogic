@@ -86,8 +86,8 @@ class MPCPathFollower:
             )
 
             rterm = np.array([50.0, 50.0, 50.0])
-            lower_u = np.array([[-0.5], [-0.5], [-1.0]])
-            upper_u = np.array([[0.5], [0.5], [1.0]])
+            lower_u = np.array([[-3], [-3], [-6.0]])
+            upper_u = np.array([[3], [3], [6.0]])
             set_up_settings = {
                 'n_horizon': self.n_horizon,
                 't_step': self.dt,
@@ -142,6 +142,7 @@ class MPCPathFollower:
     def set_path(self,target_points: np.ndarray,target_yaw: float, ref_speed=None):
         self.is_following_path = True
         #传入的target_points是一个二维数组，形状为 (N, 2)，每行是一个路径点的 (x, y) 坐标
+        assert target_points.shape[1]==2 and len(target_points.shape)==2, "target_points必须是一个二维数组，形状为 (N, 2)"
         x_pts = target_points[:, 0]
         y_pts = target_points[:, 1]
         x_points,y_points,_=self.path_planner.generate_path(x_pts, y_pts, step_cm=10.0)
@@ -188,7 +189,7 @@ class MPCPathFollower:
 
         # print(self.mpc.data)
         return u.flatten()
-    def set_target_point(self, target):
+    def set_target_point(self, target:np.ndarray):
         '''设置 MPC 的目标点'''
         #将target转换成 numpy 数组，并确保它的形状正确
         target = np.asarray(target, dtype=float)
