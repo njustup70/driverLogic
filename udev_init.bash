@@ -56,7 +56,7 @@ echo 'KERNEL=="ttyACM*", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="6666", MODE
 #增加对hik_camera的支持
 echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="2bdf", ATTRS{idProduct}=="0001", MODE="0777", SYMLINK+="hik_camera"' >> /etc/udev/rules.d/my_dev.rules
 # 增加odin支持
-echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", MODE="0777", SYMLINK+="odin"' >> /etc/udev/rules.d/my_dev.rules
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", MODE="0777", GROUP="plugdev",SYMLINK+="odin"' >> /etc/udev/rules.d/my_dev.rules
 #增加对新的qh串口支持
 echo 'KERNEL=="ttyACM*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE:="0777", GROUP:="dialout", SYMLINK+="serial_qh"' >> /etc/udev/rules.d/my_dev.rules
 service udev reload

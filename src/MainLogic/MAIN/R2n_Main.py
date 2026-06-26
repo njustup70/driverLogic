@@ -1,14 +1,26 @@
 '''
 异步主逻辑和其他函数
 '''
-import asyncio
-from MainLogic.Lib.odomVec import Odom
 from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import move_to, TFManagerInstance
-from MainLogic.app.climb_manager import climb
-from MainLogic import globalCallback as gcb
-from std_msgs.msg import UInt8MultiArray, String
 from MainLogic.core.serial_node import start_serial_process
+import asyncio
+from MainLogic.core.tf_manager import TFManagerInstance,TFOdin
+import MainLogic.core.tf_manager as tf_manager
+import MainLogic.core.nav.observer as observer_module
+from MainLogic.Lib.odomVec import Odom,SE3
+import MainLogic.core.nav.mpc as mpc
+import MainLogic.core.Move as Move
+import numpy as np
+from geometry_msgs.msg import PointStamped
+from std_msgs.msg import String, UInt8MultiArray
+from MainLogic import globalCallback as gcb
+from MainLogic.app.actions import (
+    BUILD_SPEAR_ACTION_TYPE,
+    build_spear_active,
+    build_spear_finish,
+    debug_spear_offset_callback,
+    build_spear_until_finish,
+)
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
@@ -19,15 +31,28 @@ async def async_main():
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.example_serial_callback)
     #往下继续注册
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback,0xAA)
-    sick2Base=Odom(0.0, -0.340, 0.0)
-    map2BaseInit=Odom(0.390, 0.390, 0.0)
-    laser2Base=Odom(0.310, -0.3515, 0.0)
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, 0xAA)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, 0xB3)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
+    sick2Base=Odom(0.0, -0.3511, 0.0)
+    map2BaseInit=Odom(0.352, 4.600, 0.0) # 704 * 780
+    laser2Base=Odom(-0.105, -0.3445, 0.0)
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base, sick_correct_width=6.0)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
+    # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
+    # 这个回调用来检测build_spear动作是否完成
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback, 0xA3) 
+    # 这个回调用来获取二区物块的摆放状态
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("qr_detection_result", gcb.ros_qr_callback, type=String)
+    # 暂时看不懂这个回调的作用
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("spear_status", gcb.spear_callback, type=UInt8MultiArray) 
+    # 订阅这个话题给下位机发送矛头偏移
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/arucopnp/offset_mm", debug_spear_offset_callback, type=PointStamped)
+    # 这个异步函数完成用来矛头对齐
+    await build_spear_until_finish()
     while True:
         await asyncio.sleep(1)
-        print('1')
+
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_action_return_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub('qr_detection_result', gcb.ros_qr_callback, type=String)

@@ -1019,12 +1019,25 @@ void publishRgb(capture_Image_List_t *stream) {
                 for (int idx = 0; idx < 16; ++idx) {
                     T_CL(idx / 4, idx % 4) = static_cast<double>(odom_data->pose_cov[idx]);
                 }
+                // Force last row to be [0, 0, 0, 1] for valid transformation matrix
+                T_CL(3, 0) = 0.0; T_CL(3, 1) = 0.0; T_CL(3, 2) = 0.0; T_CL(3, 3) = 1.0;
                 
                 // Build TIL matrix (4x4) from twist_cov
                 Eigen::Matrix4d T_IL = Eigen::Matrix4d::Identity();
                 for (int idx = 0; idx < 16; ++idx) {
                     T_IL(idx / 4, idx % 4) = static_cast<double>(odom_data->twist_cov[idx]);
                 }
+                // Force last row to be [0, 0, 0, 1] for valid transformation matrix
+                T_IL(3, 0) = 0.0; T_IL(3, 1) = 0.0; T_IL(3, 2) = 0.0; T_IL(3, 3) = 1.0;
+                
+                // Debug print to compare with cloud_reprojection values
+                // static int host_print_count = 0;
+                // if (host_print_count++) {
+                //     std::cout << "=== host_sdk_sample T_CL from odom_data->pose_cov ===" << std::endl;
+                //     std::cout << T_CL << std::endl;
+                //     std::cout << "=== host_sdk_sample T_IL from odom_data->twist_cov ===" << std::endl;
+                //     std::cout << T_IL << std::endl;
+                // }
                 
                 // Extract rotation and translation from T_CL
                 Eigen::Matrix3d RCL = T_CL.block<3, 3>(0, 0);
@@ -1033,7 +1046,20 @@ void publishRgb(capture_Image_List_t *stream) {
                 // Extract rotation and translation from T_IL
                 Eigen::Matrix3d RIL = T_IL.block<3, 3>(0, 0);
                 Eigen::Vector3d TIL = T_IL.block<3, 1>(0, 3);
-                    
+
+                // Debug print extracted RCL and TCL
+                // static int rcl_print_count = 0;
+                // if (rcl_print_count++ ) {
+                //     std::cout << "=== host_sdk_sample RCL (3x3 rotation from T_CL) ===" << std::endl;
+                //     std::cout << RCL << std::endl;
+                //     std::cout << "=== host_sdk_sample TCL (3x1 translation from T_CL) ===" << std::endl;
+                //     std::cout << TCL.transpose() << std::endl;
+                //     std::cout << "=== host_sdk_sample RIL (3x3 rotation from T_IL) ===" << std::endl;
+                //     std::cout << RIL << std::endl;
+                //     std::cout << "=== host_sdk_sample TIL (3x1 translation from T_IL) ===" << std::endl;
+                //     std::cout << TIL.transpose() << std::endl;
+                // }
+                
                 // Save RIL, TIL, RCL, TCL to YAML file
                 static int save_count = 0;
                 static int index_count = 0;
@@ -1096,6 +1122,59 @@ void publishRgb(capture_Image_List_t *stream) {
 
     }
 
+    // Publish WIWC data (T_CL and T_IL extrinsics) as a separate topic
+    void publishWiwc(capture_Image_List_t* stream) {
+        uint32_t data_len = stream->imageList[0].length;
+        if (data_len != sizeof(ros_odom_convert_complete_t)) {
+            return;
+        }
+        
+        ros_odom_convert_complete_t* odom_data = (ros_odom_convert_complete_t*)stream->imageList[0].pAddr;
+        
+#ifdef ROS2
+        auto msg = nav_msgs::msg::Odometry();
+        msg.header.stamp = make_aligned_stamp(odom_data->timestamp_ns, node_);
+        msg.header.frame_id = "odom";
+#else
+        nav_msgs::Odometry msg;
+        msg.header.stamp = make_aligned_stamp(odom_data->timestamp_ns);
+        msg.header.frame_id = "odom";
+#endif
+        
+        // Store T_CL in pose.covariance (first 16 elements)
+        // Force last row to be [0, 0, 0, 1] for valid transformation matrix
+        for (int i = 0; i < 16; ++i) {
+            msg.pose.covariance[i] = odom_data->pose_cov[i];
+        }
+        msg.pose.covariance[12] = 0.0;
+        msg.pose.covariance[13] = 0.0;
+        msg.pose.covariance[14] = 0.0;
+        msg.pose.covariance[15] = 1.0;
+        // Fill remaining with zeros
+        for (int i = 16; i < 36; ++i) {
+            msg.pose.covariance[i] = 0.0;
+        }
+        
+        // Store T_IL in twist.covariance (first 16 elements)
+        // Force last row to be [0, 0, 0, 1] for valid transformation matrix
+        for (int i = 0; i < 16; ++i) {
+            msg.twist.covariance[i] = odom_data->twist_cov[i];
+        }
+        msg.twist.covariance[12] = 0.0;
+        msg.twist.covariance[13] = 0.0;
+        msg.twist.covariance[14] = 0.0;
+        msg.twist.covariance[15] = 1.0;
+        // Fill remaining with zeros
+        for (int i = 16; i < 36; ++i) {
+            msg.twist.covariance[i] = 0.0;
+        }
+        
+#ifdef ROS2
+        wiwc_publisher_->publish(msg);
+#else
+        wiwc_publisher_.publish(msg);
+#endif
+    }
 
     void publishOdometry(capture_Image_List_t* stream, OdometryType odom_type, bool show_path, bool show_camerapose) {
         
@@ -1161,6 +1240,7 @@ void publishRgb(capture_Image_List_t *stream) {
                 msg.twist.twist.angular.y = static_cast<double>(odom_data->angular_velocity[1]) / 1e6;
                 msg.twist.twist.angular.z = static_cast<double>(odom_data->angular_velocity[2]) / 1e6;
 
+                // Copy original covariance data
                 for (int i = 0; i < 36; ++i) {
                     msg.pose.covariance[i] = odom_data->pose_cov[i];
                 }
@@ -1606,6 +1686,7 @@ private:
             compressed_rgb_pub_ = node_->create_publisher<sensor_msgs::msg::CompressedImage>("odin1/image/compressed", qos_small);
             undistort_rgb_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("odin1/image/undistorted", qos_sensor);
             intensity_gray_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("odin1/image/intensity_gray", qos_sensor);
+            wiwc_publisher_ = node_->create_publisher<ros::Odometry>("odin1/wiwc", qos_small);
             tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(node_);
         #endif
     }
@@ -1623,6 +1704,7 @@ private:
             compressed_rgb_pub_ = nh.advertise<sensor_msgs::CompressedImage>("odin1/image/compressed", 100);
             undistort_rgb_pub_ = nh.advertise<sensor_msgs::Image>("odin1/image/undistorted", 100);
             intensity_gray_pub_ = nh.advertise<sensor_msgs::Image>("odin1/image/intensity_gray", 100);
+            wiwc_publisher_ = nh.advertise<ros::Odometry>("odin1/wiwc", 100);
             tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>();
         }
     #endif
@@ -1643,6 +1725,7 @@ private:
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr undistort_rgb_pub_;
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr intensity_gray_pub_;
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_camera_pose_visual_;
+        rclcpp::Publisher<ros::Odometry>::SharedPtr wiwc_publisher_;
         camera_pose_visualization cameraposevisual_;
         std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
     #else
@@ -1661,6 +1744,7 @@ private:
         ros::Publisher compressed_rgb_pub_; // New compressed image publisher
         ros::Publisher undistort_rgb_pub_;
         ros::Publisher intensity_gray_pub_;
+        ros::Publisher wiwc_publisher_;
         std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
     #endif
 };

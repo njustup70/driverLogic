@@ -2,8 +2,7 @@ from rclpy.node import Node
 import asyncio
 from std_msgs.msg import UInt8MultiArray, String
 from tf2_ros import TransformListener, Buffer, TransformBroadcaster, StaticTransformBroadcaster
-from MainLogic.Lib.odomVec import Odom
-
+from MainLogic.Lib.odomVec import Odom,SE3
 
 class rosBridgeNode(Node):
     '''
@@ -60,7 +59,7 @@ class rosBridgeNode(Node):
         if self._serial_callbacks_dict:
             data = bytes(msg.data)
             data_code = bytes([data[1]]) if data else None
-            # print(data_code)
+            #print(data_code)
             data = data[2:] if len(data) > 2 else b''
             if data_code in self._serial_callbacks_dict:
                 callback = self._serial_callbacks_dict[data_code]
@@ -80,12 +79,21 @@ class rosBridgeNode(Node):
         )
         self._tfBroadcaster.sendTransform(tf_msg)
 
-    def publish_static_tf(self, parent_frame: str, child_frame: str, odom: Odom):
-        tf_msg = odom.to_transform_stamped(
-            parent_frame=parent_frame,
-            child_frame=child_frame,
-            stamp=self.get_clock().now().to_msg(),
-        )
+    def publish_static_tf(self, parent_frame: str, child_frame: str, odom: Odom|SE3 ):
+        if isinstance(odom, Odom):
+            tf_msg = odom.to_transform_stamped(
+                parent_frame=parent_frame,
+                child_frame=child_frame,
+                stamp=self.get_clock().now().to_msg(),
+            )
+        elif isinstance(odom, SE3):
+            tf_msg = odom.to_transform_stamped(
+                parent_frame=parent_frame,
+                child_frame=child_frame,
+                stamp=self.get_clock().now().to_msg(),
+            )
+        else:
+            raise TypeError("odom must be of type Odom or SE3")
         self._staticTfBroadcaster.sendTransform(tf_msg)
 
     def register_ros2_pub(self, topic_name, msg_type):

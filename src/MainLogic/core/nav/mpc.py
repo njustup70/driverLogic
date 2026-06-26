@@ -142,6 +142,7 @@ class MPCPathFollower:
     def set_path(self,target_points: np.ndarray,target_yaw: float, ref_speed=None):
         self.is_following_path = True
         #传入的target_points是一个二维数组，形状为 (N, 2)，每行是一个路径点的 (x, y) 坐标
+        assert target_points.shape[1]==2 and len(target_points.shape)==2, "target_points必须是一个二维数组，形状为 (N, 2)"
         x_pts = target_points[:, 0]
         y_pts = target_points[:, 1]
         x_points,y_points,_=self.path_planner.generate_path(x_pts, y_pts, step_cm=10.0)

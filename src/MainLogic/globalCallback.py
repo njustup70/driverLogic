@@ -1,19 +1,29 @@
 '''
 全局回调函数串口接收回调和ros2话题回调
 '''
+import math
 import struct
-from functools import partial
-from MainLogic.Lib.AsyncTools import AsyncVariable
-from MainLogic.app.actions import order_spear, QRRecogInstance
+from MainLogic.app.actions import (
+    BUILD_SPEAR_ACTION_TYPE,
+    QRRecogInstance,
+    build_spear_active,
+    build_spear_finish,
+    order_spear,
+)
 from MainLogic.app.climb_manager import ClimbManagerInstance
-from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
+from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
+from MainLogic.Lib.bytes import turn_to_bytes
 
-def mcu_transmit_callback(data: bytes): # 0xAA
-    """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
-    # odom数据帧：3个float，共12字节
-    _ODOM_FRAME_LEN = 12
-    # sick数据帧：4个float加头3位，尾1位，共20字节
+
+SPEAR_OFFSET_COMMAND = b'\xB1'
+
+def mcu_transmit_callback(data: bytes):
+    """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
+    # odom数据帧：
+    _ODOM_FRAME_PREFIX = b'\xFF\xAA'
+    _ODOM_FRAME_LEN = 14
+    # sick数据帧：
     _SICK_FRAME_LEN = 20
     
     if not data:
@@ -31,6 +41,15 @@ def mcu_transmit_callback(data: bytes): # 0xAA
             print(f"ODOM解析错误: {e}")
         return
 
+
+def sick_callback(data: bytes): # 0xAA
+    """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
+    # sick数据帧：4个float加头3位，尾1位，共20字节
+    _SICK_FRAME_LEN = 20
+    
+    if not data:
+        return
+    
     if len(data) == _SICK_FRAME_LEN:
         sick_header = data[0]
         sick_tail = data[19]
@@ -38,12 +57,14 @@ def mcu_transmit_callback(data: bytes): # 0xAA
         if not sick_valid:
             print(f"SICK数据校验失败")
             return
-        
+      
         sick_data = data[3:19]
         try:
             sick_floats = struct.unpack('<4f', sick_data)
-            distance = 1.0667 * sick_floats[0] - 0.0533
+            distance = sick_floats[0]
+            # print(id(TFManagerInstance), id(TFOdinInstance))
             TFManagerInstance.sick(float(distance))
+            TFOdinInstance.sick(float(distance))
             print(f"SICK数据解析成功: distance={distance:.3f} m")
         except Exception as e:
             print(f"SICK解析错误: {e}")
@@ -53,8 +74,17 @@ def serial_correct_callback(data: bytes): # 0xB2
     correct纠正指令核心处理函数
     帧格式：FF B2 [checksum=0xB2] FF (4 字节)
     """
+    # 检查数据长度和格式
+    if len(data) < 2:
+        # print(f"✗ SLAM correct 指令格式错误：数据长度不足，期望≥2，实际{len(data)}")
+        return False
+    # 检查脱头后的前两个字节：[0xB2, 0xFF]
+    if data[0] != 0xB2 or data[1] != 0xFF:
+        # print(f"✗ SLAM correct 指令格式错误：期望[0xB2, 0xFF]，实际[{data[0]:02x}, {data[1]:02x}]")
+        return False
     try:
         result = TFManagerInstance.apply_sick_initial_yaw_correction()
+        result = TFOdinInstance.apply_sick_initial_yaw_correction()
         if result:
             print("✓ SLAM correct 纠正指令已触发，SICK yaw 纠正成功")
         else:
@@ -72,11 +102,21 @@ def serial_correct_callback(data: bytes): # 0xB2
 #         #print(f"Received serial data: {data}")
 #         pass
 # def serial_action_return_callback(data: bytes):
-#     if data[0:2] == b'\xFF\xFF': # 后面根据帧头改
+#     if data[0:2] == b'\xFF\xFF':
 #         return_statu = data[3:4]
-#         #print(f"回调函数收到串口数据，状态码:{data.hex()}")
 #         serial_action_finish.value = return_statu
-def climb_type_callback(data: bytes): # 0xB1
+
+def serial_action_return_callback(data: bytes):
+    if not build_spear_active.value:
+        return
+    if len(data) < 4:
+        return
+    if data[0:2] == b'\xFF\xFF':  # 后面根据帧头改
+        return_statu = data[3:4]
+        if return_statu == BUILD_SPEAR_ACTION_TYPE:
+            build_spear_finish.value = return_statu
+
+def climb_type_callback(data: bytes):
     """
     
     """
@@ -117,6 +157,22 @@ def climb_type_callback(data: bytes): # 0xB1
 
 def spear_callback(msg):
     order_spear.value = msg.data
+
+
+def spear_offset_callback(msg):
+    if not build_spear_active.value:
+        return
+
+    left_mm = float(msg.point.x)
+    up_mm = float(msg.point.y)
+    if not math.isfinite(left_mm) or not math.isfinite(up_mm):
+        return
+
+    bridge = ros_bridge_module.RosBridgeNodeInstance
+    if bridge is None:
+        return
+
+    bridge.writeBytes(SPEAR_OFFSET_COMMAND + turn_to_bytes([left_mm, up_mm]))
 
 
     

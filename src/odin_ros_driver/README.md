@@ -18,7 +18,7 @@ This driver package provides core functionality for point cloud SLAM application
 
 ## 1. Version
 
-Current version: v0.9.0
+Current version: v0.10.2
 
 Required device firmware version: v0.10.0
 
@@ -36,7 +36,7 @@ Required device firmware version: v0.10.0
 
 ### 2.2 Dependencies
 
-● Opencv >= 4.5.0(recommand 4.5.5/4.8.0. Make sure only one version of opencv is installed)
+● Opencv >= 4.2.0(recommand 4.5.5/4.8.0. Make sure only one version of opencv is installed)
 
 ● yaml-cpp
 
@@ -161,6 +161,8 @@ The operation mode can be configured via the `custom_map_mode` parameter in conf
 #### Odometry mode
 
 Set `custom_map_mode = 0` to enable odometry mode. In this mode, the map frame and odom frame share the same pose.
+
+If the odom data is found to drift, the script command "./set_param.sh algo_reset 1" can be used to dynamically reset the algorithm.
 
 #### SLAM mode
 
@@ -348,11 +350,11 @@ ld: cannot find -llydHostApi or symbol lookup errors
 ROS1 
 ```shell
 rm -rf devel/ build/  
-``` 
+```
 ROS2
 ```shell
 rm -rf devel/ install/ log/ 
-``` 
+```
 2. Re-run script installation
 
 ### 5.3 Docker GUI passthrough failure
@@ -363,7 +365,7 @@ Unable to open X display or No protocol specified
 **Resolution** 
 ```shell
 xhost + #This command enables graphical passthrough to Docker containers
-``` 
+```
 
 ### 5.4 ROS driver exit with get version failed error
 
@@ -480,17 +482,79 @@ This is due to ros driver version mismatch with device firmware version, resulti
 
 Please make sure you are using most up-to-date ros driver and device firmware.
 
+### 5.12 USB device access error (LIBUSB_ERROR_BUSY or LIBUSB_ERROR_ACCESS)
+
+**Error Message**  
+
+```shell
+libusb: error [udev_hotplug_event] ignoring udev action bind
+LIBUSB_ERROR_BUSY
+```
+
+or
+
+```shell
+libusb: error [_get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/xxx/xxx, errno=13
+LIBUSB_ERROR_ACCESS
+```
+
+**Reason**
+
+- **LIBUSB_ERROR_BUSY**: Another process is already using the USB device. This commonly happens when multiple instances of the ROS driver are running, or another application (such as a previous crashed instance) still holds the device handle.
+
+- **LIBUSB_ERROR_ACCESS**: The current user does not have permission to access the USB device. This is typically caused by missing udev rules or insufficient user privileges.
+
+**Resolution** 
+
+For **LIBUSB_ERROR_BUSY**:
+
+1. Check if another instance of the driver is running:
+```shell
+ps aux | grep host_sdk_sample
+```
+
+2. Kill any existing instances:
+```shell
+killall host_sdk_sample
+```
+
+3. If the issue persists, unplug and replug the USB device to reset the device state.
+
+For **LIBUSB_ERROR_ACCESS**:
+
+1. Add udev rules for the device. Create a file `/etc/udev/rules.d/99-odin.rules` with the following content:
+```shell
+SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", MODE="0666", GROUP="plugdev"
+```
+
+2. Reload udev rules:
+```shell
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+3. Alternatively, run the driver with sudo (not recommended for production):
+```shell
+sudo -E ros2 launch odin_ros_driver odin_ros_driver.launch.py
+```
+
+4. Make sure your user is in the `plugdev` group:
+```shell
+sudo usermod -aG plugdev $USER
+```
+Then log out and log back in for the group change to take effect.
+
 ## 6.  Contact Information​​
 
 You can contact our support through support@manifoldtech.cn
 
 To help diagnose the issue, please provide the following details to our FAE engineer:
 
-1. ​Current firmware version​​ 
+1. Current firmware version​​ 
 ```shell
 [device_version_capture]: ros_driver_version: [Version Number]
-``` 
-2. ​Photos of power adapter and converter cable​​ in use.
+```
+2. Photos of power adapter and converter cable​​ in use.
 
 3. Does the issue happen occasionally or consistently?
 
