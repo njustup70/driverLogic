@@ -15,10 +15,12 @@ metadata.yaml
 *.mcap
 *.log
 *.lock
+MvSdkLog/
 rosbag2_*/
 .claude/settings.local.json
 *.svg
 result.json
+*.json
 *.core
 *.csv
 *.npy

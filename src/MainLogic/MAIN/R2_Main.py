@@ -2,7 +2,7 @@
 异步主逻辑和其他函数
 '''
 import asyncio
-from MainLogic.Lib.odomVec import Odom
+import os
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import move_to, TFManagerInstance
 from MainLogic.app.climb_manager import climb, climb_arm_act,check_types ,ClimbManagerInstance
@@ -11,6 +11,9 @@ from std_msgs.msg import UInt8MultiArray, String
 from MainLogic.core.serial_node import start_serial_process
 from MainLogic.Lib.bytes import turn_to_bytes
 
+ZONE2_DEMO_SEED = os.getenv("ZONE2_DEMO_SEED")
+SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/ttyACM0")
+SERIAL_BAUDRATE = int(os.getenv("SERIAL_BAUDRATE", "115200"))
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
     serial_port = '/dev/ttyUSB0'  # 可以根据需要修改串口路径
@@ -62,10 +65,19 @@ async def async_main():
     # await build_spear()
     # await move_to(1.0,1.0,1.0)
 
-async def test():
-    #测试函数
+    result = zone2_model_api.demo_visualize_random_map(
+        seed=seed,
+        show=False,
+        move_cost=move_cost,
+        pick_cost=pick_cost,
+        turn_cost=turn_cost,
+        r1_remove_cost=r1_remove_cost,
+        required_r2_count=required_r2_count,
+    )
+    print(f"[R2_Main] zone2 demo finished: found={result.get('found')} cost={result.get('cost')} image={result.get('image_path')}")
+    zone2_model_api.print_path_debug_info(result)
+    
+    zone2_model_api.visualize_path_result(result, show=True)
+    zone2_model_api.send_mcu_action_frame_to_mcu(result)
     while True:
         await asyncio.sleep(1)
-        #这里的baseLinkOdom必须整个重新赋值，如果用baseLinkOdom.x=...是不会触发更新的
-        TFManagerInstance.baseLinkOdom.value= Odom(TFManagerInstance.baseLinkOdom.x + 0.1, TFManagerInstance.baseLinkOdom.y, TFManagerInstance.baseLinkOdom.yaw)
-        # TFManagerInstance.baseLinkOdom.value.x+=0.1

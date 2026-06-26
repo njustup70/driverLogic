@@ -12,8 +12,8 @@ from MainLogic.core.serial_node import start_serial_process
 
 async def async_main():
     # 启动 rosSerialNode 进程（非阻塞）
-    serial_port = '/dev/ttyACM0'  # 可以根据需要修改串口路径
-    baudrate = 115200  # 可以根据需要修改波特率
+    serial_port = '/dev/ttyUSB0'  # 可以根据需要修改串口路径
+    baudrate = 921600  # 可以根据需要修改波特率
     start_serial_process(serial_port=serial_port, baudrate=baudrate)
     #注册回调
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
@@ -27,8 +27,7 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('/update_exec_req', String)
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_pub('location', String)
 
-    TFManagerInstance.register_tf_chain()
-    asyncio.create_task(TFManagerInstance.tf_update_loop())
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.meilin_map_frame_callback)
 
     asyncio.create_task(test())
     #逻辑实例...,比如移动到某个坐标
