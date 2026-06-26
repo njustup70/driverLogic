@@ -1,133 +1,93 @@
 """zone2_encoder 模块作用：
 
-负责把路径和动作记录编码成二进制帧，供串口或下位机直接消费。
+负责把动作序列编码成二进制帧，供串口或下位机直接消费。
 
 本模块只做"数据编码"，不负责打印和发送；发送逻辑放在 `zone2_sender.py`。
 """
-from __future__ import annotations
+from typing import Any, Dict, List
 
-from MainLogic.core.zone2_model.zone2_helpers import (
-    _encode_path_node,
-    _is_derived_node,
-    _extract_pick_target_from_derived_node,
-    _turn_action_from_headings,
-)
-from MainLogic.core.zone2_model.zone2_format import extract_r1_nodes_on_path
+# =============================================================================
+# 单字节功能码协议
+# =============================================================================
+# 升降
+FUNC_UP_200   = 0x64
+FUNC_DOWN_200 = 0x65
+FUNC_UP_400   = 0x66
+FUNC_DOWN_400 = 0x67
+# 转向
+FUNC_TURN_CCW = 0x68  # 逆时针（正方向）
+FUNC_TURN_CW  = 0x69  # 顺时针（负方向）
+# 取块
+FUNC_PICK_UP_200   = 0x6A
+FUNC_PICK_UP_400   = 0x6B
+FUNC_PICK_DOWN_200 = 0x6C
+FUNC_PICK_DOWN_400 = 0x6D
 
-PATH_NODE_FRAME_HEADER = 0xB5
-MCU_ACTION_FRAME_HEADER = 0xB8
+# delta_z → 升降功能码
+_LIFT_CODE: Dict[int, int] = {
+    200:  FUNC_UP_200,
+    -200: FUNC_DOWN_200,
+    400:  FUNC_UP_400,
+    -400: FUNC_DOWN_400,
+}
 
-MCU_ACTION_TYPE_TURN = 0x01
-MCU_ACTION_TYPE_PICK = 0x02
-MCU_ACTION_TYPE_MOVE = 0x03
-MCU_ACTION_TYPE_R1_LIST = 0x04
+# delta_z → 取块功能码
+_PICK_CODE: Dict[int, int] = {
+    200:  FUNC_PICK_UP_200,
+    -200: FUNC_PICK_DOWN_200,
+    400:  FUNC_PICK_UP_400,
+    -400: FUNC_PICK_DOWN_400,
+}
 
+# turn code → 转向功能码
+_TURN_CODE: Dict[int, int] = {
+    1: FUNC_TURN_CCW,  # 逆时针
+    2: FUNC_TURN_CW,   # 顺时针
+}
 
-def _build_action_payload(result: dict, include_r1_list: bool = False) -> tuple[bytes, int]:
-    """按 path_steps 直接生成动作序列负载。"""
-    path_steps = list(result.get("path_steps", []))
-    if not path_steps:
-        return b"", 0
-
-    payload = bytearray()
-    action_count = 0
-
-    for step in path_steps:
-        u = step.get("from")
-        v = step.get("to")
-        edge_class = str(step.get("edge_class", ""))
-        turn_action = _turn_action_from_headings(step.get("heading_in"), step.get("heading_out"))
-        turn_cost = float(step.get("turn_cost", 0.0))
-        pick_target = _extract_pick_target_from_derived_node(v) if edge_class == "to_derived" or _is_derived_node(v) else 0
-
-        if turn_cost > 0.0 and turn_action != 0 and str(u) != "start":
-            u_code = _encode_path_node(str(u))
-            payload.append(MCU_ACTION_TYPE_TURN)
-            payload.append(u_code)
-            payload.append(turn_action)
-            action_count += 1
-
-        is_pick_step = edge_class == "to_derived" or _is_derived_node(v)
-
-        if is_pick_step:
-            u_code = _encode_path_node(str(u))
-            payload.append(MCU_ACTION_TYPE_PICK)
-            payload.append(u_code)
-            payload.append(pick_target)
-            action_count += 1
-        else:
-            u_code = _encode_path_node(str(u))
-            v_code = _encode_path_node(str(v))
-            payload.append(MCU_ACTION_TYPE_MOVE)
-            payload.append(u_code)
-            payload.append(v_code)
-            action_count += 1
-
-    if include_r1_list:
-        r1_nodes = extract_r1_nodes_on_path(result)
-        if r1_nodes:
-            if len(r1_nodes) > 255:
-                raise ValueError(f"R1 列表过长，数量 {len(r1_nodes)} 超过单帧上限 255")
-            payload.append(MCU_ACTION_TYPE_R1_LIST)
-            payload.append(len(r1_nodes))
-            for nid in r1_nodes:
-                payload.append(_encode_path_node(str(nid)))
-            action_count += 1
-
-    if action_count > 255:
-        raise ValueError(f"动作过多，当前数量 {action_count} 超过单帧上限 255")
-
-    return bytes(payload), action_count
+# 动作类型 → (参数字段, 映射表)
+_ACTION_ENCODERS = {
+    "pick": ("delta_z", _PICK_CODE),
+    "lift": ("delta_z", _LIFT_CODE),
+    "turn": ("code",    _TURN_CODE),
+}
 
 
-def encode_path_frame(path_nodes: list[str], result: dict = None) -> bytes:
-    """把路径节点列表编码成节点帧，并包含R1物块列表。
-    
-    帧格式：[0xB5, 节点总数, ..., 0x04, R1数量, 节点码1, 节点码2, ...]
+# =============================================================================
+# 编码
+# =============================================================================
+def encode_r1_frame(r1_nodes: List[int]) -> bytes:
+    """编码 R1 物块列表帧: [个数, 桩号1, 桩号2, ...] 每字节一个。"""
+    return bytes([len(r1_nodes)]) + bytes(r1_nodes)
+
+
+def encode_action_sequence(actions: List[Dict[str, Any]]) -> bytes:
+    """将动作序列编码为 [长度位 | 功能码...] 的字节串。
+
+    帧格式: [N, code1, code2, ..., codeN]
+      N  = 有效功能码个数（不含 move）
+
+    pick  → 0x6A~0x6D  (按 delta_z)
+    lift  → 0x64~0x67  (按 delta_z)
+    turn  → 0x68~0x69  (按 code)
+    move  → 忽略（升降已合并到 lift）
     """
-    payload = bytearray()
-    
-    # 编码路径节点
-    node_count = len(path_nodes)
-    payload.append(node_count)
-    
-    for node in path_nodes:
-        payload.append(_encode_path_node(node))
-    
-    # 添加R1物块列表分隔符和数据
-    payload.append(MCU_ACTION_TYPE_R1_LIST)  # 0x04
-    
-    # 编码R1物块列表
-    if result:
-        r1_nodes = extract_r1_nodes_on_path(result)
-        if r1_nodes:
-            if len(r1_nodes) > 255:
-                raise ValueError(f"R1 列表过长，数量 {len(r1_nodes)} 超过单帧上限 255")
-            payload.append(len(r1_nodes))
-            for nid in r1_nodes:
-                payload.append(_encode_path_node(str(nid)))
-        else:
-            payload.append(0)
-    else:
-        payload.append(0)
-    
-    return bytes([PATH_NODE_FRAME_HEADER]) + bytes(payload)
+    codes = bytearray()
+    for act in actions:
+        t = act["type"]
+        if t == "move":
+            continue  # 纯水平移动无功能码
+        if t not in _ACTION_ENCODERS:
+            print(f"[encode] 未知动作类型: {t}，跳过")
+            continue
 
+        key, mapping = _ACTION_ENCODERS[t]
+        val = act.get(key, 0)
+        code = mapping.get(val)
+        if code is None:
+            print(f"[encode] 未知 {t} {key}={val}，跳过")
+            continue
+        codes.append(code)
 
-def encode_mcu_action_frame(action_type: int, from_node: str, to_or_code) -> bytes:
-    """把单个动作编码成 MCU 二进制帧。
-    
-    帧格式：[0xB8, 动作类型, 当前节点编码, 目标或代码]
-    
-    - 移动：(0x03, 当前节点编码, 目标位置编码)
-    - 转向：(0x01, 当前节点编码, 转向码)
-    - 拾取：(0x02, 当前节点编码, R2物块的位置编码)
-    """
-    from_node_code = _encode_path_node(from_node)
-    
-    payload = bytearray()
-    payload.append(action_type)
-    payload.append(from_node_code)
-    payload.append(int(to_or_code))
-    
-    return bytes([MCU_ACTION_FRAME_HEADER]) + bytes(payload)
+    # 前面插入长度位
+    return bytes([len(codes)]) + bytes(codes)

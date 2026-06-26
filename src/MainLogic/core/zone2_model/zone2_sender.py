@@ -5,6 +5,8 @@ from MainLogic.core.zone2_model.zone2_helpers import (
     _is_derived_node,
     _turn_action_from_headings,
 )
+from MainLogic.core.zone2_model.zone2_encoder import encode_action_sequence, encode_r1_frame
+from MainLogic.core.zone2_model.zone2_format import extract_r1_nodes_on_path
 
 # =============================================================================
 # 三维坐标常量
@@ -24,52 +26,6 @@ STAKE_3D_INFO: Dict[int, Dict[str, float]] = {
     12: {"x": 7400, "y": 4200, "base_height": 200},
 }
 R2_HEIGHT = 200  # R2 物块额外高度 (mm)
-
-# =============================================================================
-# 单字节功能码协议
-# =============================================================================
-# 升降
-FUNC_UP_200   = 0x64
-FUNC_DOWN_200 = 0x65
-FUNC_UP_400   = 0x66
-FUNC_DOWN_400 = 0x67
-# 转向
-FUNC_TURN_CCW = 0x68  # 逆时针（正方向）
-FUNC_TURN_CW  = 0x69  # 顺时针（负方向）
-# 取块
-FUNC_PICK_UP_200   = 0x6A
-FUNC_PICK_UP_400   = 0x6B
-FUNC_PICK_DOWN_200 = 0x6C
-FUNC_PICK_DOWN_400 = 0x6D
-
-# delta_z → 升降功能码
-_LIFT_CODE: Dict[int, int] = {
-    200:  FUNC_UP_200,
-    -200: FUNC_DOWN_200,
-    400:  FUNC_UP_400,
-    -400: FUNC_DOWN_400,
-}
-
-# delta_z → 取块功能码
-_PICK_CODE: Dict[int, int] = {
-    200:  FUNC_PICK_UP_200,
-    -200: FUNC_PICK_DOWN_200,
-    400:  FUNC_PICK_UP_400,
-    -400: FUNC_PICK_DOWN_400,
-}
-
-# turn code → 转向功能码
-_TURN_CODE: Dict[int, int] = {
-    1: FUNC_TURN_CCW,  # 逆时针
-    2: FUNC_TURN_CW,   # 顺时针
-}
-
-# 动作类型 → (参数字段, 映射表)
-_ACTION_ENCODERS = {
-    "pick": ("delta_z", _PICK_CODE),
-    "lift": ("delta_z", _LIFT_CODE),
-    "turn": ("code",    _TURN_CODE),
-}
 
 # =============================================================================
 # 高度计算
@@ -210,38 +166,22 @@ def determine_start_position(
 
 
 # =============================================================================
-# 编码 & 发送
+# 发送
 # =============================================================================
-def encode_action_sequence(actions: List[Dict[str, Any]]) -> bytes:
-    """将动作序列编码为 [长度位 | 功能码...] 的字节串。
+def send_r1_nodes(r1_nodes: List[int]) -> None:
+    """将 R1 物块列表编码后通过串口发送。
 
-    帧格式: [N, code1, code2, ..., codeN]
-      N  = 有效功能码个数（不含 move）
-
-    pick  → 0x6A~0x6D  (按 delta_z)
-    lift  → 0x64~0x67  (按 delta_z)
-    turn  → 0x68~0x69  (按 code)
-    move  → 忽略（升降已合并到 lift）
+    帧格式: [个数, 桩号1, 桩号2, ...]
     """
-    codes = bytearray()
-    for act in actions:
-        t = act["type"]
-        if t == "move":
-            continue  # 纯水平移动无功能码
-        if t not in _ACTION_ENCODERS:
-            print(f"[encode] 未知动作类型: {t}，跳过")
-            continue
+    from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 
-        key, mapping = _ACTION_ENCODERS[t]
-        val = act.get(key, 0)
-        code = mapping.get(val)
-        if code is None:
-            print(f"[encode] 未知 {t} {key}={val}，跳过")
-            continue
-        codes.append(code)
+    data = encode_r1_frame(r1_nodes)
+    if not data or data[0] == 0:
+        print("[send_r1_nodes] R1 列表为空，不发送")
+        return
 
-    # 前面插入长度位
-    return bytes([len(codes)]) + bytes(codes)
+    print(f"[send_r1_nodes] {r1_nodes} → {data.hex(' ')}")
+    RosBridgeNodeInstance.writeBytes(data)
 
 
 def send_actions(actions: List[Dict[str, Any]]) -> None:
