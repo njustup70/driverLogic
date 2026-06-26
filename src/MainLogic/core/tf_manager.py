@@ -70,12 +70,13 @@ class TFManager:
         # 存储了sick修正增量的变量，用于连续修正时的撤销与更新逻辑
         self._sickYawCorrection = 0.0
 
-    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,laser2Base: Odom):
+    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,laser2Base: Odom,sick_correct_width: float = 0.0):
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
         assert sick2Base is not None and map2BaseInit is not None and laser2Base is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
         self.laser_to_base = laser2Base
         self.mapToBaseInit = map2BaseInit
         self.sickToBaseLink = sick2Base
+        self.sick_correct_width = sick_correct_width
         # 计算 sick 相对车体中心 (base_link) 的坐标和 yaw 角
         # sick2Base 是 sick->base_link 的变换，取逆得到 base_link->sick
         BaseLinktoSick = sick2Base.inverse()
@@ -118,7 +119,7 @@ class TFManager:
         # print(sick_pose.x,sick_pose.y,sick_pose.yaw)
         if self.flag==0:
             # 解超越方程
-            new_yaw_correction =  fsolve(lambda theta:-(6-sick_y*math.cos(theta+self._baseinitodom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.cos(theta+self._baseinitodom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
 
         if self.flag==1:
             new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
