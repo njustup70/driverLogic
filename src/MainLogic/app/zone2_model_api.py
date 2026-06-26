@@ -175,20 +175,11 @@ class Zone2ModelAPI:
         result["image_path"] = image_path
         return result
 
-    def send_path_result_to_mcu(self, result: dict) -> None:
-        send_path_result_to_mcu(result)
-
     def print_path_debug_info(self, result: dict) -> None:
         print_path_debug_info(result)
 
     def format_mcu_action_list(self, result: dict) -> str:
         return format_mcu_action_list(result)
-
-    def encode_mcu_action_frame(self, result: dict) -> bytes:
-        return encode_mcu_action_frame(result)
-
-    def send_mcu_action_frame_to_mcu(self, result: dict) -> None:
-        send_mcu_action_frame_to_mcu(result)
 
     def visualize_path_result(self, result: dict, save_path: str = "/tmp/merlin_random_demo.png", show: bool = True) -> str:
         return visualize_path_result(result, save_path=save_path, show=show)
@@ -201,12 +192,6 @@ __all__ = [
     "Zone2ModelAPI",
     "zone2_model_api",
     "visualize_path_result",
-    "send_path_result_to_mcu",
-    "send_mcu_action_frame_to_mcu",
-    "encode_path_frame",
-    "encode_path_action_frame",
-    "encode_full_path_frame",
-    "encode_mcu_action_frame",
     "format_mcu_action_list",
     "print_path_debug_info",
     "build_path_step_records",
