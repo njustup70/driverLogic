@@ -51,6 +51,19 @@ services:
       - /dev:/dev
     working_dir: "/home/Elaina/ros2_ws"
     entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch rc_bringup R2n.launch.py"]
+  ros2yolo-service:
+    image: elainasuki/rc2026:yolo-ros #cpu镜像
+    container_name: yolo_ros_runtime
+    restart: always
+    <<: *common
+    environment:
+      <<: *common_env
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ros2_opencv_volume:/home/Elaina/yolo
+      - /dev:/dev
+    working_dir: "/home/Elaina/yolo"
+    entrypoint: ["/bin/bash", "-i", "-c", "python3 /home/Elaina/yolo/spear/ros2_arucopnp_serial_node.py"]
   voxel_service:
     image: elainasuki/rc2026:voxel_slam_ros2
     container_name: voxel_slam_ros2_runtime
@@ -64,6 +77,13 @@ services:
     working_dir: "/home/Elaina/slam/VoxelSlam"
     entrypoint: ["/bin/bash", "-i", "-c", "source ~/ros2_ws/install/setup.bash && ros2 launch voxel_slam vxlm_airy.launch.py"]
 volumes:
+  ros2_opencv_volume:
+    driver: local
+    driver_opts:
+      type: none # 表示直接绑定本地目录
+      device: ./.. # 对应原 ./..（当前 Compose 所在目录的上一级）
+      o: bind # 启用绑定模式，保证双向同步
+    name: ros2_opencv_volume
   driverLogic_volume:
     external: true
     name: driverLogic_volume

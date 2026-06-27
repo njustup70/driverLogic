@@ -1,3 +1,11 @@
+'''
+Author: Nagisa 2964793117@qq.com
+Date: 2026-06-26 11:01:15
+LastEditors: Nagisa 2964793117@qq.com
+LastEditTime: 2026-06-27 16:05:58
+FilePath: \driverLogic\src\rc_bringup\launch\R2n.launch.py
+Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+'''
 #!/usr/bin/env python3
 """启动底盘测试：airy + MainLogic(slamMain) + foxglove。"""
 
@@ -20,6 +28,11 @@ def generate_launch_description():
         launch_arguments={
             'use_rviz': 'false',
         }.items(),
+    )
+    hik_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(get_package_share_directory('my_driver'), 'launch', 'hik_camera.launch.py')
+        )
     )
 
     slam_main = ExecuteProcess(
@@ -56,6 +69,7 @@ def generate_launch_description():
         actions=[ros_bag_node]
     )
     ld.add_action(airy_launch)
+    ld.add_action(hik_launch)
     ld.add_action(slam_main)
     ld.add_action(foxglove)
     ld.add_action(ros_bag_action)
