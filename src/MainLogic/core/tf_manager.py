@@ -106,6 +106,24 @@ class TFManager:
         if len(self.sick_buffer) > self.sick_buffer_size:
             self.sick_buffer.pop(0)
 
+    def sickInitYCorrect(self):
+        '''
+        sick初始值修正，直接把sick测量的y值作为车体中心到地图原点的y偏移，适用于车体中心在地图原点的情况
+        '''
+        if not self.sick_buffer:
+            return False
+        sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
+        # sick装左边的情况下场地有一个12cm的初始偏移
+        map2sick_y = self.sick_correct_width - sick_y - 0.12
+        self._mapToSlamInit = Odom(
+            self._mapToSlamInit.x,
+            map2sick_y + self.sickToBaseLink.y,
+            self._mapToSlamInit.yaw
+        )
+        if self.rosBridge is not None:
+            self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
+        self.sick_buffer.clear()
+
     def apply_sick_initial_yaw_correction(self) -> bool:
         """使用 sick 缓存值修正 map->slam_init 的初始 yaw（增量更新，可撤销前次修正）。"""
         if not self.sick_buffer or not self._has_slam_pose:
