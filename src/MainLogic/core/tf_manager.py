@@ -124,6 +124,13 @@ class TFManager:
         if self.flag==1:
             new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
         
+        # 角度修正量过大则认为不可靠，不应用本次修正
+        YAW_CORRECTION_MAX = math.radians(5.0)  # 5度阈值
+        if abs(new_yaw_correction) > YAW_CORRECTION_MAX:
+            print(f"[WARN] new_yaw_correction={math.degrees(new_yaw_correction):.2f}° 超过阈值 {math.degrees(YAW_CORRECTION_MAX):.1f}°，丢弃本次修正")
+            self.sick_buffer.clear()
+            return False
+
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
         print(self._mapToSlamInit)
