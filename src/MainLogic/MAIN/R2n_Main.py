@@ -44,7 +44,7 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
     sick2Base=Odom(0.0, -0.3511, 0.0)
     map2BaseInit=Odom(0.352, 4.600, 0.0) # 704 * 780
-    laser2Base=Odom(-0.105, -0.3445, 0.0)
+    laser2Base=Odom(-0.095, -0.365, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base, sick_correct_width=6.0)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
