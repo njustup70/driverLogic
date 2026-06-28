@@ -14,9 +14,11 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
 from MainLogic.Lib.bytes import turn_to_bytes
+from std_msgs.msg import Float32
 
 
 SPEAR_OFFSET_COMMAND = b'\xB1'
+SICK_DISTANCE_TOPIC = '/state/sick_distance'
 
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
@@ -65,6 +67,10 @@ def sick_callback(data: bytes): # 0xAA
             # print(id(TFManagerInstance), id(TFOdinInstance))
             TFManagerInstance.sick(float(distance))
             TFOdinInstance.sick(float(distance))
+            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
+                SICK_DISTANCE_TOPIC,
+                Float32(data=float(distance))
+            )
             print(f"SICK数据解析成功: distance={distance:.3f} m")
         except Exception as e:
             print(f"SICK解析错误: {e}")
