@@ -214,10 +214,11 @@ class TFManager:
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新，每 100ms 执行一次 slam 更新。"""
         tick_10ms = 0
+        loop = asyncio.get_running_loop()
+        t_next = loop.time()
         while True:
             assert self._tf_chain_registered, 'TF chain is not registered yet!'
             try:
-                
                 if tick_10ms % 10 == 0:
                     self.slam_100ms()
                     self.odom_10ms()
@@ -226,7 +227,8 @@ class TFManager:
             except Exception as e:
                 print(e)
             tick_10ms = (tick_10ms + 1) % 10
-            await asyncio.sleep(0.01)
+            t_next += 0.01
+            await asyncio.sleep(max(0, t_next - loop.time()))
 
 import numpy as np
 class TFOdin:
@@ -409,9 +411,12 @@ class TFOdin:
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([baselink.x, baselink.y, baselink.yaw]))
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新"""
+        loop = asyncio.get_running_loop()
+        t_next = loop.time()
         while True:
             assert self._tf_chain_registered, 'TF chain is not registered yet!'
             self.odom_10ms()
-            await asyncio.sleep(0.01)
+            t_next += 0.01
+            await asyncio.sleep(max(0, t_next - loop.time()))
 TFManagerInstance = TFManager()
 TFOdinInstance=TFOdin()
