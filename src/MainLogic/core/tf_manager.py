@@ -116,17 +116,16 @@ class TFManager:
         # sick装左边的情况下场地有一个12cm的初始偏移
         map2sick_y = self.sick_correct_width - sick_y - 0.12
         self.mapToBaseInit = Odom(self.mapToBaseInit.x, map2sick_y + self.sickToBaseLink.y, self.mapToBaseInit.yaw)
+
         # self._mapToSlamInit = Odom(
         #     self._mapToSlamInit.x,
         #     map2sick_y + self.sickToBaseLink.y,
         #     self._mapToSlamInit.yaw
         # ) @ self.laser_to_base.inverse()
-        
+
         self._mapToSlamInitNominal = self.mapToBaseInit @ self.laser_to_base.inverse()
         self._mapToSlamInit = self._mapToSlamInitNominal
-
-        if self.rosBridge is not None:
-            self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
+        
         self.sick_buffer.clear()
 
     def apply_sick_initial_yaw_correction(self) -> bool:
