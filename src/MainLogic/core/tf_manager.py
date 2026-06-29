@@ -144,7 +144,7 @@ class TFManager:
             new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.cos(theta+self._baseinitodom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
 
         if self.flag==1:
-            new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            new_yaw_correction =  fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw) + self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw) + self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
         
         # 角度修正量过大则认为不可靠，不应用本次修正
         YAW_CORRECTION_MAX = math.radians(5.0)  # 5度阈值
