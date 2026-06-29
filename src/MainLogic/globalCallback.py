@@ -23,10 +23,7 @@ SICK_DISTANCE_TOPIC = '/state/sick_distance'
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
     # odom数据帧：
-    _ODOM_FRAME_PREFIX = b'\xFF\xAA'
-    _ODOM_FRAME_LEN = 14
-    # sick数据帧：
-    _SICK_FRAME_LEN = 20
+    _ODOM_FRAME_LEN = 12
     
     if not data:
         return
@@ -38,7 +35,7 @@ def mcu_transmit_callback(data: bytes):
             #if have nan value
             if any(map(lambda v: not isinstance(v, float) or v != v, [x, y, yaw])):
                 print(f"ODOM数据包含无效值: x={x}, y={y}, yaw={yaw}")
-            # print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
+            print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
@@ -48,7 +45,6 @@ def sick_callback(data: bytes): # 0xAA
     """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
     # sick数据帧：4个float加头3位，尾1位，共20字节
     _SICK_FRAME_LEN = 20
-    
     if not data:
         return
     
