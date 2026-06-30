@@ -100,7 +100,7 @@ from MainLogic.app.actions import (
 )
 from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
+from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.Lib.bytes import turn_to_bytes
 from std_msgs.msg import Empty, Float32, String
 
@@ -112,7 +112,6 @@ SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
-    # odom数据帧：
     _ODOM_FRAME_LEN = 12
     
     if not data:
@@ -122,10 +121,7 @@ def mcu_transmit_callback(data: bytes):
         try:
             x, y, yaw = struct.unpack('<fff', data)
             TFManagerInstance.odom(float(x), float(y), float(yaw))
-            #if have nan value
-            if any(map(lambda v: not isinstance(v, float) or v != v, [x, y, yaw])):
-                print(f"ODOM数据包含无效值: x={x}, y={y}, yaw={yaw}")
-            # print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
+            print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
@@ -150,51 +146,13 @@ def sick_callback(data: bytes): # 0xAA
         sick_data = data[3:19]
         try:
             sick_floats = struct.unpack('<4f', sick_data)
-            left_distance = sick_floats[0]
-            # print(id(TFManagerInstance), id(TFOdinInstance))
-            TFManagerInstance.left_sick(float(left_distance))
-            # TFOdinInstance.sick(float(left_distance))
-            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
-                SICK_LEFT_DISTANCE_TOPIC,
-                Float32(data=float(left_distance))
-            )
-            # print(f"SICK数据解析成功: distance={left_distance:.3f} m")
-
-            right_distance = sick_floats[1]
-            TFManagerInstance.right_sick(float(right_distance))
-            # TFOdinInstance.sick_right(float(right_distance))
-            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
-                SICK_RIGHT_DISTANCE_TOPIC,
-                Float32(data=float(right_distance))
-            )
-            # print(f"SICK右侧数据解析成功: distance={right_distance:.3f} m")
-        except Exception as e:
-            print(f"SICK解析错误: {e}")
-
-def sick_callback(data: bytes): # 0xAA
-    """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
-    # sick数据帧：4个float加头3位，尾1位，共20字节
-    _SICK_FRAME_LEN = 20
-    
-    if not data:
-        return
-    
-    if len(data) == _SICK_FRAME_LEN:
-        sick_header = data[0]
-        sick_tail = data[19]
-        sick_valid = sick_header == sick_tail and ((sum(data[1:19]) & 0xFF) == sick_tail)
-        if not sick_valid:
-            print(f"SICK数据校验失败")
-            return
-      
-        sick_data = data[3:19]
-        try:
-            sick_floats = struct.unpack('<4f', sick_data)
-            distance = 1.0667 * sick_floats[0] - 0.0533
+            distance = 1.0613*sick_floats[0]-0.0407 # sick校正
+            print(id(TFManagerInstance))
             TFManagerInstance.sick(float(distance))
             print(f"SICK数据解析成功: distance={distance:.3f} m")
         except Exception as e:
             print(f"SICK解析错误: {e}")
+
 
 def serial_correct_callback(data: bytes): # 0xB2
     """
@@ -211,7 +169,6 @@ def serial_correct_callback(data: bytes): # 0xB2
         return False
     try:
         result = TFManagerInstance.apply_sick_initial_yaw_correction()
-        result = TFOdinInstance.apply_sick_initial_yaw_correction()
         if result:
             print("✓ SLAM correct 纠正指令已触发，SICK yaw 纠正成功")
         else:

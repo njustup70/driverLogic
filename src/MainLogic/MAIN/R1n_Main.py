@@ -14,15 +14,15 @@ async def async_main():
         await asyncio.sleep(0.05)
 
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.odom_callback, b'\xAA')
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, b'\xAA')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, b'\xB3')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
-    #sick2Base=Odom(-0.3125, -0.495, 0.0) # sick底盘(sick位于底盘的左侧,但在右半场启动)
-    sick2Base=Odom(-0.3125, 0.360, 0.0) # sick底盘(sick位于底盘的右侧,在右半场启动)
+    sick2Base=Odom(-0.3125, -0.495, 0.0) # sick底盘(sick位于底盘的左侧,但在右半场启动)
+    #sick2Base=Odom(-0.3125, 0.360, 0.0) # sick底盘(sick位于底盘的右侧,在右半场启动)
     map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base, 1.2)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     while True:
         #阻塞，无任务
