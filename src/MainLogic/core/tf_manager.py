@@ -146,7 +146,7 @@ class TFManager:
             # 未翻转90度时
             # new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.sin(self._baseinitodom.yaw + theta)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
             # 翻转90度时
-            new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.sin(self._baseinitodom.yaw - theta)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.sin(self._baseinitodom.yaw - theta)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta+3.1415926/2)+self._baseinitodom.y*math.cos(theta+3.1415926/2)+self.mapToBaseInit.y,0)[0]
 
         if self.flag==1:
             new_yaw_correction =  fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw) + self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw) + self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
