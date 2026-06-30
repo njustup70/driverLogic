@@ -232,7 +232,7 @@ async def send_actions_one_by_one(
         False 表示超时或动作序列为空。
     """
     from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
-
+    actions_finish_frame = bytes([0x6e])  # 动作序列结束帧
     # 1) 编码整个动作序列，得到 [N, code1, code2, ..., codeN]
     data = encode_action_sequence(actions)
     if not data or data[0] == 0:
@@ -261,5 +261,6 @@ async def send_actions_one_by_one(
             return False
         print(f"[send_actions] 第 {i + 1}/{total} 帧收到 FF 6F ✓")
 
-    print(f"[send_actions] 全部 {total} 帧发送完成 ✓")
+    RosBridgeNodeInstance.writeBytes(actions_finish_frame)
+    print("[send_actions] 所有帧发送完成，动作序列结束帧已发送")
     return True
