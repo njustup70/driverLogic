@@ -212,7 +212,7 @@ class TFManager:
         base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
         sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
         print(sick_pose.x,sick_pose.y,sick_pose.yaw)
-        if self.flag==0:
+        if self.sick_flag==0:
             # 解超越方程
             # y_real=fsolve
             def calculate_y_real(theta):
@@ -270,11 +270,12 @@ class TFManager:
         fused_base = self._mapToSlamInit @ self._slamInitToOdom @ wheel_pose
         self._mapToBase = fused_base
         self.baseLinkOdom.value = fused_base
-        #print(f"is:{fused_base.x}")
-        self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y, fused_base.yaw]))
+        # 出口镜像: 蓝场(start_flag=-1)时 y/yaw 取反，下位机与监控统一看到红场坐标
+        sf = self.start_flag
+        self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([fused_base.x, fused_base.y * sf, fused_base.yaw * sf]))
         # 发布 Vector3Stamped 话题
         odom_raw=Vector3(x=wheel_pose.x, y=wheel_pose.y, z=wheel_pose.yaw)
-        odom_msg = Vector3(x=fused_base.x, y=fused_base.y, z=fused_base.yaw)
+        odom_msg = Vector3(x=fused_base.x, y=fused_base.y * sf, z=fused_base.yaw * sf)
         self.rosBridge.publish_ros2(BASE_LINK_ODOM_TOPIC, odom_msg)
         self.rosBridge.publish_ros2('/state/odom_raw',odom_raw)
         # print(f"{self._baseinitodom.x},{self._baseinitodom.y},{self._baseinitodom.yaw}")
