@@ -1,16 +1,26 @@
 '''
 全局回调函数串口接收回调和ros2话题回调
 '''
+import asyncio
 import struct
 from MainLogic.app.actions import order_spear, QRRecogInstance
 from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.app.merlin_map_solver_debug import run_solver_on_states
 from MainLogic.core.tf_manager import TFManagerInstance
+from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 from typing import List
-from MainLogic.app.zone2_model_api import generate_actions_from_result, determine_start_position, encode_action_sequence, send_actions, send_r1_nodes, extract_r1_nodes_on_path
+from MainLogic.app.zone2_model_api import generate_actions_from_result, determine_start_position, encode_action_sequence, send_actions, send_r1_nodes, extract_r1_nodes_on_path,send_actions_one_by_one
+from MainLogic.core.zone2_model.zone2_sender import action_ack_event
 _MEILIN_MAP_FRAME_PREFIX = b'\xff\x0d\xa2'
 _MEILIN_MAP_FRAME_LEN = 15
 
+def action_callback(data: bytes):
+    """动作执行完成回调函数，收到 FF 6F 帧时触发 ack_event 通知下一帧发送"""
+    if not data:
+        return
+    if data[0:2] == b'\xFF\x6F':
+        print(f"动作执行完成回调函数收到数据: {data.hex()}")
+        action_ack_event.set()
 
 def _decode_meilin_map_states(data: bytes) -> List[str]:
     """解析 14 字节梅林地图编码帧，返回 12 个桩位状态。
@@ -67,10 +77,10 @@ def meilin_map_frame_callback(data: bytes):
         start_pos = determine_start_position(actions, approach_distance=500)
         print(f"起始坐标: x={start_pos[0]:.1f}, y={start_pos[1]:.1f}")
         encode_action_sequence(actions)
-        send_actions(actions)
+        # send_actions(actions)
+        asyncio.run_coroutine_threadsafe(send_actions_one_by_one(actions, timeout=10.0), RosBridgeNodeInstance._loop)
         R1 = extract_r1_nodes_on_path(result)
         send_r1_nodes(R1)
-        
         return True
     except Exception as e:
         print(f"梅林地图编码帧处理错误: {e}")

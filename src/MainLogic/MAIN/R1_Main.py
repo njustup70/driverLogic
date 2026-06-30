@@ -19,4 +19,5 @@ async def async_main():
     assert ros_bridge_module.RosBridgeNodeInstance is not None, "RosBridgeNodeInstance is not initialized yet!"
 
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.meilin_map_frame_callback)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.action_callback)
 

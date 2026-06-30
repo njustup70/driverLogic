@@ -1,3 +1,5 @@
+import asyncio
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 from MainLogic.core.zone2_model.zone2_helpers import (
@@ -7,6 +9,11 @@ from MainLogic.core.zone2_model.zone2_helpers import (
 )
 from MainLogic.core.zone2_model.zone2_encoder import encode_action_sequence, encode_r1_frame
 from MainLogic.core.zone2_model.zone2_format import extract_r1_nodes_on_path
+
+# 动作完成确认事件：action_callback 收到 FF 6F 帧时 set，send_actions_one_by_one 等待此事件
+# 使用 threading.Event 而非 asyncio.Event，因为 action_callback 在 ROS2 回调线程中执行，
+# threading.Event 天然线程安全，set() 后 run_in_executor 中的 wait() 立即返回，无调度延迟
+action_ack_event = threading.Event()
 
 # =============================================================================
 # 三维坐标常量
@@ -185,7 +192,7 @@ def send_r1_nodes(r1_nodes: List[int]) -> None:
 
 
 def send_actions(actions: List[Dict[str, Any]]) -> None:
-    """将动作序列编码后一次性通过串口发送。
+    """将动作序列编码后一次性通过串口发送（同步版本，不等待响应）。
 
     发送链路:
       RosBridgeNodeInstance.writeBytes() → serial_tx 话题 → serial_node → 物理串口
@@ -199,3 +206,60 @@ def send_actions(actions: List[Dict[str, Any]]) -> None:
 
     print(f"[send_actions] {len(actions)} 个动作 → {data.hex(' ')}")
     RosBridgeNodeInstance.writeBytes(data)
+
+
+async def send_actions_one_by_one(
+    actions: List[Dict[str, Any]],
+    timeout: float = 10.0,
+) -> bool:
+    """逐帧发送动作序列，每发送一帧等待下位机回复 0x6F 后再发下一帧。
+
+    通信协议:
+      - 发送帧格式: [1, 功能码]  (每帧一个动作)
+      - 下位机成功执行后回复: 0x6F
+      - 超时未收到 0x6F 则终止发送并返回 False
+
+    Args:
+        actions: 动作列表，每项为 dict:
+          {"type": "turn", "from": "1", "code": 1}
+          {"type": "pick", "from": "1", "target": 2, "delta_z": 400}
+          {"type": "lift", "from": "1", "to": "4", "delta_z": 200}
+          {"type": "move", "from": "1", "to": "4"}
+        timeout: 每帧等待响应的超时时间（秒）。
+
+    Returns:
+        True 表示所有帧均成功发送并收到 0x6F 响应。
+        False 表示超时或动作序列为空。
+    """
+    from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
+
+    # 1) 编码整个动作序列，得到 [N, code1, code2, ..., codeN]
+    data = encode_action_sequence(actions)
+    if not data or data[0] == 0:
+        print("[send_actions] 动作序列为空，不发送")
+        return False
+
+    total = data[0]  # 功能码个数
+    codes = data[1:]  # 功能码列表
+
+    print(f"[send_actions] 共 {total} 帧，开始逐帧发送...")
+
+    for i, code in enumerate(codes):
+        action_ack_event.clear()
+
+        # 构造单帧: [功能码]
+        frame = bytes([code])
+        print(f"[send_actions] 发送第 {i + 1}/{total} 帧: {frame.hex(' ')}")
+        RosBridgeNodeInstance.writeBytes(frame)
+
+        # 等待 action_callback 收到 FF 6F 后 set action_ack_event
+        # threading.Event.wait(timeout) 返回 True=已set, False=超时
+        loop = asyncio.get_running_loop()
+        acked = await loop.run_in_executor(None, action_ack_event.wait, timeout)
+        if not acked:
+            print(f"[send_actions] 第 {i + 1}/{total} 帧超时 {timeout}s 未收到 FF 6F，终止发送")
+            return False
+        print(f"[send_actions] 第 {i + 1}/{total} 帧收到 FF 6F ✓")
+
+    print(f"[send_actions] 全部 {total} 帧发送完成 ✓")
+    return True
