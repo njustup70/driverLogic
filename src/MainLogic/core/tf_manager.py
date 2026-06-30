@@ -35,8 +35,8 @@ class TFManager:
         if getattr(self, '_is_initialized', False):
                     return
         self._is_initialized = True
-        # sick纠正场地分类Flag
-        self.flag = 0 #（0表示红场，1表示蓝场）
+        # sick纠正选择墙体分边Flag
+        self.flag = 0 #（0表示左侧场，1表示右侧场）
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
         # 坐标系固定配置（不使用 ROS2 参数）
@@ -143,7 +143,10 @@ class TFManager:
         print(sick_pose.x,sick_pose.y,sick_pose.yaw)
         if self.flag==0:
             # 解超越方程
-            new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.cos(theta+self._baseinitodom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            # 未翻转90度时
+            # new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.sin(self._baseinitodom.yaw + theta)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            # 翻转90度时
+            new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.sin(self._baseinitodom.yaw - theta)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
 
         if self.flag==1:
             new_yaw_correction =  fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw) + self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw) + self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
