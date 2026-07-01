@@ -207,11 +207,11 @@ class TFManager:
             return False
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
         #先干掉纠正
-        #self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,0.0)
+        self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,0.0)
         # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
-        base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
-        sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
-        print(sick_pose.x,sick_pose.y,sick_pose.yaw)
+        #base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
+        #sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
+        #print(sick_pose.x,sick_pose.y,sick_pose.yaw)
         if self.sick_flag==0:
             # 解超越方程
             # y_real=fsolve
@@ -247,8 +247,8 @@ class TFManager:
         # nominal_yaw = float(self._mapToSlamInit.yaw - self._sickYawCorrection)
         
         print(self._mapToSlamInit)
-        self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
-        #self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,new_yaw_correction)
+        #self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
+        self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,new_yaw_correction)
         print(self._mapToSlamInit)
 
         self._sickYawCorrection = new_yaw_correction

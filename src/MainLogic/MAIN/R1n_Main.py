@@ -21,7 +21,12 @@ async def async_main():
     
     # 注册红蓝场标志位
     TFManagerInstance.start_flag = 1 # 红场=1, 蓝场=-1
-    TFManagerInstance.sick_flag = 0 # sick纠正方向
+
+    if TFManagerInstance.start_flag == 1:
+        TFManagerInstance.sick_flag = 0 # sick纠正方向
+    else:
+        TFManagerInstance.sick_flag = 1 # sick纠正方向
+    
     sf = TFManagerInstance.start_flag
 
     sick2Base=Odom(-0.3125, -0.495, 0.0) # sick底盘(sick位于底盘的左侧,但在右半场启动)
