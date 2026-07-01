@@ -216,38 +216,19 @@ class TFManager:
             # 解超越方程
             # y_real=fsolve
             def calculate_y_real(theta):
-                return 6.0-0.39
-                #return (
-                #    self.sick_correct_width
-                #    - sick_y * math.cos(theta + self._baseinitodom.yaw)
-                #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
-                #)
-            dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
-            # dyaw =  self._baseinitodom.yaw - math.pi/2 - theta
-        # elif self.sick_direction_flag==1:
-            # dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
-            print(f"{-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(self._baseinitodom.yaw+self._baseinitYaw)}")
-        if self.sick_direction_flag==1:
-            dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
-            
-        else:
-            self.left_sick_buffer.clear()
-            self.right_sick_buffer.clear()
-            return False
-        print(f"dyaw={math.degrees(dyaw):.2f}°")
-        # 角度修正量过大则认为不可靠，不应用本次修正
-        # YAW_CORRECTION_MAX = math.radians(5.0)  # 5度阈值
-        # if abs(dyaw) > YAW_CORRECTION_MAX:
-        #     print(f"[WARN] dyaw={math.degrees(dyaw):.2f}° 超过阈值 {math.degrees(YAW_CORRECTION_MAX):.1f}°，丢弃本次修正")
-        #     self.left_sick_buffer.clear()
-        #     self.right_sick_buffer.clear()
-        #     return False
+                return 0.45
+                return (
+                    self.sick_correct_width 
+                    - sick_y * math.cos(theta + self._baseinitodom.yaw) 
+                    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
+                )
+            new_yaw_correction =  fsolve(lambda theta:-calculate_y_real(theta)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
 
         # # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         # nominal_yaw = float(self._mapToSlamInit.yaw - self._sickYawCorrection)
         
         print(self._mapToSlamInit)
-        #self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
+        # self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
         self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,new_yaw_correction)
         print(self._mapToSlamInit)
 
