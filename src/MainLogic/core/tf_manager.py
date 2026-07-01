@@ -217,11 +217,11 @@ class TFManager:
             # y_real=fsolve
             def calculate_y_real(theta):
                 return 0.45
-                return (
-                    self.sick_correct_width 
-                    - sick_y * math.cos(theta + self._baseinitodom.yaw) 
-                    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
-                )
+                #return (
+                #    self.sick_correct_width 
+                #    - sick_y * math.cos(theta + self._baseinitodom.yaw) 
+                #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
+                #)
             new_yaw_correction =  fsolve(lambda theta:-calculate_y_real(theta)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
 
         # # 从当前 map->slam_init 中撤销旧修正，再应用新修正。

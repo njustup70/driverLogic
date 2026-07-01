@@ -35,7 +35,7 @@ async def async_main():
     else:
         map2BaseInit=Odom(0.450, -0.5317, 0.0) # 地图起点(0.451,0.453) 0.9817-0.450=0.5317
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base, 1.2)
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     while True:
         #阻塞，无任务
