@@ -80,7 +80,7 @@ class TFManager:
         # 含sick修正的 map->slam_init 位姿中间变量，其中包含了地图原点到车体中心偏移
         # 存储了sick修正增量的变量，用于连续修正时的撤销与更新逻辑
 
-    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,laser2Base: Odom,sick_correct_width: float =0.0):
+    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,Base2laser: Odom,sick_correct_width: float =0.0):
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
         assert sick2Base is not None and map2BaseInit is not None and Base2laser is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
         self.laser_to_base = Base2laser.inverse()

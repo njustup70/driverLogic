@@ -1,7 +1,7 @@
 from MainLogic import globalCallback as gcb
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
-import asyncio
+import asyncio,math
 from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.Lib.odomVec import Odom
 async def async_main():
@@ -35,7 +35,8 @@ async def async_main():
     else:
         map2BaseInit=Odom(0.450, -0.5317, 0.0) # 地图起点(0.451,0.453) 0.9817-0.450=0.5317
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base)
+    base2laser=Odom(0.4775,-0.345, 1.6*math.pi/180) # 雷达底盘
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     while True:
         #阻塞，无任务
