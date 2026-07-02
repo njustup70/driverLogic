@@ -20,7 +20,7 @@ async def async_main():
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     
     # 注册红蓝场标志位
-    TFManagerInstance.start_flag = 1 # 红场=1, 蓝场=-1
+    TFManagerInstance.start_flag = 1 # 红场=1, 蓝场=-1, 红场三区=2, 蓝场三区=-2
 
     if TFManagerInstance.start_flag == 1:
         TFManagerInstance.sick_flag = 0 # sick纠正方向
@@ -33,8 +33,13 @@ async def async_main():
     if sf == 1:
         map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453) 
         #map2BaseInit=Odom(0.450, 0.53170, -90.0*math.pi/180) # 地图起点(0.451,0.453) 90 clockwise
-    else:
+        map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
+    elif sf == -1:
         map2BaseInit=Odom(0.450, -0.5317, 0.0) # 地图起点(0.451,0.453) 0.9817-0.450=0.5317
+    elif sf == 2:
+        map2BaseInit=Odom(11.480, 0.450, 0.0) # 三区技能赛地图起点 12-0.52=11.48
+    else:
+        map2BaseInit=Odom(11.480, -0.5317, 0.0) # 三区技能赛地图起点 12-0.52=11.48
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
     base2laser=Odom(0.4775,-0.345, 1.6*math.pi/180) # 雷达底盘
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser)
