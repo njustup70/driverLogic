@@ -18,7 +18,8 @@ from std_msgs.msg import Float32
 
 
 SPEAR_OFFSET_COMMAND = b'\xB1'
-SICK_DISTANCE_TOPIC = '/state/sick_distance'
+SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
+SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
@@ -59,15 +60,24 @@ def sick_callback(data: bytes): # 0xAA
         sick_data = data[3:19]
         try:
             sick_floats = struct.unpack('<4f', sick_data)
-            distance = sick_floats[0]
+            left_distance = sick_floats[0]
             # print(id(TFManagerInstance), id(TFOdinInstance))
-            TFManagerInstance.sick(float(distance))
-            TFOdinInstance.sick(float(distance))
+            TFManagerInstance.sick(float(left_distance))
+            # TFOdinInstance.sick(float(left_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
-                SICK_DISTANCE_TOPIC,
-                Float32(data=float(distance))
+                SICK_LEFT_DISTANCE_TOPIC,
+                Float32(data=float(left_distance))
             )
-            print(f"SICK数据解析成功: distance={distance:.3f} m")
+            print(f"SICK数据解析成功: distance={left_distance:.3f} m")
+
+            right_distance = sick_floats[1]
+            TFManagerInstance.sick_right(float(right_distance))
+            # TFOdinInstance.sick_right(float(right_distance))
+            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
+                SICK_RIGHT_DISTANCE_TOPIC,
+                Float32(data=float(right_distance))
+            )
+            print(f"SICK右侧数据解析成功: distance={right_distance:.3f} m")
         except Exception as e:
             print(f"SICK解析错误: {e}")
 
