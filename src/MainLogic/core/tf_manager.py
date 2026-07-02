@@ -99,11 +99,17 @@ class TFManager:
         """码盘数据入口：更新 odom->base_link。"""
         self._odomToBase = Odom(x, y, yaw)
 
-    def sick(self, sick_y: float):
+    def left_sick(self, sick_y: float):
         """SICK 数据入口：输入侧向测距值（单位米）。"""
-        self.sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
-        if len(self.sick_buffer) > self.sick_buffer_size:
-            self.sick_buffer.pop(0)
+        self.left_sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
+        if len(self.left_sick_buffer) > self.sick_buffer_size:
+            self.left_sick_buffer.pop(0)
+
+    def right_sick(self, sick_y: float):
+        """SICK 数据入口：输入侧向测距值（单位米）。"""
+        self.right_sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
+        if len(self.right_sick_buffer) > self.sick_buffer_size:
+            self.right_sick_buffer.pop(0)
 
     def sickInitYCorrect(self):
         '''
@@ -140,6 +146,7 @@ class TFManager:
         base_without_prev = Odom(0,0,-float(self._sickYawCorrection)) @ self.baseLinkOdom.value
         sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
         print(sick_pose.x,sick_pose.y,sick_pose.yaw)
+        theta = math.acos(6/(self.left_sick + self.right_sick + self.sick_dist_to_base*2))
         if self.flag==0:
             # 解超越方程
             # y_real=fsolve
@@ -150,15 +157,16 @@ class TFManager:
                 #    - sick_y * math.cos(theta + self._baseinitodom.yaw)
                 #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
                 #)
-            dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
-
+            # dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            dyaw = self._baseinitodom.yaw - math.pi/2 - theta
         elif self.flag==1:
             dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
 
         else:
-            self.sick_buffer.clear()
+            self.left_sick_buffer.clear()
+            self.right_sick_buffer.clear()
             return False
-        
+        print(f"dyaw={math.degrees(dyaw):.2f}°")
         # 角度修正量过大则认为不可靠，不应用本次修正
         YAW_CORRECTION_MAX = math.radians(5.0)  # 5度阈值
         if abs(dyaw) > YAW_CORRECTION_MAX:
