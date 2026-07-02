@@ -31,7 +31,8 @@ async def async_main():
 
     sick2Base=Odom(-0.3125, -0.495, 0.0) # sick底盘(sick位于底盘的左侧,但在右半场启动)
     if sf == 1:
-        map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
+        map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453) 
+        #map2BaseInit=Odom(0.450, 0.53170, -90.0*math.pi/180) # 地图起点(0.451,0.453) 90 clockwise
     else:
         map2BaseInit=Odom(0.450, -0.5317, 0.0) # 地图起点(0.451,0.453) 0.9817-0.450=0.5317
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
