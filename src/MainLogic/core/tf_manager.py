@@ -66,14 +66,12 @@ class TFManager:
         self.sick_buffer_size = 10
         self.sick_buffer: list[float] = []
         # 含sick修正的 map->slam_init 位姿中间变量，其中包含了地图原点到车体中心偏移
-        self._mapToSlamInitNominal = Odom(0.0, 0.0, 0.0)
         # 存储了sick修正增量的变量，用于连续修正时的撤销与更新逻辑
-        self._sickYawCorrection = 0.0
 
-    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,laser2Base: Odom,sick_correct_width: float = 0.0):
+    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,Base2laser: Odom,sick_correct_width: float =0.0):
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
-        assert sick2Base is not None and map2BaseInit is not None and laser2Base is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
-        self.laser_to_base = laser2Base
+        assert sick2Base is not None and map2BaseInit is not None and Base2laser is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
+        self.laser_to_base = Base2laser.inverse()
         self.mapToBaseInit = map2BaseInit
         self.sickToBaseLink = sick2Base
         self.sick_correct_width = sick_correct_width
@@ -89,9 +87,10 @@ class TFManager:
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
-        self._mapToSlamInitNominal = self.mapToBaseInit @ self.laser_to_base.inverse()
-        self._mapToSlamInit = self._mapToSlamInitNominal
+        self._mapToSlamInit = self.mapToBaseInit @ self.laser_to_base.inverse()
         self._sickYawCorrection = 0.0
+        self._baseinitYaw=(self._mapToSlamInit@self.laser_to_base).yaw
+        self._slaminitYaw=self._mapToSlamInit.yaw
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
@@ -133,23 +132,27 @@ class TFManager:
         if not self.sick_buffer or not self._has_slam_pose:
             return False
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
-
-        #先干掉纠正
-        # self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,0.0)
-
+        self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw)
+        #在当前座标系下求BaseInit->Base的值
+        baseinit2base=self.laser_to_base.inverse()@self._slamBaseOdom
         # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
         base_without_prev = Odom(0,0,-float(self._sickYawCorrection)) @ self.baseLinkOdom.value
         sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
         print(sick_pose.x,sick_pose.y,sick_pose.yaw)
         if self.flag==0:
             # 解超越方程
-            # 未翻转90度时
-            # new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.sin(self._baseinitodom.yaw + theta)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
-            # 翻转90度时
-            new_yaw_correction = float(fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.cos(self._baseinitodom.yaw - theta-math.pi/2)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta+math.pi/2)+self._baseinitodom.y*math.cos(theta+math.pi/2)+self.mapToBaseInit.y,0)[0])
+            # y_real=fsolve
+            def calculate_y_real(theta):
+                return 0.45
+                #return (
+                #    self.sick_correct_width 
+                #    - sick_y * math.cos(theta + self._baseinitodom.yaw) 
+                #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
+                #)
+            dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
 
-        if self.flag==1:
-            new_yaw_correction =  float(fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw) + self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw) + self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0])
+        if self.sick_flag==1:
+            dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
         
         # 角度修正量过大则认为不可靠，不应用本次修正
         YAW_CORRECTION_MAX = math.radians(5.0)  # 5度阈值
@@ -161,13 +164,11 @@ class TFManager:
         # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
         nominal_yaw = float(self._mapToSlamInit.yaw - self._sickYawCorrection)
         print(self._mapToSlamInit)
-
-        # 右乘：先撤销旧修正(-old)，再应用新修正(+new)，纯旋转不影响 x,y
-        self._mapToSlamInit = self._mapToSlamInit @ Odom(0, 0, -float(self._sickYawCorrection)) @ Odom(0, 0, new_yaw_correction)
-
+        #self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
+        self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw+dyaw)
+        self._mapToSlamInit=self.mapToBaseInit@self.laser_to_base.inverse()
         print(self._mapToSlamInit)
 
-        self._sickYawCorrection = new_yaw_correction  # 已经是 Python float
 
         if self.rosBridge is not None:
             self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
