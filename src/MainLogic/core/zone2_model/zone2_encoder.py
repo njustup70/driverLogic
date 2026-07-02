@@ -90,4 +90,4 @@ def encode_action_sequence(actions: List[Dict[str, Any]]) -> bytes:
         codes.append(code)
 
     # 前面插入长度位
-    return bytes([len(codes)]) + bytes(codes)
+    return bytes([len(codes)]) + bytes([0x91]) + bytes(codes)

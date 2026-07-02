@@ -77,8 +77,8 @@ def meilin_map_frame_callback(data: bytes):
         start_pos = determine_start_position(actions, approach_distance=500)
         print(f"起始坐标: x={start_pos[0]:.1f}, y={start_pos[1]:.1f}")
         encode_action_sequence(actions)
-        # send_actions(actions)
-        asyncio.run_coroutine_threadsafe(send_actions_one_by_one(actions, timeout=10.0), RosBridgeNodeInstance._loop)
+        send_actions(actions)
+        # asyncio.run_coroutine_threadsafe(send_actions_one_by_one(actions, timeout=10.0), RosBridgeNodeInstance._loop)
         R1 = extract_r1_nodes_on_path(result)
         send_r1_nodes(R1)
         return True
