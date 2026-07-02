@@ -208,7 +208,7 @@ class TFManager:
         sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
         self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw)
         #在当前座标系下求BaseInit->Base的值
-        baseinit2base=self.mapToBaseInit@self.laser_to_base.inverse()@self._slamBaseOdom
+        baseinit2base=self.laser_to_base.inverse()@self._slamBaseOdom
         # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
         #base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
         #sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
