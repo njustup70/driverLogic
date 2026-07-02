@@ -124,8 +124,9 @@ class TFManager:
 
         self._mapToSlamInitNominal = self.mapToBaseInit @ self.laser_to_base.inverse()
         self._mapToSlamInit = self._mapToSlamInitNominal
-        
+
         self.sick_buffer.clear()
+        return True
 
     def apply_sick_initial_yaw_correction(self) -> bool:
         """使用 sick 缓存值修正 map->slam_init 的初始 yaw（增量更新，可撤销前次修正）。"""
@@ -145,24 +146,29 @@ class TFManager:
             def calculate_y_real(theta):
                 return 0.45
                 #return (
-                #    self.sick_correct_width 
-                #    - sick_y * math.cos(theta + self._baseinitodom.yaw) 
+                #    self.sick_correct_width
+                #    - sick_y * math.cos(theta + self._baseinitodom.yaw)
                 #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
                 #)
             dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
 
-        if self.sick_flag==1:
+        elif self.flag==1:
             dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+
+        else:
+            self.sick_buffer.clear()
+            return False
         
         # 角度修正量过大则认为不可靠，不应用本次修正
         YAW_CORRECTION_MAX = math.radians(5.0)  # 5度阈值
-        if abs(new_yaw_correction) > YAW_CORRECTION_MAX:
-            print(f"[WARN] new_yaw_correction={math.degrees(new_yaw_correction):.2f}° 超过阈值 {math.degrees(YAW_CORRECTION_MAX):.1f}°，丢弃本次修正")
+        if abs(dyaw) > YAW_CORRECTION_MAX:
+            print(f"[WARN] dyaw={math.degrees(dyaw):.2f}° 超过阈值 {math.degrees(YAW_CORRECTION_MAX):.1f}°，丢弃本次修正")
             self.sick_buffer.clear()
             return False
 
-        # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
-        nominal_yaw = float(self._mapToSlamInit.yaw - self._sickYawCorrection)
+        # # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
+        # nominal_yaw = float(self._mapToSlamInit.yaw - self._sickYawCorrection)
+        
         print(self._mapToSlamInit)
         #self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
         self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw+dyaw)
@@ -238,7 +244,6 @@ class TFManager:
             t_next += 0.01
             await asyncio.sleep(max(0, t_next - loop.time()))
 
-import numpy as np
 class TFOdin:
     _instance = None  # 存放唯一实例的私有类属性
     def __new__(cls, *args, **kwargs):
@@ -352,6 +357,8 @@ class TFOdin:
         map2sick_y=6.0-sick_y-0.12
         self._mapToOdinInit = Odom(
             self._mapToOdinInit.x,map2sick_y+self._sick_to_base.y,self._mapToOdinInit.yaw)
+        self.sick_buffer.clear()
+        return True
         
     def odom_10ms(self):
         """10ms 更新：发布 odom/base, map/odom, 计算 map/base 并下发到下位机。"""
