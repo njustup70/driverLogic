@@ -142,10 +142,10 @@ def generate_actions_from_result(
 def determine_start_position(
     actions: List[Dict[str, Any]],
     approach_distance: float = 500.0,
-) -> Tuple[float, float]:
-    """根据动作序列推算机器人起始坐标 (x, y)。
+) -> Optional[int]:
+    """根据动作序列推算第一个目标桩的编号。
 
-    起始点位于第一个目标桩正前方 approach_distance 处。
+    返回第一个 move/pick 动作的目标桩号，若无法确定则返回 None。
     """
     first_target: Optional[str] = None
     for act in actions:
@@ -154,7 +154,7 @@ def determine_start_position(
             break
 
     if first_target is None:
-        return (0.0, 0.0)
+        return None
 
     # 解析桩号（兼容衍生节点 D_1_to_2）
     if first_target.startswith("D_"):
@@ -166,10 +166,38 @@ def determine_start_position(
         stake_id = None
 
     if stake_id is None or stake_id not in STAKE_3D_INFO:
-        return (0.0, 0.0)
+        return None
 
-    stake = STAKE_3D_INFO[stake_id]
-    return (stake["x"] - approach_distance, stake["y"])
+    return stake_id
+
+
+def determine_column_stake_id(actions: List[Dict[str, Any]]) -> Optional[int]:
+    """提取取块后第一个 move/lift 动作的目标桩号。
+
+    从第一个 pick 动作之后开始扫描，找到第一个 move 或 lift 动作，
+    返回其目标桩号（to 字段）。若无法确定则返回 None。
+    """
+    found_pick = False
+    for act in actions:
+        t = act.get("type")
+        if t == "pick":
+            found_pick = True
+            continue
+        if not found_pick:
+            continue
+        if t in ("move", "lift"):
+            target = str(act.get("to", ""))
+            if target.isdigit():
+                stake_id = int(target)
+                if stake_id in STAKE_3D_INFO:
+                    return stake_id
+            # 兼容衍生节点 D_X_to_Y
+            if target.startswith("D_"):
+                parts = target.split("_")
+                stake_id = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else None
+                if stake_id is not None and stake_id in STAKE_3D_INFO:
+                    return stake_id
+    return None
 
 
 # =============================================================================
@@ -182,7 +210,7 @@ def send_r1_nodes(r1_nodes: List[int]) -> None:
     """
     from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 
-    data = encode_r1_frame(r1_nodes)
+    data = encode_r1_frame([n - 1 for n in r1_nodes])  # 桩号从 1 开始，编码时减 1
     if not data or data[0] == 0:
         print("[send_r1_nodes] R1 列表为空，不发送")
         return
@@ -199,12 +227,14 @@ def send_actions(actions: List[Dict[str, Any]]) -> None:
     """
     from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 
-    data = encode_action_sequence(actions)
+    start_stake_id = determine_start_position(actions) or 0
+    column_stake_id = determine_column_stake_id(actions) or 0
+    data = encode_action_sequence(actions, start_stake_id=start_stake_id, column_stake_id=column_stake_id)
     if not data:
         print("[send_actions] 动作序列为空，不发送")
         return
 
-    print(f"[send_actions] {len(actions)} 个动作 → {data.hex(' ')}")
+    print(f"[send_actions] 起始桩={start_stake_id}, 列桩={column_stake_id}, {len(actions)} 个动作 → {data.hex(' ')}")
     RosBridgeNodeInstance.writeBytes(data)
 
 
@@ -233,14 +263,17 @@ async def send_actions_one_by_one(
     """
     from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
     actions_finish_frame = bytes([0x6e])  # 动作序列结束帧
-    # 1) 编码整个动作序列，得到 [N, code1, code2, ..., codeN]
-    data = encode_action_sequence(actions)
+    # 1) 编码整个动作序列，得到 [N, 0x91, start_stake_id, column_stake_id, code1, ..., codeN, 0x6e]
+    start_stake_id = determine_start_position(actions) or 0
+    column_stake_id = determine_column_stake_id(actions) or 0
+    data = encode_action_sequence(actions, start_stake_id=start_stake_id, column_stake_id=column_stake_id)
     if not data or data[0] == 0:
         print("[send_actions] 动作序列为空，不发送")
         return False
 
     total = data[0]  # 功能码个数
-    codes = data[1:]  # 功能码列表
+    # 跳过 [N, 0x91, start_stake_id, column_stake_id] 四个字节，提取功能码列表
+    codes = data[4:-1]  # 去掉末尾 0x6e
 
     print(f"[send_actions] 共 {total} 帧，开始逐帧发送...")
 
