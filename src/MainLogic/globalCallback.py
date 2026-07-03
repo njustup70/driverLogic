@@ -36,7 +36,7 @@ def mcu_transmit_callback(data: bytes):
             #if have nan value
             if any(map(lambda v: not isinstance(v, float) or v != v, [x, y, yaw])):
                 print(f"ODOM数据包含无效值: x={x}, y={y}, yaw={yaw}")
-            print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
+            # print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
@@ -45,6 +45,7 @@ def mcu_transmit_callback(data: bytes):
 def sick_callback(data: bytes): # 0xAA
     """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
     # sick数据帧：4个float加头3位，尾1位，共20字节
+    # print(f"回调函数收到串口数据:{data.hex()}")
     _SICK_FRAME_LEN = 20
     if not data:
         return
@@ -62,22 +63,22 @@ def sick_callback(data: bytes): # 0xAA
             sick_floats = struct.unpack('<4f', sick_data)
             left_distance = sick_floats[0]
             # print(id(TFManagerInstance), id(TFOdinInstance))
-            TFManagerInstance.sick(float(left_distance))
+            TFManagerInstance.left_sick(float(left_distance))
             # TFOdinInstance.sick(float(left_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
                 SICK_LEFT_DISTANCE_TOPIC,
                 Float32(data=float(left_distance))
             )
-            print(f"SICK数据解析成功: distance={left_distance:.3f} m")
+            # print(f"SICK数据解析成功: distance={left_distance:.3f} m")
 
             right_distance = sick_floats[1]
-            TFManagerInstance.sick_right(float(right_distance))
+            TFManagerInstance.right_sick(float(right_distance))
             # TFOdinInstance.sick_right(float(right_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
                 SICK_RIGHT_DISTANCE_TOPIC,
                 Float32(data=float(right_distance))
             )
-            print(f"SICK右侧数据解析成功: distance={right_distance:.3f} m")
+            # print(f"SICK右侧数据解析成功: distance={right_distance:.3f} m")
         except Exception as e:
             print(f"SICK解析错误: {e}")
 

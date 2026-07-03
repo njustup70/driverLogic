@@ -43,9 +43,10 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, 0xB3)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
     sick2Base=Odom(0.0, -0.3511, 0.0)
-    map2BaseInit=Odom(0.352, 4.600, 0.0) # 704 * 780
-    laser2Base=Odom(-0.095, -0.365, 0.0)
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base, sick_correct_width=6.0)
+    map2BaseInit=Odom(0.390, 5-0.352, -3.1415926/2) # 704 * 780
+    laser2Base=Odom(-0.10, -0.336, 0.0)
+    base2laser=Odom(0.10, 0.336, 0.0)
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser, sick_correct_width=6.0)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
     # 这个回调用来检测build_spear动作是否完成
@@ -61,14 +62,15 @@ async def async_main():
     # await asyncio.sleep(1.5)
     # 跑到矛头架
     # await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
-    print("等待 SICK 数据接入...")
-    while len(TFManagerInstance.sick_buffer) == 0:
-        await asyncio.sleep(0.1)  # 短暂让出控制权，不阻塞其他协程
-
-    await asyncio.sleep(0.5) 
     
-    print("SICK 数据就绪，执行初始 Y 轴修正")
-    TFManagerInstance.sickInitYCorrect()
+    # print("等待 SICK 数据接入...")
+    # while len(TFManagerInstance.sick_buffer) == 0:
+    #     await asyncio.sleep(0.1)  # 短暂让出控制权，不阻塞其他协程
+
+    # await asyncio.sleep(0.5) 
+    
+    # print("SICK 数据就绪，执行初始 Y 轴修正")
+    # TFManagerInstance.sickInitYCorrect()
     
     await build_spear_until_finish()
     while True:
