@@ -42,6 +42,7 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, 0xAA)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, 0xB3)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.meilin_map_frame_callback, 0xa2)
     sick2Base=Odom(0.0, -0.3511, 0.0)
     map2BaseInit=Odom(0.390, 5-0.352, -3.1415926/2) # 704 * 780
     laser2Base=Odom(-0.10, -0.336, 0.0)

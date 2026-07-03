@@ -17,8 +17,7 @@ from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 from typing import List
 from MainLogic.app.zone2_model_api import generate_actions_from_result, determine_start_position, encode_action_sequence, send_actions, send_r1_nodes, extract_r1_nodes_on_path,send_actions_one_by_one
 from MainLogic.core.zone2_model.zone2_sender import action_ack_event
-_MEILIN_MAP_FRAME_PREFIX = b'\xff\x0d\xa2'
-_MEILIN_MAP_FRAME_LEN = 15
+_MEILIN_MAP_FRAME_LEN = 12
 
 def action_callback(data: bytes):
     """动作执行完成回调函数，收到 FF 6F 帧时触发 ack_event 通知下一帧发送"""
@@ -32,11 +31,7 @@ def _decode_meilin_map_states(data: bytes) -> List[str]:
     """解析 14 字节梅林地图编码帧，返回 12 个桩位状态。
     
     协议格式：[0xFF] [0xA2] [KFS_1] [KFS_2] ... [KFS_12] (共 14 字节)
-    """
-    if len(data) != _MEILIN_MAP_FRAME_LEN:
-        raise ValueError(f"梅林地图编码帧长度错误: 期望 {_MEILIN_MAP_FRAME_LEN}，实际 {len(data)}")       
-    if data[:3] != _MEILIN_MAP_FRAME_PREFIX:
-        raise ValueError(f"梅林地图编码帧头错误: 期望 {_MEILIN_MAP_FRAME_PREFIX.hex()}，实际 {data[:3].hex()}")
+    """      
     code_to_name = {
         0: "EMPTY",  # 空
         1: "R1",     # R1
@@ -44,13 +39,11 @@ def _decode_meilin_map_states(data: bytes) -> List[str]:
         3: "FAKE",   # 假块 (对应你说的假块)
     }
     states = []
-    for stake_idx, byte_value in enumerate(data[3:], start=1):
+    for stake_idx, byte_value in enumerate(data[0:], start=1):
         if byte_value not in code_to_name:
             raise ValueError(f"KFS_{stake_idx} 包含未知的状态代码: {byte_value}")        
         states.append(code_to_name[byte_value])
 
-    if len(states) != 12:
-        raise ValueError(f"梅林地图编码帧解析结果长度错误: {len(states)}")
         
     return states
 
@@ -63,7 +56,7 @@ def meilin_map_frame_callback(data: bytes):
     if not data:
         return False
 
-    meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN and data[:3] == _MEILIN_MAP_FRAME_PREFIX
+    meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN
     if not meilin_map_valid:
         return False
     
@@ -92,83 +85,45 @@ def meilin_map_frame_callback(data: bytes):
         print(f"梅林地图编码帧处理错误: {e}")
         return False
 
+'''
+全局回调函数串口接收回调和ros2话题回调
+'''
+import math
+import struct
+from MainLogic.app.actions import (
+    BUILD_SPEAR_ACTION_TYPE,
+    QRRecogInstance,
+    build_spear_active,
+    build_spear_finish,
+    order_spear,
+)
+from MainLogic.app.climb_manager import ClimbManagerInstance
+from MainLogic.core import ros_bridge_node as ros_bridge_module
+from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
+from MainLogic.Lib.bytes import turn_to_bytes
+from std_msgs.msg import Float32
+
+
+SPEAR_OFFSET_COMMAND = b'\xB1'
+SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
+SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
+
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
     # odom数据帧：
-    _ODOM_FRAME_PREFIX = b'\xFF\xAA'
-    _ODOM_FRAME_LEN = 14
-    # sick数据帧：
-    _SICK_FRAME_LEN = 20
-    # slam correct纠正帧：
-    _CORRECT_FRAME_PREFIX = b'\xFF\xB2'
-    _CORRECT_FRAME_LEN = 4
-    # 梅林状态帧与重算触发帧：
-    _MEILIN_STATE_FRAME_PREFIX = b'\xFF\xB3'
-    _MEILIN_STATE_FRAME_LEN = 7
-    
-    _MEILIN_CMD_FRAME_PREFIX = b'\xFF\xB4'
-    _MEILIN_CMD_FRAME_LEN = 5
-    _MEILIN_STATE_CODE_TO_NAME = {
-        0: "EMPTY",
-        1: "R2",
-        2: "R1",
-        3: "FAKE",
-    }
+    _ODOM_FRAME_LEN = 12
     
     if not data:
         return
 
-    odom_valid = len(data) == _ODOM_FRAME_LEN and data[:2] == _ODOM_FRAME_PREFIX
-
-    sick_valid = False
-    if len(data) == _SICK_FRAME_LEN:
-        sick_header = data[0]
-        sick_tail = data[19]
-        sick_valid = sick_header == sick_tail and ((sum(data[1:19]) & 0xFF) == sick_tail)
-
-    correct_valid = False
-    if len(data) == _CORRECT_FRAME_LEN:
-        # 帧格式：FF B2 [checksum] FF
-        # checksum = 0xB2 (frame type)
-        correct_header = data[:2] == _CORRECT_FRAME_PREFIX
-        correct_checksum = data[2] == 0xB2
-        correct_tail = data[3] == 0xFF
-        correct_valid = correct_header and correct_checksum and correct_tail
-
-    meilin_state_valid = False
-    if len(data) == _MEILIN_STATE_FRAME_LEN:
-        meilin_state_header = data[:2] == _MEILIN_STATE_FRAME_PREFIX
-        meilin_state_checksum = ((0xB3 + data[2] + data[3] + data[4]) & 0xFF) == data[5]
-        meilin_state_tail = data[6] == 0xFF
-        meilin_state_valid = meilin_state_header and meilin_state_checksum and meilin_state_tail
-
-    meilin_cmd_valid = False
-    if len(data) == _MEILIN_CMD_FRAME_LEN:
-        meilin_cmd_header = data[:2] == _MEILIN_CMD_FRAME_PREFIX
-        meilin_cmd_byte = data[2] == 0x01
-        meilin_cmd_checksum = ((0xB4 + data[2]) & 0xFF) == data[3]
-        meilin_cmd_tail = data[4] == 0xFF
-        meilin_cmd_valid = meilin_cmd_header and meilin_cmd_byte and meilin_cmd_checksum and meilin_cmd_tail
-
-    meilin_map_valid = len(data) == _MEILIN_MAP_FRAME_LEN and data[:2] == _MEILIN_MAP_FRAME_PREFIX
-
-    # 检查帧类型互斥性
-    frame_count = sum([odom_valid, sick_valid, correct_valid, meilin_state_valid, meilin_cmd_valid, meilin_map_valid])
-    if frame_count == 0:
-        return
-    
-    if frame_count > 1:
-        print("帧类型歧义，丢弃该帧")
-        return
-
-    if odom_valid:
+    if len(data) == _ODOM_FRAME_LEN:
         try:
             x, y, yaw = struct.unpack('<fff', data)
             TFManagerInstance.odom(float(x), float(y), float(yaw))
             #if have nan value
             if any(map(lambda v: not isinstance(v, float) or v != v, [x, y, yaw])):
                 print(f"ODOM数据包含无效值: x={x}, y={y}, yaw={yaw}")
-            # print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
+            print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
@@ -177,7 +132,6 @@ def mcu_transmit_callback(data: bytes):
 def sick_callback(data: bytes): # 0xAA
     """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
     # sick数据帧：4个float加头3位，尾1位，共20字节
-    # print(f"回调函数收到串口数据:{data.hex()}")
     _SICK_FRAME_LEN = 20
     if not data:
         return
@@ -195,24 +149,24 @@ def sick_callback(data: bytes): # 0xAA
             sick_floats = struct.unpack('<4f', sick_data)
             left_distance = sick_floats[0]
             # print(id(TFManagerInstance), id(TFOdinInstance))
-            TFManagerInstance.left_sick(float(left_distance))
+            TFManagerInstance.sick(float(left_distance))
             # TFOdinInstance.sick(float(left_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
                 SICK_LEFT_DISTANCE_TOPIC,
                 Float32(data=float(left_distance))
             )
-            # print(f"SICK数据解析成功: distance={left_distance:.3f} m")
+            print(f"SICK数据解析成功: distance={left_distance:.3f} m")
 
-
-
-    try:
-        sick_payload = data[3:19]
-        sick_floats = struct.unpack('<4f', sick_payload)
-        distance = 1.0667 * sick_floats[0] - 0.0533
-        TFManagerInstance.sick(float(distance))
-        print(f"SICK数据解析成功: distance={distance:.3f} m")
-    except Exception as e:
-        print(f"SICK解析错误: {e}")
+            right_distance = sick_floats[1]
+            TFManagerInstance.sick_right(float(right_distance))
+            # TFOdinInstance.sick_right(float(right_distance))
+            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
+                SICK_RIGHT_DISTANCE_TOPIC,
+                Float32(data=float(right_distance))
+            )
+            print(f"SICK右侧数据解析成功: distance={right_distance:.3f} m")
+        except Exception as e:
+            print(f"SICK解析错误: {e}")
 
 def serial_correct_callback(data: bytes): # 0xB2
     """
