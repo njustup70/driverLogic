@@ -149,8 +149,8 @@ def determine_start_position(
     """
     first_target: Optional[str] = None
     for act in actions:
-        if act.get("type") in ("move", "pick") and str(act.get("from")) == "start":
-            first_target = str(act.get("to" if act["type"] == "move" else "target"))
+        if act.get("type") in ("move", "pick", "lift") and str(act.get("from")) == "start":
+            first_target = str(act.get("to" if act["type"] in ("move", "lift") else "target"))
             break
 
     if first_target is None:
@@ -171,11 +171,19 @@ def determine_start_position(
     return stake_id
 
 
+def _stake_id_to_column(stake_id: int) -> int:
+    """桩号 → 列编号（1-based）。
+
+    桩位布局: 每列 3 个桩，列 1={1,2,3}, 列 2={4,5,6}, 列 3={7,8,9}, 列 4={10,11,12}。
+    """
+    return (stake_id - 1) // 3 + 1
+
+
 def determine_column_stake_id(actions: List[Dict[str, Any]]) -> Optional[int]:
-    """提取取块后第一个 move/lift 动作的目标桩号。
+    """提取取块后第一个 move/lift 动作所在列的编号（1-based）。
 
     从第一个 pick 动作之后开始扫描，找到第一个 move 或 lift 动作，
-    返回其目标桩号（to 字段）。若无法确定则返回 None。
+    返回其目标桩号所在列的编号（1~4）。若无法确定则返回 None。
     """
     found_pick = False
     for act in actions:
@@ -187,16 +195,14 @@ def determine_column_stake_id(actions: List[Dict[str, Any]]) -> Optional[int]:
             continue
         if t in ("move", "lift"):
             target = str(act.get("to", ""))
+            stake_id: Optional[int] = None
             if target.isdigit():
                 stake_id = int(target)
-                if stake_id in STAKE_3D_INFO:
-                    return stake_id
-            # 兼容衍生节点 D_X_to_Y
-            if target.startswith("D_"):
+            elif target.startswith("D_"):
                 parts = target.split("_")
                 stake_id = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else None
-                if stake_id is not None and stake_id in STAKE_3D_INFO:
-                    return stake_id
+            if stake_id is not None and stake_id in STAKE_3D_INFO:
+                return _stake_id_to_column(stake_id)
     return None
 
 

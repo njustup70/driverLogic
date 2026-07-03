@@ -58,7 +58,7 @@ _ACTION_ENCODERS = {
 # =============================================================================
 def encode_r1_frame(r1_nodes: List[int]) -> bytes:
     """编码 R1 物块列表帧: [个数, 桩号1, 桩号2, ...] 每字节一个。"""
-    return bytes([0x73]) + bytes([len(r1_nodes)]) + bytes(r1_nodes)
+    return bytes([0x73]) + bytes(r1_nodes)
 
 
 def encode_action_sequence(
@@ -71,7 +71,7 @@ def encode_action_sequence(
     帧格式: [N, 0x91, start_stake_id, column_stake_id, code1, code2, ..., codeN, 0x6e]
       N  = 有效功能码个数（不含 move）
       start_stake_id  = 第一个目标桩编号
-      column_stake_id = 取块后第一个 move/lift 目标桩编号（列标识）
+      column_stake_id = 取块后第一个 move/lift 目标桩所在列的编号 1~4（列标识）
 
     pick  → 0x6A~0x6D  (按 delta_z)
     lift  → 0x64~0x67  (按 delta_z)
@@ -97,8 +97,7 @@ def encode_action_sequence(
 
     # 帧格式: [N, 0x91, start_stake_id, column_stake_id, code1, ..., codeN, 0x6e]
     return (
-        bytes([len(codes)+2])
-        + bytes([0x91])
+        bytes([0x91])
         + bytes([start_stake_id + 0x7F])
         + bytes([column_stake_id + 0x7F])
         + bytes(codes)
