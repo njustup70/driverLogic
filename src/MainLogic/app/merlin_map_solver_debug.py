@@ -16,16 +16,16 @@ from __future__ import annotations
 import argparse
 from typing import Any, Dict, List, Optional
 
-from MainLogic.core.zone2_model import (
+from MainLogic.app.zone2_model_api import (
     dijkstra_min_cost_path,
     draw_merlin_model,
     list_saved_merlin_maps,
     load_saved_merlin_map,
+    load_saved_merlin_map_by_filename,
     print_merlin_map,
+    print_path_debug_info,
     solve_route,
 )
-from MainLogic.core.zone2_model.merlin_map import load_saved_merlin_map_by_filename
-from MainLogic.core.zone2_model.zone2_format import print_path_debug_info
 
 
 _STATE_TO_BLOCK = {
@@ -191,7 +191,7 @@ def run_solver_on_states(
 ) -> dict:
     """直接把 12 个状态组装成 map_data 后求解。"""
     map_data = build_map_data_from_states(states12, map_id=map_id, seed=seed)
-    result = solve_route(strategy="dijkstra", map_data=map_data)
+    result = solve_route(strategy="straight", map_data=map_data)
     result["map_data"] = map_data
 
     if render_map:

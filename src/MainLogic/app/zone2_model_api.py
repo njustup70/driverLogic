@@ -25,8 +25,17 @@ from MainLogic.core.zone2_model import (
     dijkstra_min_cost_path,
     draw_merlin_model,
     get_merlin_map,
+<<<<<<< HEAD
     solve_route,
 )
+=======
+    list_saved_merlin_maps,
+    load_saved_merlin_map,
+    print_merlin_map,
+    solve_route,
+)
+from MainLogic.core.zone2_model.merlin_map import load_saved_merlin_map_by_filename
+>>>>>>> Zone2
 
 from MainLogic.core.zone2_model.zone2_helpers import *
 from MainLogic.core.zone2_model.zone2_format import *
@@ -171,21 +180,27 @@ class Zone2ModelAPI:
         result["image_path"] = image_path
         return result
 
+<<<<<<< HEAD
     def send_path_result_to_mcu(self, result: dict) -> None:
         send_path_result_to_mcu(result)
 
+=======
+>>>>>>> Zone2
     def print_path_debug_info(self, result: dict) -> None:
         print_path_debug_info(result)
 
     def format_mcu_action_list(self, result: dict) -> str:
         return format_mcu_action_list(result)
 
+<<<<<<< HEAD
     def encode_mcu_action_frame(self, result: dict) -> bytes:
         return encode_mcu_action_frame(result)
 
     def send_mcu_action_frame_to_mcu(self, result: dict) -> None:
         send_mcu_action_frame_to_mcu(result)
 
+=======
+>>>>>>> Zone2
     def visualize_path_result(self, result: dict, save_path: str = "/tmp/merlin_random_demo.png", show: bool = True) -> str:
         return visualize_path_result(result, save_path=save_path, show=show)
 
@@ -197,15 +212,34 @@ __all__ = [
     "Zone2ModelAPI",
     "zone2_model_api",
     "visualize_path_result",
+<<<<<<< HEAD
     "send_path_result_to_mcu",
     "send_mcu_action_frame_to_mcu",
     "encode_path_frame",
     "encode_path_action_frame",
     "encode_full_path_frame",
     "encode_mcu_action_frame",
+=======
+>>>>>>> Zone2
     "format_mcu_action_list",
     "print_path_debug_info",
     "build_path_step_records",
     "format_action_chain",
     "format_chronological_steps",
+<<<<<<< HEAD
+=======
+    "generate_actions_from_result",
+    "determine_start_position",
+    "encode_action_sequence",
+    "send_actions",
+    "send_r1_nodes",
+    "extract_r1_nodes_on_path",
+    "list_saved_merlin_maps",
+    "load_saved_merlin_map",
+    "load_saved_merlin_map_by_filename",
+    "print_merlin_map",
+    "dijkstra_min_cost_path",
+    "draw_merlin_model",
+    "solve_route",
+>>>>>>> Zone2
 ]

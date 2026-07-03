@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any
 from MainLogic.core.zone2_model.zone2_helpers import (
     _turn_action_name,
-    _pick_action_name,
     _is_derived_node,
     _is_real_node,
     _extract_pick_target_from_derived_node,
@@ -22,24 +21,29 @@ from MainLogic.core.zone2_model.zone2_helpers import (
 
 
 def extract_r1_nodes_on_path(result: dict) -> list[int]:
-    """提取路径上经过的 R1 节点编号（升序）。"""
+    """提取路径上经过的 R1 节点编号（按路径先后顺序，去重）。"""
     path_steps = list(result.get("path_steps", []))
     if not path_steps:
         return []
 
     preset_nodes = result.get("r1_nodes_on_path")
     if isinstance(preset_nodes, list) and preset_nodes:
-        normalized: set[int] = set()
+        seen: set[int] = set()
+        ordered: list[int] = []
         for value in preset_nodes:
             value_str = str(value)
             if value_str.isdigit():
-                normalized.add(int(value_str))
-        return sorted(normalized)
+                node_id = int(value_str)
+                if node_id not in seen:
+                    seen.add(node_id)
+                    ordered.append(node_id)
+        return ordered
 
     map_data = result.get("map_data") if isinstance(result, dict) else None
     blocks = map_data.get("blocks", {}) if isinstance(map_data, dict) else {}
 
-    r1_nodes: set[int] = set()
+    seen: set[int] = set()
+    ordered: list[int] = []
     for step in path_steps:
         for node in (step.get("from"), step.get("to")):
             node_str = str(node)
@@ -51,10 +55,11 @@ def extract_r1_nodes_on_path(result: dict) -> list[int]:
             if block_value is None:
                 block_value = blocks.get(node_str)
 
-            if block_value == "R1":
-                r1_nodes.add(node_id)
+            if block_value == "R1" and node_id not in seen:
+                seen.add(node_id)
+                ordered.append(node_id)
 
-    return sorted(r1_nodes)
+    return ordered
 
 
 def build_path_step_records(result: dict) -> list[dict]:
