@@ -35,8 +35,8 @@ class TFManager:
         if getattr(self, '_is_initialized', False):
                     return
         self._is_initialized = True
-        # sick纠正场地分类Flag
-        self.flag = 0 #（0表示红场，1表示蓝场）
+        # sick纠正选择墙体分边Flag
+        self.flag = 0 #（0表示左侧场，1表示右侧场）
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
         # 坐标系固定配置（不使用 ROS2 参数）
@@ -64,16 +64,15 @@ class TFManager:
         # sick 修正缓存
         self.sick_lateral_offset = 0.0
         self.sick_buffer_size = 10
-        self.sick_buffer: list[float] = []
+        self.right_sick_buffer: list[float] = []
+        self.left_sick_buffer: list[float] = []
         # 含sick修正的 map->slam_init 位姿中间变量，其中包含了地图原点到车体中心偏移
-        self._mapToSlamInitNominal = Odom(0.0, 0.0, 0.0)
         # 存储了sick修正增量的变量，用于连续修正时的撤销与更新逻辑
-        self._sickYawCorrection = 0.0
 
-    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,laser2Base: Odom,sick_correct_width: float = 0.0):
+    def register_tf_chain(self,sick2Base: Odom,map2BaseInit: Odom,Base2laser: Odom,sick_correct_width: float =0.0):
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
-        assert sick2Base is not None and map2BaseInit is not None and laser2Base is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
-        self.laser_to_base = laser2Base
+        assert sick2Base is not None and map2BaseInit is not None and Base2laser is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
+        self.laser_to_base = Base2laser.inverse()
         self.mapToBaseInit = map2BaseInit
         self.sickToBaseLink = sick2Base
         self.sick_correct_width = sick_correct_width
@@ -89,9 +88,10 @@ class TFManager:
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
-        self._mapToSlamInitNominal = self.mapToBaseInit @ self.laser_to_base.inverse()
-        self._mapToSlamInit = self._mapToSlamInitNominal
+        self._mapToSlamInit = self.mapToBaseInit @ self.laser_to_base.inverse()
         self._sickYawCorrection = 0.0
+        self._baseinitYaw=(self._mapToSlamInit@self.laser_to_base).yaw
+        self._slaminitYaw=self._mapToSlamInit.yaw
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
@@ -100,42 +100,99 @@ class TFManager:
         """码盘数据入口：更新 odom->base_link。"""
         self._odomToBase = Odom(x, y, yaw)
 
-    def sick(self, sick_y: float):
+    def left_sick(self, sick_y: float):
         """SICK 数据入口：输入侧向测距值（单位米）。"""
-        self.sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
-        if len(self.sick_buffer) > self.sick_buffer_size:
-            self.sick_buffer.pop(0)
+        self.left_sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
+        if len(self.left_sick_buffer) > self.sick_buffer_size:
+            self.left_sick_buffer.pop(0)
+
+    def right_sick(self, sick_y: float):
+        """SICK 数据入口：输入侧向测距值（单位米）。"""
+        self.right_sick_buffer.append(float(sick_y) + self.sick_lateral_offset)
+        if len(self.right_sick_buffer) > self.sick_buffer_size:
+            self.right_sick_buffer.pop(0)
+
+    # def sickInitYCorrect(self):
+    #     '''
+    #     sick初始值修正，直接把sick测量的y值作为车体中心到地图原点的y偏移，适用于车体中心在地图原点的情况
+    #     '''
+    #     if not self.left_sick_buffer:
+    #         return False
+    #     left_sick_y = sum(self.left_sick_buffer) / len(self.left_sick_buffer)
+    #     # sick装左边的情况下场地有一个12cm的初始偏移
+    #     map2sick_y = self.sick_correct_width - sick_y - 0.12
+    #     self.mapToBaseInit = Odom(self.mapToBaseInit.x, map2sick_y + self.sickToBaseLink.y, self.mapToBaseInit.yaw)
+
+    #     # self._mapToSlamInit = Odom(
+    #     #     self._mapToSlamInit.x,
+    #     #     map2sick_y + self.sickToBaseLink.y,
+    #     #     self._mapToSlamInit.yaw
+    #     # ) @ self.laser_to_base.inverse()
+
+    #     self._mapToSlamInitNominal = self.mapToBaseInit @ self.laser_to_base.inverse()
+    #     self._mapToSlamInit = self._mapToSlamInitNominal
+
+    #     self.sick_buffer.clear()
+    #     return True
 
     def apply_sick_initial_yaw_correction(self) -> bool:
         """使用 sick 缓存值修正 map->slam_init 的初始 yaw（增量更新，可撤销前次修正）。"""
-        if not self.sick_buffer or not self._has_slam_pose:
+        if not self.left_sick_buffer or not self.right_sick_buffer or not self._has_slam_pose:
             return False
-        sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
-        #先干掉纠正
-        self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,0.0)
+        self.left_sick_y = sum(self.left_sick_buffer) / len(self.left_sick_buffer)
+        self.right_sick_y = sum(self.right_sick_buffer) / len(self.right_sick_buffer)
+        self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw)
+        #在当前座标系下求BaseInit->Base的值
+        baseinit2base=self.laser_to_base.inverse()@self._slamBaseOdom
         # 先撤销上一轮修正，再基于未修正状态计算本轮修正量。
-        # base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
-        # sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
-        # print(sick_pose.x,sick_pose.y,sick_pose.yaw)
+        base_without_prev = Odom(0,0,-float(self._sickYawCorrection)) @ self.baseLinkOdom.value
+        sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
+        print(sick_pose.x,sick_pose.y,sick_pose.yaw)
+        # y = (self.left_sick_y + self.right_sick_y + self.sick_dist_to_base*2)
+        # print(f"y={y:.3f}")
+        # theta = math.acos(6/y)
         if self.flag==0:
             # 解超越方程
-            new_yaw_correction =  fsolve(lambda theta:-(self.sick_correct_width-sick_y*math.cos(theta+self._baseinitodom.yaw)-self.sick_dist_to_base*math.sin(self.sick_yaw_in_base+theta+self._baseinitodom.yaw))+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+            # y_real=fsolve
+            def calculate_y_real(theta):
+                return 6.0-0.39
+                #return (
+                #    self.sick_correct_width
+                #    - sick_y * math.cos(theta + self._baseinitodom.yaw)
+                #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
+                #)
+            dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            # dyaw =  self._baseinitodom.yaw - math.pi/2 - theta
+        # elif self.flag==1:
+            # dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            print(f"{-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(self._baseinitodom.yaw+self._baseinitYaw)}")
+        else:
+            self.left_sick_buffer.clear()
+            self.right_sick_buffer.clear()
+            return False
+        print(f"dyaw={math.degrees(dyaw):.2f}°")
+        # 角度修正量过大则认为不可靠，不应用本次修正
+        # YAW_CORRECTION_MAX = math.radians(5.0)  # 5度阈值
+        # if abs(dyaw) > YAW_CORRECTION_MAX:
+        #     print(f"[WARN] dyaw={math.degrees(dyaw):.2f}° 超过阈值 {math.degrees(YAW_CORRECTION_MAX):.1f}°，丢弃本次修正")
+        #     self.left_sick_buffer.clear()
+        #     self.right_sick_buffer.clear()
+        #     return False
 
-        if self.flag==1:
-            new_yaw_correction = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta)+self._baseinitodom.y*math.cos(theta)+self.mapToBaseInit.y,0)[0]
+        # # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
+        # nominal_yaw = float(self._mapToSlamInit.yaw - self._sickYawCorrection)
         
-        # 从当前 map->slam_init 中撤销旧修正，再应用新修正。
-        nominal_yaw = self._mapToSlamInit.yaw - self._sickYawCorrection
         print(self._mapToSlamInit)
-        # self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
-        self._mapToSlamInit = Odom(self._mapToSlamInit.x,self._mapToSlamInit.y,new_yaw_correction)
+        #self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
+        self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw+dyaw)
+        self._mapToSlamInit=self.mapToBaseInit@self.laser_to_base.inverse()
         print(self._mapToSlamInit)
 
-        # self._sickYawCorrection = new_yaw_correction
 
         if self.rosBridge is not None:
             self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
-        self.sick_buffer.clear()
+        self.left_sick_buffer.clear()
+        self.right_sick_buffer.clear()
         return True
 
     def odom_10ms(self):
@@ -156,6 +213,8 @@ class TFManager:
         odom_msg = Vector3(x=fused_base.x, y=fused_base.y, z=fused_base.yaw)
         self.rosBridge.publish_ros2(BASE_LINK_ODOM_TOPIC, odom_msg)
         self.rosBridge.publish_ros2('/state/odom_raw',odom_raw)
+        # print(f"{self._baseinitodom.x},{self._baseinitodom.y},{self._baseinitodom.yaw}")
+        # print(f"{self._sickYawCorrection},{self._mapToSlamInit.yaw}")
     def slam_100ms(self):
         """100ms 更新：读取 SLAM TF 并更新 slam_init->odom。"""
         if not self._tf_chain_registered or self.rosBridge is None:
@@ -185,10 +244,11 @@ class TFManager:
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新，每 100ms 执行一次 slam 更新。"""
         tick_10ms = 0
+        loop = asyncio.get_running_loop()
+        t_next = loop.time()
         while True:
             assert self._tf_chain_registered, 'TF chain is not registered yet!'
             try:
-                
                 if tick_10ms % 10 == 0:
                     self.slam_100ms()
                     self.odom_10ms()
@@ -197,9 +257,9 @@ class TFManager:
             except Exception as e:
                 print(e)
             tick_10ms = (tick_10ms + 1) % 10
-            await asyncio.sleep(0.01)
+            t_next += 0.01
+            await asyncio.sleep(max(0, t_next - loop.time()))
 
-import numpy as np
 class TFOdin:
     _instance = None  # 存放唯一实例的私有类属性
     def __new__(cls, *args, **kwargs):
@@ -313,6 +373,8 @@ class TFOdin:
         map2sick_y=6.0-sick_y-0.12
         self._mapToOdinInit = Odom(
             self._mapToOdinInit.x,map2sick_y+self._sick_to_base.y,self._mapToOdinInit.yaw)
+        self.sick_buffer.clear()
+        return True
         
     def odom_10ms(self):
         """10ms 更新：发布 odom/base, map/odom, 计算 map/base 并下发到下位机。"""
@@ -380,9 +442,12 @@ class TFOdin:
         self.rosBridge.writeBytes(b'\xA0' + turn_to_bytes([baselink.x, baselink.y, baselink.yaw]))
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新"""
+        loop = asyncio.get_running_loop()
+        t_next = loop.time()
         while True:
             assert self._tf_chain_registered, 'TF chain is not registered yet!'
             self.odom_10ms()
-            await asyncio.sleep(0.01)
+            t_next += 0.01
+            await asyncio.sleep(max(0, t_next - loop.time()))
 TFManagerInstance = TFManager()
 TFOdinInstance=TFOdin()

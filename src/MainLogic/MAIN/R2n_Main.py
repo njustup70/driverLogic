@@ -1,4 +1,12 @@
 '''
+Author: Nagisa 2964793117@qq.com
+Date: 2026-06-26 11:01:15
+LastEditors: Nagisa 2964793117@qq.com
+LastEditTime: 2026-06-28 15:14:32
+FilePath: \driverLogic\src\MainLogic\MAIN\R2n_Main.py
+Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+'''
+'''
 异步主逻辑和其他函数
 '''
 from MainLogic.core import ros_bridge_node as ros_bridge_module
@@ -35,9 +43,10 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, 0xB3)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, 0xB2)
     sick2Base=Odom(0.0, -0.3511, 0.0)
-    map2BaseInit=Odom(0.352, 4.600, 0.0) # 704 * 780
-    laser2Base=Odom(-0.105, -0.3445, 0.0)
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, laser2Base, sick_correct_width=6.0)
+    map2BaseInit=Odom(0.390, 5-0.352, -3.1415926/2) # 704 * 780
+    laser2Base=Odom(-0.10, -0.336, 0.0)
+    base2laser=Odom(0.10, 0.336, 0.0)
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser, sick_correct_width=6.0)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
     # 这个回调用来检测build_spear动作是否完成
@@ -49,6 +58,20 @@ async def async_main():
     # 订阅这个话题给下位机发送矛头偏移
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/arucopnp/offset_mm", debug_spear_offset_callback, type=PointStamped)
     # 这个异步函数完成用来矛头对齐
+    await asyncio.sleep(0.5)
+    # await asyncio.sleep(1.5)
+    # 跑到矛头架
+    # await Move.mpc_move_to_point([1.45, 5.5, 0.0], ref_speed=0.5)
+    
+    # print("等待 SICK 数据接入...")
+    # while len(TFManagerInstance.sick_buffer) == 0:
+    #     await asyncio.sleep(0.1)  # 短暂让出控制权，不阻塞其他协程
+
+    # await asyncio.sleep(0.5) 
+    
+    # print("SICK 数据就绪，执行初始 Y 轴修正")
+    # TFManagerInstance.sickInitYCorrect()
+    
     await build_spear_until_finish()
     while True:
         await asyncio.sleep(1)

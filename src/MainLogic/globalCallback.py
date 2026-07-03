@@ -14,17 +14,17 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
 from MainLogic.Lib.bytes import turn_to_bytes
+from std_msgs.msg import Float32
 
 
 SPEAR_OFFSET_COMMAND = b'\xB1'
+SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
+SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
     # odom数据帧：
-    _ODOM_FRAME_PREFIX = b'\xFF\xAA'
-    _ODOM_FRAME_LEN = 14
-    # sick数据帧：
-    _SICK_FRAME_LEN = 20
+    _ODOM_FRAME_LEN = 12
     
     if not data:
         return
@@ -45,8 +45,8 @@ def mcu_transmit_callback(data: bytes):
 def sick_callback(data: bytes): # 0xAA
     """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
     # sick数据帧：4个float加头3位，尾1位，共20字节
+    # print(f"回调函数收到串口数据:{data.hex()}")
     _SICK_FRAME_LEN = 20
-    
     if not data:
         return
     
@@ -61,11 +61,24 @@ def sick_callback(data: bytes): # 0xAA
         sick_data = data[3:19]
         try:
             sick_floats = struct.unpack('<4f', sick_data)
-            distance = sick_floats[0]
+            left_distance = sick_floats[0]
             # print(id(TFManagerInstance), id(TFOdinInstance))
-            TFManagerInstance.sick(float(distance))
-            TFOdinInstance.sick(float(distance))
-            print(f"SICK数据解析成功: distance={distance:.3f} m")
+            TFManagerInstance.left_sick(float(left_distance))
+            # TFOdinInstance.sick(float(left_distance))
+            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
+                SICK_LEFT_DISTANCE_TOPIC,
+                Float32(data=float(left_distance))
+            )
+            # print(f"SICK数据解析成功: distance={left_distance:.3f} m")
+
+            right_distance = sick_floats[1]
+            TFManagerInstance.right_sick(float(right_distance))
+            # TFOdinInstance.sick_right(float(right_distance))
+            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
+                SICK_RIGHT_DISTANCE_TOPIC,
+                Float32(data=float(right_distance))
+            )
+            # print(f"SICK右侧数据解析成功: distance={right_distance:.3f} m")
         except Exception as e:
             print(f"SICK解析错误: {e}")
 
