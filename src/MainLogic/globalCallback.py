@@ -204,6 +204,7 @@ def sick_callback(data: bytes): # 0xAA
             # print(f"SICK数据解析成功: distance={left_distance:.3f} m")
 
 
+
     try:
         sick_payload = data[3:19]
         sick_floats = struct.unpack('<4f', sick_payload)
