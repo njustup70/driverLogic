@@ -174,16 +174,17 @@ def determine_start_position(
 def _stake_id_to_column(stake_id: int) -> int:
     """桩号 → 列编号（1-based）。
 
-    桩位布局: 每列 3 个桩，列 1={1,2,3}, 列 2={4,5,6}, 列 3={7,8,9}, 列 4={10,11,12}。
+    桩位布局: 四行三列，每列 4 个桩。
+    列 1={1,2,3,4}, 列 2={5,6,7,8}, 列 3={9,10,11,12}。
     """
-    return (stake_id - 1) // 3 + 1
+    return (stake_id - 1) // 4 + 1
 
 
 def determine_column_stake_id(actions: List[Dict[str, Any]]) -> Optional[int]:
-    """提取第一个 lift 动作目标桩号所在列的编号（1-based）。
+    """提取第一个 lift 动作的目标桩号。
 
-    扫描整个动作序列，找到第一个 lift 动作，返回其 to 字段对应桩号
-    所在列的编号（1~4）。若无法确定则返回 None。
+    扫描整个动作序列，找到第一个 lift 动作，返回其 to 字段对应的桩号（1~12）。
+    若无法确定则返回 None。
     """
     for act in actions:
         if act.get("type") != "lift":
