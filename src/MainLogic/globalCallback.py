@@ -110,6 +110,72 @@ YOLO_CLASSNAME_COMMAND = b'\xB4'
 SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
 SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
+# === R1 二区 KFS 属性帧 (0xA2) ===
+# 遥控器或下位机发送方块属性 → 触发路径规划 → 编码0xBA帧 → 串口下发
+from MainLogic.core.R1_zone2 import compute_r1_zone2_path, encode_zone2_frame, format_ba_frame_hex
+
+KFS_LABELS = {0: "空", 1: "R1", 2: "R2", 3: "假块"}
+zone2_kfs_state: list[int] = [0] * 12
+
+
+def kfs_callback(data: bytes):
+    """解析 0xA2 KFS 属性帧 → 路径规划 → 编码0xBA帧 → 串口下发。
+
+    方块编号顺序（俯视图，一区面向机器人）：
+        三区
+        ---------------
+        1   2   3
+        4   5   6
+        7   8   9
+       10  11  12
+        ---------------
+        一区
+    KFS 状态约定：0=空, 1=R1, 2=R2, 3=假块
+    """
+    global zone2_kfs_state
+
+    if len(data) < 12:
+        print(f"[KFS] 帧长度不足: 期望12字节, 实际{len(data)}")
+        return
+
+    kfs_raw = list(data[:12])
+    for i, v in enumerate(kfs_raw):
+        if v not in (0, 1, 2, 3):
+            print(f"[KFS] 方块{i+1}属性值异常: {v}, 已修正为0(空)")
+            kfs_raw[i] = 0
+
+    zone2_kfs_state = kfs_raw
+
+    r1_blocks = [i for i, v in enumerate(kfs_raw) if v == 1]
+    r2_blocks = [i for i, v in enumerate(kfs_raw) if v == 2]
+    fake_block = [i for i, v in enumerate(kfs_raw) if v == 3]
+    print(f"[KFS] 二区属性更新: R1={r1_blocks}, R2={r2_blocks}, Fake={fake_block}")
+
+    # === 触发路径规划与下发 ===
+    if len(fake_block) > 1:
+        print("[Zone2] 假块数量超过1个，无法规划")
+        return
+    if not r1_blocks:
+        print("[Zone2] 未检测到R1方块，跳过路径规划")
+        return
+
+    result = compute_r1_zone2_path(
+        r1_blocks=r1_blocks, r2_blocks=r2_blocks, fake_block=fake_block,
+        auto_dog_flag=1, priority_block=[], start_candidates=[2, 0, 16],
+        exit_node=11, verbose=True,
+    )
+
+    if not result['success']:
+        print(f"[Zone2] 路径规划失败: {result['error']}")
+        return
+
+    ba_frame = encode_zone2_frame(result['filtered_nodes'])
+    print(format_ba_frame_hex(ba_frame))
+
+    ros_bridge_module.RosBridgeNodeInstance.writeBytes(ba_frame)
+    print(f"[Zone2] 0xBA 路径帧已下发，共 {len(ba_frame)} 字节")
+
+
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
     _ODOM_FRAME_LEN = 12
@@ -300,7 +366,7 @@ def serial_action_return_callback(data: bytes):
 
 def climb_type_callback(data: bytes):
     """
-    
+    爬墙类型回调函数
     """
 
     print(f"回调函数收到串口数据:{data.hex()}")
