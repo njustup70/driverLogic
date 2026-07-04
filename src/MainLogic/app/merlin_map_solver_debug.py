@@ -191,7 +191,7 @@ def run_solver_on_states(
 ) -> dict:
     """直接把 12 个状态组装成 map_data 后求解。"""
     map_data = build_map_data_from_states(states12, map_id=map_id, seed=seed)
-    result = solve_route(strategy="straight", map_data=map_data)
+    result = solve_route(strategy="dijkstra", map_data=map_data)
     result["map_data"] = map_data
 
     if render_map:
