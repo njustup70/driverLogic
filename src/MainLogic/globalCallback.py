@@ -90,6 +90,8 @@ def meilin_map_frame_callback(data: bytes):
 全局回调函数串口接收回调和ros2话题回调
 '''
 import math
+import time
+from threading import Thread
 import struct
 from MainLogic.app.actions import (
     BUILD_SPEAR_ACTION_TYPE,
@@ -119,64 +121,74 @@ zone2_kfs_state: list[int] = [0] * 12
 
 
 def kfs_callback(data: bytes):
-    """路径规划 """
+    """解析 0xC2 KFS 属性帧 → 路径规划 → 编码0xBA帧 → 串口下发。
+
+    方块编号顺序（俯视图，一区面向机器人）：
+        三区
+        ---------------
+        1   2   3
+        4   5   6
+        7   8   9
+       10  11  12
+        ---------------
+        一区
+    KFS 状态约定：0=空, 1=R1, 2=R2, 3=假块
+    """
     global zone2_kfs_state
 
-    # 1. 基础长度校验：帧头(1) + 长度(1) + 功能码(1) + 数据(12) = 15字节
-    if len(data) < 15:
-        # print(f"[KFS] 帧长度不足: 期望>=15, 实际{len(data)}")
+    print(f"[KFS] 原始帧数据 (hex): {data.hex()}")
+
+    if len(data) < 12:
+        print(f"[KFS] 帧长度不足: 期望12字节, 实际{len(data)}")
         return
 
-    # 2. 帧头与功能码校验
-    if data[0] != 0xFF or data[1] != 0x0D or data[2] != 0xC2:
-        # print(f"[KFS] 帧头或功能码不匹配，忽略该帧: {data[:3].hex()}")
+    kfs_raw = list(data[:12])
+    for i, v in enumerate(kfs_raw):
+        if v not in (0, 1, 2, 3):
+            print(f"[KFS] 方块{i+1}属性值异常: {v}, 已修正为0(空)")
+            kfs_raw[i] = 0
+
+    zone2_kfs_state = kfs_raw
+
+    r1_blocks = [i for i, v in enumerate(kfs_raw) if v == 1]
+    r2_blocks = [i for i, v in enumerate(kfs_raw) if v == 2]
+    fake_block = [i for i, v in enumerate(kfs_raw) if v == 3]
+    print(f"[KFS] 二区属性更新: R1={r1_blocks}, R2={r2_blocks}, Fake={fake_block}")
+
+    # === 触发路径规划与下发 ===
+    if len(fake_block) > 1:
+        print("[Zone2] 假块数量超过1个，无法规划")
+        return
+    if not r1_blocks:
+        print("[Zone2] 未检测到R1方块，跳过路径规划")
         return
 
-    print(f"[KFS] 接收到合法帧，原始数据 (hex): {data.hex()}")
+    result = compute_r1_zone2_path(
+        r1_blocks=r1_blocks, r2_blocks=r2_blocks, fake_block=fake_block,
+        auto_dog_flag=1, priority_block=[], start_candidates=[2, 0, 16],
+        exit_node=11, verbose=True,
+    )
 
-    try:
-        # 3. 提取有效数据位 (第 3 到 14 字节)
-        kfs_raw = list(data[3:15])
-        
-        for i, v in enumerate(kfs_raw):
-            if v not in (0, 1, 2, 3):
-                print(f"[KFS] 方块{i+1}属性值异常: 0x{v:02X}, 已修正为0(空)")
-                kfs_raw[i] = 0
+    if not result['success']:
+        print(f"[Zone2] 路径规划失败: {result['error']}")
+        return
 
-        zone2_kfs_state = kfs_raw
+    ba_frame = encode_zone2_frame(result['filtered_nodes'])
 
-        r1_blocks = [i for i, v in enumerate(kfs_raw) if v == 1]
-        r2_blocks = [i for i, v in enumerate(kfs_raw) if v == 2]
-        fake_block = [i for i, v in enumerate(kfs_raw) if v == 3]
-        print(f"[KFS] 二区属性更新: R1={r1_blocks}, R2={r2_blocks}, Fake={fake_block}")
+    # === 调试打印：动作序列 ===
+    _print_action_sequence(ba_frame)
 
-        # === 触发路径规划与下发 ===
-        if len(fake_block) > 1:
-            print("[Zone2] 假块数量超过1个，无法规划")
-            return
-        if not r1_blocks:
-            print("[Zone2] 未检测到R1方块，跳过路径规划")
-            return
+    BA_REPEAT_COUNT = 10       # 重复发送次数
+    BA_REPEAT_INTERVAL = 0.1  # 发送间隔（秒）
 
-        result = compute_r1_zone2_path(
-            r1_blocks=r1_blocks, r2_blocks=r2_blocks, fake_block=fake_block,
-            auto_dog_flag=1, priority_block=[], start_candidates=[2, 0, 16],
-            exit_node=11, verbose=True,
-        )
+    def _repeat_send(frame, count, interval):
+        for i in range(count):
+            ros_bridge_module.RosBridgeNodeInstance.writeBytes(frame)
+            print(f"已下发 ({i+1}/{count})")
+            if i < count - 1:
+                time.sleep(interval)
 
-        if not result['success']:
-            print(f"[Zone2] 路径规划失败: {result['error']}")
-            return
-
-        ba_frame = encode_zone2_frame(result['filtered_nodes'])
-        _print_action_sequence(ba_frame)
-
-        ros_bridge_module.RosBridgeNodeInstance.writeBytes(ba_frame)
-        print(f"[Zone2] 0xBA 路径帧已下发，共 {len(ba_frame)} 字节")
-
-    except Exception as e:
-        print(f"[KFS] 解析异常: {e}")
-
+    Thread(target=_repeat_send, args=(ba_frame, BA_REPEAT_COUNT, BA_REPEAT_INTERVAL), daemon=True).start()
 
 def _print_action_sequence(frame: bytes):
     """解码 0xBA 帧并打印可读的动作序列（调试用）。"""
