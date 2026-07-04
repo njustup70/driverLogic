@@ -180,29 +180,23 @@ def _stake_id_to_column(stake_id: int) -> int:
 
 
 def determine_column_stake_id(actions: List[Dict[str, Any]]) -> Optional[int]:
-    """提取取块后第一个 move/lift 动作所在列的编号（1-based）。
+    """提取第一个 lift 动作目标桩号所在列的编号（1-based）。
 
-    从第一个 pick 动作之后开始扫描，找到第一个 move 或 lift 动作，
-    返回其目标桩号所在列的编号（1~4）。若无法确定则返回 None。
+    扫描整个动作序列，找到第一个 lift 动作，返回其 to 字段对应桩号
+    所在列的编号（1~4）。若无法确定则返回 None。
     """
-    found_pick = False
     for act in actions:
-        t = act.get("type")
-        if t == "pick":
-            found_pick = True
+        if act.get("type") != "lift":
             continue
-        if not found_pick:
-            continue
-        if t in ("move", "lift"):
-            target = str(act.get("to", ""))
-            stake_id: Optional[int] = None
-            if target.isdigit():
-                stake_id = int(target)
-            elif target.startswith("D_"):
-                parts = target.split("_")
-                stake_id = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else None
-            if stake_id is not None and stake_id in STAKE_3D_INFO:
-                return _stake_id_to_column(stake_id)
+        target = str(act.get("to", ""))
+        stake_id: Optional[int] = None
+        if target.isdigit():
+            stake_id = int(target)
+        elif target.startswith("D_"):
+            parts = target.split("_")
+            stake_id = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else None
+        if stake_id is not None and stake_id in STAKE_3D_INFO:
+            return _stake_id_to_column(stake_id)
     return None
 
 
