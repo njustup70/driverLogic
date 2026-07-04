@@ -193,7 +193,94 @@ def serial_correct_callback(data: bytes): # 0xB2
         print(f"✗ SLAM correct 纠正指令处理错误: {e}")
         return False
 
+# 场地/区域回调的去重缓存（看门狗双去重：回调层 + 看门狗层）
+_last_field_color_value = None
+_last_zone_retry_value = None
 
+def field_color_callback(data: bytes):  # 0x78
+    """
+    红蓝场决定指令回调
+    帧格式：0xFF 0x78 [场地决定帧] 0xFF (4 字节)
+    场地决定帧：0x01 = 蓝场，0x00 = 红场
+    """
+    global _last_field_color_value
+    if not data or len(data) != 2:
+        return
+    if data[1] != 0xFF:
+        return
+
+    field = data[0]
+    if field not in (0x00, 0x01):
+        print(f"场地决定：未知场地码 0x{field:02X}")
+        return
+    # 回调层去重：数据内容没变则不重复设 flag
+    if field == _last_field_color_value:
+        return
+    _last_field_color_value = field
+    if field == 0x01:
+        TFManagerInstance.field_color_flag = 1
+        TFManagerInstance.sick_direction_flag = 1
+        print("场地决定：蓝场")
+    elif field == 0x00:
+        TFManagerInstance.field_color_flag = 0
+        TFManagerInstance.sick_direction_flag = 0
+        print("场地决定：红场")
+
+
+def zone_retry_callback(data: bytes):  # 0x69
+    """
+    一三区场地重试指令回调
+    帧格式：0xFF 0x69 [重试地决定帧] 0xFF (4 字节)
+    重试地决定帧：0x01 = 一区重试，0x03 = 三区重试
+    注意：R1 与 R2 即使是一三区重启，参数设置也不一样，但可共用一个回调。
+    """
+    global _last_zone_retry_value
+    if not data or len(data) != 2:
+        return
+    if data[1] != 0xFF:
+        return
+
+    zone = data[0]
+    if zone not in (0x01, 0x03):
+        print(f"场地重试：未知重试区码 0x{zone:02X}")
+        return
+    # 回调层去重：数据内容没变则不重复设 flag
+    if zone == _last_zone_retry_value:
+        return
+    _last_zone_retry_value = zone
+    if zone == 0x01:
+        TFManagerInstance.zone_retry_flag = 1
+        print("场地重试：一区重试")
+    elif zone == 0x03:
+        TFManagerInstance.zone_retry_flag = 3
+        print("场地重试：三区重试")
+
+
+def slam_restart_callback(data: bytes):  # 0x13
+    """
+    SLAM 重启指令回调
+    帧格式：0xFF 0x13 0x13 0xFF (4 字节)
+    此指令用于重试时由下位机按键触发，重启 SLAM 容器。
+    """
+    if not data or len(data) != 2:
+        return
+    if data[0] != 0x13 or data[1] != 0xFF:
+        return
+    print("SLAM 重启指令已触发，重启 SLAM 容器")
+    import subprocess
+    try:
+        subprocess.run(
+            ["docker", "restart", "voxel_slam_ros2_runtime"],
+            check=True,
+            timeout=15,
+        )
+        print("✓ voxel_slam_ros2_runtime 容器重启成功，entrypoint 已重新运行")
+    except subprocess.CalledProcessError as e:
+        print(f"✗ voxel_slam_ros2_runtime 容器重启失败 (exit={e.returncode}): {e.stderr}")
+    except subprocess.TimeoutExpired:
+        print("✗ voxel_slam_ros2_runtime 容器重启超时（超过 15 秒）")
+    except FileNotFoundError:
+        print("✗ docker CLI 未找到，请确认容器内已安装 docker")
 # def example_serial_callback(data: bytes):
 #     #示例函数
 #     #检查第一位 非常重要
@@ -294,4 +381,12 @@ def ros_qr_callback(msg):
         QRRecogInstance.recog_qr_result.value = ", ".join(states)
         return
     except:
-        return 
+        return
+
+
+
+
+
+   
+
+

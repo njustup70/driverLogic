@@ -35,8 +35,15 @@ class TFManager:
         if getattr(self, '_is_initialized', False):
                     return
         self._is_initialized = True
+
+        # 三个场地标志位
         # sick纠正选择墙体分边Flag
-        self.flag = 0 #（0表示左侧场，1表示右侧场）
+        self.sick_direction_flag = 0 #（0表示左侧场，1表示右侧场）
+        # 场地红蓝场标志位
+        self.field_color_flag = 0 #（0表示红场，1表示蓝场）
+        # 一三区重启标志位
+        self.zone_retry_flag = 1 #（1表示一区，3表示三区）
+
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
         # 坐标系固定配置（不使用 ROS2 参数）
@@ -61,6 +68,10 @@ class TFManager:
         # 控制标志
         self._tf_chain_registered = False
         self._has_slam_pose = False
+        # 场地/区域看门狗：追踪上次已应用的组合状态
+        self._last_applied_field_color = None
+        self._last_applied_zone_retry = None
+        self._field_zone_config_applied = False
         # sick 修正缓存
         self.sick_lateral_offset = 0.0
         self.sick_buffer_size = 10
@@ -95,6 +106,61 @@ class TFManager:
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
+        # 同步看门狗状态：记录 register_tf_chain 时的初始 flag 组合
+        self._last_applied_field_color = self.field_color_flag
+        self._last_applied_zone_retry = self.zone_retry_flag
+        self._field_zone_config_applied = True
+
+    # ==================== 场地/区域 看门狗 ====================
+    # (field_color_flag, zone_retry_flag) → map2BaseInit 映射表
+    # field_color_flag: 0=红场, 1=蓝场
+    # zone_retry_flag:  1=一区, 3=三区
+    FIELD_ZONE_MAP2BASE_CONFIG = {
+        (0, 1): Odom(0.390, 5 - 0.352, -3.1415926 / 2),  # 红场一区 （现有参数）
+        (0, 3): Odom(0.0, 0.0, 0.0),                       # 红场三区 PLACEHOLDER
+        (1, 1): Odom(0.0, 0.0, 0.0),                       # 蓝场一区 PLACEHOLDER
+        (1, 3): Odom(0.0, 0.0, 0.0),                       # 蓝场三区 PLACEHOLDER
+    }
+
+    def _check_and_apply_field_zone_config(self):
+        """看门狗检查：若场地/区域组合状态变化，更新 map2BaseInit 并重发静态 TF。
+
+        仅当 (field_color_flag, zone_retry_flag) 组合与上次已应用的不同时才执行：
+        1. 用新的 map2BaseInit 覆盖 self.mapToBaseInit
+        2. 按 register_tf_chain 相同的公式重算 _mapToSlamInit
+        3. 重新发布 map → slam_init 静态 TF
+        """
+        if not self._tf_chain_registered or self.rosBridge is None:
+            return
+
+        fc = self.field_color_flag
+        zr = self.zone_retry_flag
+
+        # 看门狗层去重：组合状态没变则跳过
+        if self._field_zone_config_applied:
+            if fc == self._last_applied_field_color and zr == self._last_applied_zone_retry:
+                return
+
+        new_map2base = self.FIELD_ZONE_MAP2BASE_CONFIG.get((fc, zr))
+        if new_map2base is None:
+            print(f"[FieldZone] 未知场地/区域组合: field={fc}, zone={zr}，跳过")
+            return
+
+        field_name = "蓝场" if fc else "红场"
+        zone_name = f"{zr}区"
+        print(f"[FieldZone] 配置变更: {field_name} {zone_name} → map2BaseInit={new_map2base}")
+
+        self.mapToBaseInit = new_map2base
+        self._mapToSlamInit = self.mapToBaseInit @ self.laser_to_base.inverse()
+        # 同步所有依赖 mapToBaseInit 的派生变量
+        self._sickYawCorrection = 0.0
+        self._baseinitYaw = (self._mapToSlamInit @ self.laser_to_base).yaw
+        self._slaminitYaw = self._mapToSlamInit.yaw
+        self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
+
+        self._last_applied_field_color = fc
+        self._last_applied_zone_retry = zr
+        self._field_zone_config_applied = True
 
     def odom(self, x: float, y: float, yaw: float):
         """码盘数据入口：更新 odom->base_link。"""
@@ -151,7 +217,7 @@ class TFManager:
         # y = (self.left_sick_y + self.right_sick_y + self.sick_dist_to_base*2)
         # print(f"y={y:.3f}")
         # theta = math.acos(6/y)
-        if self.flag==0:
+        if self.sick_direction_flag==0:
             # 解超越方程
             # y_real=fsolve
             def calculate_y_real(theta):
@@ -163,9 +229,12 @@ class TFManager:
                 #)
             dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
             # dyaw =  self._baseinitodom.yaw - math.pi/2 - theta
-        # elif self.flag==1:
+        # elif self.sick_direction_flag==1:
             # dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
             print(f"{-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(self._baseinitodom.yaw+self._baseinitYaw)}")
+        if self.sick_direction_flag==1:
+            dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            
         else:
             self.left_sick_buffer.clear()
             self.right_sick_buffer.clear()
@@ -251,6 +320,7 @@ class TFManager:
             try:
                 if tick_10ms % 10 == 0:
                     self.slam_100ms()
+                    self._check_and_apply_field_zone_config()
                     self.odom_10ms()
                 else:
                     self.odom_10ms()
