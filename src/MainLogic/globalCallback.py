@@ -178,7 +178,7 @@ def kfs_callback(data: bytes):
     # === 调试打印：动作序列 ===
     _print_action_sequence(ba_frame)
 
-    BA_REPEAT_COUNT = 10       # 重复发送次数
+    BA_REPEAT_COUNT = 100       # 重复发送次数
     BA_REPEAT_INTERVAL = 0.1  # 发送间隔（秒）
 
     def _repeat_send(frame, count, interval):
