@@ -1,13 +1,14 @@
 /hik_camera_ros2_driver:
   ros__parameters:
-    camera_info_url: "package://hik_camera_ros2_driver/config/camera_info.yaml"
-    pixel_format: "Mono8"           # Prefer Mono8 for high-FPS PnP. Falls back to a supported Bayer8 format.
+    camera_info_url: "file:///home/hjw/charuco_calibration_optimized/results/camera_round_02_20260704_190117.yaml"
+    pixel_format: "BayerGB8"        # This camera reports BayerGB8 as the supported 8-bit format.
     adc_bit_depth: ""               # Leave empty for cameras that do not expose ADCBitDepth.
-    use_sensor_data_qos: false
+    use_sensor_data_qos: true       # Best-effort QoS avoids image backlog and preview latency.
     camera_name: "camera"
     # frame_id: "optical_frame"     # If not set, it will be set as <camera_name>_optical_frame
     # camera_topic: "image"         # If not set, it will be set as <camera_name>/image
 
-    acquisition_frame_rate: 200.0   # Unit: Hz
+    image_node_num: 8               # SDK internal image buffers. Range: 1 ~ 30.
+    acquisition_frame_rate: 200.0    # Unit: Hz
     exposure_time: 8000             # Unit: us
-    gain: 12.0                      # Range: 0.0 ~ 16.9, Unit: dB
+    gain: 8.0                       # Range: 0.0 ~ 16.9, Unit: dB

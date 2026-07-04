@@ -187,11 +187,26 @@ private:
     camera_name_ = this->declare_parameter("camera_name", "camera");
     frame_id_ = this->declare_parameter("frame_id", camera_name_ + "_optical_frame");
     camera_topic_ = this->declare_parameter("camera_topic", camera_name_ + "/image");
+    int image_node_num = this->declare_parameter("image_node_num", 8);
+    image_node_num = std::max(1, std::min(image_node_num, 30));
 
     auto qos = use_sensor_data_qos ? rmw_qos_profile_sensor_data : rmw_qos_profile_default;
     camera_pub_ = image_transport::create_camera_publisher(this, camera_topic_, qos);
 
-    MV_CC_StartGrabbing(camera_handle_);
+    int status = MV_CC_SetImageNodeNum(camera_handle_, static_cast<unsigned int>(image_node_num));
+    if (status == MV_OK) {
+      RCLCPP_INFO(this->get_logger(), "SDK image node number: %d", image_node_num);
+    } else {
+      RCLCPP_WARN(
+        this->get_logger(), "Failed to set image node number to %d, status = %s",
+        image_node_num, statusToString(status).c_str());
+    }
+
+    status = MV_CC_StartGrabbing(camera_handle_);
+    if (status != MV_OK) {
+      RCLCPP_ERROR(
+        this->get_logger(), "Failed to start grabbing, status = %s", statusToString(status).c_str());
+    }
 
     // Load camera info
     camera_info_manager_ =
@@ -208,7 +223,7 @@ private:
 
   void captureLoop()
   {
-    MV_FRAME_OUT out_frame;
+    MV_FRAME_OUT out_frame = {};
     RCLCPP_INFO(this->get_logger(), "Publishing image!");
 
     image_msg_.header.frame_id = frame_id_;
@@ -217,6 +232,8 @@ private:
     while (rclcpp::ok()) {
       n_ret_ = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000);
       if (MV_OK == n_ret_) {
+        fail_count_ = 0;
+        no_data_count_ = 0;
         image_msg_.header.stamp = this->now();
         image_msg_.height = out_frame.stFrameInfo.nHeight;
         image_msg_.width = out_frame.stFrameInfo.nWidth;
@@ -226,7 +243,6 @@ private:
         if (fillMonoImage(out_frame)) {
           camera_info_msg_.header = image_msg_.header;
           camera_pub_.publish(image_msg_, camera_info_msg_);
-          fail_count_ = 0;
         }
 
         MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
@@ -240,16 +256,29 @@ private:
           last_log_time = now;
         }
 
-      } else {
-        RCLCPP_WARN(this->get_logger(), "Get buffer failed! nRet: [%x]", n_ret_);
-        MV_CC_StopGrabbing(camera_handle_);
-        MV_CC_StartGrabbing(camera_handle_);
-        fail_count_++;
+        continue;
       }
 
-      if (fail_count_ > 5) {
-        RCLCPP_FATAL(this->get_logger(), "Camera failed!");
-        rclcpp::shutdown();
+      if (n_ret_ == static_cast<int>(MV_E_NODATA)) {
+        no_data_count_++;
+        warnBufferFailure("No image data from camera", n_ret_);
+        if (no_data_count_ >= kMaxConsecutiveNoDataBeforeRestart) {
+          RCLCPP_WARN(
+            this->get_logger(), "No image data for %d consecutive waits; restarting stream.",
+            no_data_count_);
+          restartGrabbing();
+          no_data_count_ = 0;
+        }
+      } else {
+        fail_count_++;
+        warnBufferFailure("Get image buffer failed", n_ret_);
+        if (fail_count_ >= kMaxConsecutiveFailuresBeforeRestart) {
+          RCLCPP_WARN(
+            this->get_logger(), "Image buffer failed %d times consecutively; restarting stream.",
+            fail_count_);
+          restartGrabbing();
+          fail_count_ = 0;
+        }
       }
     }
   }
@@ -527,6 +556,45 @@ private:
     }
   }
 
+  void warnBufferFailure(const std::string & message, int status)
+  {
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_buffer_warning_time_ >= std::chrono::seconds(1)) {
+      RCLCPP_WARN(
+        this->get_logger(), "%s, status = %s", message.c_str(), statusToString(status).c_str());
+      last_buffer_warning_time_ = now;
+    }
+  }
+
+  bool restartGrabbing()
+  {
+    const int stop_status = MV_CC_StopGrabbing(camera_handle_);
+    if (stop_status != MV_OK && stop_status != static_cast<int>(MV_E_CALLORDER)) {
+      RCLCPP_WARN(
+        this->get_logger(), "Failed to stop grabbing during recovery, status = %s",
+        statusToString(stop_status).c_str());
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    const int start_status = MV_CC_StartGrabbing(camera_handle_);
+    if (start_status == MV_OK) {
+      RCLCPP_INFO(this->get_logger(), "Camera stream restarted.");
+      return true;
+    }
+    if (start_status == static_cast<int>(MV_E_CALLORDER)) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "StartGrabbing returned call-order error during recovery; stream may already be active.");
+      return true;
+    }
+
+    RCLCPP_ERROR(
+      this->get_logger(), "Failed to restart camera stream, status = %s",
+      statusToString(start_status).c_str());
+    return false;
+  }
+
   void * camera_handle_ = nullptr;
   int n_ret_ = MV_OK;
   MV_IMAGE_BASIC_INFO img_info_;
@@ -543,7 +611,12 @@ private:
 
   std::thread capture_thread_;
   int fail_count_ = 0;
+  int no_data_count_ = 0;
+  static constexpr int kMaxConsecutiveNoDataBeforeRestart = 10;
+  static constexpr int kMaxConsecutiveFailuresBeforeRestart = 5;
   std::chrono::steady_clock::time_point last_image_warning_time_ = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point last_buffer_warning_time_ =
+    std::chrono::steady_clock::now();
 };
 }  // namespace hik_camera_ros2_driver
 
