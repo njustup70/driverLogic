@@ -110,16 +110,16 @@ YOLO_CLASSNAME_COMMAND = b'\xB4'
 SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
 SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
-# === R1 二区 KFS 属性帧 (0xA2) ===
+# === R1 二区 KFS 属性帧 (0xC2) ===
 # 遥控器或下位机发送方块属性 → 触发路径规划 → 编码0xBA帧 → 串口下发
-from MainLogic.core.R1_zone2 import compute_r1_zone2_path, encode_zone2_frame, format_ba_frame_hex
+from MainLogic.core.R1_zone2 import compute_r1_zone2_path, encode_zone2_frame
 
 KFS_LABELS = {0: "空", 1: "R1", 2: "R2", 3: "假块"}
 zone2_kfs_state: list[int] = [0] * 12
 
 
 def kfs_callback(data: bytes):
-    """解析 0xA2 KFS 属性帧 → 路径规划 → 编码0xBA帧 → 串口下发。
+    """解析 0xC2 KFS 属性帧 → 路径规划 → 编码0xBA帧 → 串口下发。
 
     方块编号顺序（俯视图，一区面向机器人）：
         三区
@@ -170,7 +170,6 @@ def kfs_callback(data: bytes):
         return
 
     ba_frame = encode_zone2_frame(result['filtered_nodes'])
-    print(format_ba_frame_hex(ba_frame))
 
     ros_bridge_module.RosBridgeNodeInstance.writeBytes(ba_frame)
     print(f"[Zone2] 0xBA 路径帧已下发，共 {len(ba_frame)} 字节")
