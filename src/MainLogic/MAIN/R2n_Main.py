@@ -20,7 +20,7 @@ import MainLogic.core.nav.mpc as mpc
 import MainLogic.core.Move as Move
 import numpy as np
 from geometry_msgs.msg import PointStamped
-from std_msgs.msg import String, UInt8MultiArray
+from std_msgs.msg import Empty, String, UInt8MultiArray
 from MainLogic import globalCallback as gcb
 from MainLogic.app.actions import (
     BUILD_SPEAR_ACTION_TYPE,
@@ -47,6 +47,7 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.field_color_callback, 0x78)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.zone_retry_callback, 0x69)
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.slam_restart_callback, 0x13)
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/slam_reset", gcb.slam_reset_callback, type=Empty)
     
 
     sick2Base=Odom(0.0, -0.3511, 0.0)

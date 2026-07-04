@@ -101,7 +101,7 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
 from MainLogic.Lib.bytes import turn_to_bytes
-from std_msgs.msg import Float32
+from std_msgs.msg import Empty, Float32
 
 
 SPEAR_OFFSET_COMMAND = b'\xB1'
@@ -254,6 +254,11 @@ def zone_retry_callback(data: bytes):  # 0x69
     elif zone == 0x03:
         TFManagerInstance.zone_retry_flag = 3
         print("场地重试：三区重试")
+
+
+def slam_reset_callback(msg: Empty):
+    """SLAM Reset 话题回调：监听 /slam_reset (std_msgs/Empty)，当 VoxelSLAM 内部触发 system_reset 时被调用。"""
+    print("⚠️  SLAM Reset 话题已触发！VoxelSLAM 内部执行了 system_reset")
 
 
 def slam_restart_callback(data: bytes):  # 0x13
