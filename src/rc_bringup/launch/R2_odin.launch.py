@@ -17,12 +17,15 @@ def generate_launch_description():
     PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('odin_ros_driver'), 'launch', 'odin1_ros2.launch.py')
         ),
+        launch_arguments={
+            'config_file': '/home/Elaina/ros2_ws/src/odin_ros_driver/config/control_command.yaml',
+        }.items(),
     )
     r2_main = ExecuteProcess(
         cmd=[
             'bash',
             '-c',
-            'python3 ~/ros2_ws/src/MainLogic/Main.py --main-module R2n_Main --main-func async_main',
+            'python3 ~/ros2_ws/src/MainLogic/Main.py --main-module odintestMain --main-func async_main',
         ],
         output='screen',
         emulate_tty=True,
@@ -52,7 +55,7 @@ def generate_launch_description():
         actions=[ros_bag_node]
     )
     # ld.add_action(airy_launch)
-    # ld.add_action(r2_main)
+    ld.add_action(r2_main)
     ld.add_action(odin_driver)
     ld.add_action(foxglove)
     ld.add_action(ros_bag_action)

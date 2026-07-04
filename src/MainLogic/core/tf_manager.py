@@ -1,7 +1,6 @@
 '''
 坐标管理类
 '''
-
 import asyncio
 import math
 from typing import cast
@@ -10,6 +9,7 @@ from scipy.optimize import fsolve
 import rclpy.time
 from geometry_msgs.msg import Vector3Stamped,Vector3
 
+from .odin_param import OdinMapAnalyzeResult, OdinMapParam, analyze_odin_map_param
 from MainLogic.Lib.odomVec import Odom,SE3
 from MainLogic.Lib.bytes import turn_to_bytes
 from MainLogic.Lib.AsyncTools import AsyncVariable
@@ -287,22 +287,53 @@ class TFOdin:
         # 存储了sick修正增量的变量，用于连续修正时的撤销与更新逻辑
         self._sickYawCorrection = 0.0
 
-    def register_tf_chain(self,Base2odin: Odom,Base2sick: Odom,Map2Base: Odom,Trans:SE3):
+        # odin地图标定参数
+        self._odin_map_param: OdinMapParam | None = None
+        self._odinMapAnalyzeResult: OdinMapAnalyzeResult | None = None
+        self._odinMapToFieldScale = 1.0
+        self._odinMapToFieldMatrix = np.eye(3, dtype=np.float64)
+        self._odinMapToField = Odom(0.0, 0.0, 0.0)
+        self._mapToOdinInit = Odom(0.0, 0.0, 0.0)
+        self._baseToOdin = Odom(0.0, 0.0, 0.0)
+        self._odin_to_base = Odom(0.0, 0.0, 0.0)
+        self._odinMapToField, self._baseToOdin, self._odin_to_base = self.load_odin_map_param()
+
+    def load_odin_map_param(self, map_num: str = "map_1"):
+        analyze_result = analyze_odin_map_param(map_num)
+        self._odin_map_param = analyze_result.map_param
+        self._odinMapAnalyzeResult = analyze_result
+        self._odinMapToFieldScale = analyze_result.scale
+        self._odinMapToFieldMatrix = analyze_result.odin_to_field_matrix
+        self._odinMapToField = analyze_result.odin_to_field
+        self._baseToOdin = analyze_result.base_to_odin
+        self._odin_to_base = analyze_result.odin_to_base
+        return (
+            self._odinMapToField,
+            self._baseToOdin,
+            self._odin_to_base,
+        )
+
+    def analyze_odin_map_para(self, map_num: str = "map_1"):
+        return self.load_odin_map_param(map_num)
+
+    def register_tf_chain(self,Base2odin: Odom | None = None,Base2sick: Odom | None = None,Map2Base: Odom | None = None,Trans:SE3 | None = None):
         '''
         param Base2odin: 车体中心到odin坐标
         '''
         self.rosBridge = ros_bridge_module.RosBridgeNodeInstance
-        assert Base2odin is not None and Base2sick is not None and Trans is not None, 'TFManager register_tf_chain requires all TFs to be provided!'
-        self._odin_to_base = Base2odin.inverse()
-        self._sick_to_base = Base2sick.inverse()
-        self._map_to_base = Map2Base
-        self._transSE=Trans
         assert self.rosBridge is not None, 'RosBridgeNodeInstance is not initialized yet!'
+        if Base2sick is not None:
+            self._sick_to_base = Base2sick.inverse()
+        if Map2Base is not None:
+            self._mapToBase = Map2Base
+        if Trans is not None:
+            self._transSE=Trans
         # 从 map->base_link_init 推导出 map->slam_init，并发布静态坐标
         # 公式：map->slam_init = map->base_link @ base_link->slam_init
-        self._mapToOdinInit = self._map_to_base @ Base2odin
+        self._mapToOdinInit = self._mapToBase @ self._baseToOdin
         self._sickYawCorrection = 0.0
-        self.rosBridge.publish_static_tf(self.odin_map_frame, self.map_frame, self._transSE.inverse())
+        if Trans is not None:
+            self.rosBridge.publish_static_tf(self.odin_map_frame, self.map_frame, self._transSE.inverse())
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
 
@@ -387,17 +418,19 @@ class TFOdin:
             except Exception:
                 return
         
-        if(self._is_relocalization):
+        if(self._is_relocalization):#重定位模式
             raw_SE3=SE3.from_transform_stamped(tf_map_base_odin)
-            # raw_odom=SE3.from_transform_stamped(tf_odom_msg)
-            #========== 坐标变换逻辑 ============
-            # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系 ——> Odin里程计坐标系 ——> 车体中心坐标系
-            #抓换到ref座标系(地图座标系)
-            # 场景坐标系 ——> Odin 建图起点坐标系 ——> 此次定位起点坐标系
-            ref_SE3=self._transSE@raw_SE3
-            map_to_odin = ref_SE3.to_odom()
-
-            baselink = (map_to_odin @ self._odin_to_base)
+            odin_to_lidar = raw_SE3.to_odom()
+            field_lidar_x, field_lidar_y, _ = (
+                self._odinMapToFieldMatrix
+                @ np.array((odin_to_lidar.x, odin_to_lidar.y, 1.0), dtype=np.float64)
+            ).tolist()
+            field_to_lidar = Odom(
+                field_lidar_x,
+                field_lidar_y,
+                self._odinMapToField.yaw + odin_to_lidar.yaw,
+            )
+            baselink = field_to_lidar @ self._odin_to_base
             # ========== 发布 TF 树 ============
             # 发布 map_odin -> odom_odin
             # self.rosBridge.publish_dynamic_tf(self.map_frame, self.odom_frame, map_to_odom)

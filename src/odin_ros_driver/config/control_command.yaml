@@ -1,96 +1,93 @@
 register_keys:
-  # if off, allow connection even if usb connection is below usb 3.0
-  # ATTENTION: usb 3.0 is always recommended, as advance functionality like SLAM mode requires usb 3.0 for reliable map file transfer
-  strict_usb3.0_check: 0  # 0: off: 1: on;
+  # 强制要求 USB 3.0；重定位地图传输建议开启
+  strict_usb3.0_check: 1
 
-  # 0: use odin internal system time as data time stamp, typical and recommended;
-  # 1: use host ros time (upon receive) as data time stamp, only use if you specifically require this setup, not recommended for most users
-  # 2: align odin1 time to host time, timestamp is the sensor data reception time on host time axis
-  use_host_ros_time: 2  # Changed to 0 to use device timestamp without PTP offset correction
+  # 2：将 Odin 时间对齐到主机时间轴
+  use_host_ros_time: 2
 
-  streamctrl: 1           # 0: off; 1: on
+  # 数据流控制
+  streamctrl: 1
 
-  # original rgb data in jpeg format from device
-  sendrgbcompressed: 1    # 0: off; 1: on
+  # 原始 JPEG 图像
+  sendrgbcompressed: 1
 
-  # RGB data, decoded from original jpeg data from device, bgr8 format
-  # Processed on host device
-  sendrgb: 1              # 0: off; 1: on
+  # 主机解码后的 BGR8 图像
+  sendrgb: 1
 
-  # undistort rgb image processed from decoded rgb data.
-  # depends on sendrgb. related camera parameters can be found in ws/src/odin_ros_driver/config/calib.yaml
-  # Processed on host device
-  sendrgbundistort: 1     # 0: off; 1: on.
+  # 去畸变 RGB 图像，依赖 sendrgb
+  sendrgbundistort: 1
 
-  # IMU data
-  sendimu: 0              # 0: off; 1: on
-    # SDK IMU smooth sending feature
-  # When enabled, SDK will send IMU data at precise intervals (default 400Hz) 
-  # using a dedicated high-priority thread to reduce jitter and timing variance
-  enable_imu_smooth: 0    # 0: disable SDK IMU smooth sending; 1: enable (default)
+  # IMU 数据
+  sendimu: 1
 
-  # SDK IMU smooth sending frequency in Hz (only effective when enable_imu_smooth = 1)
-  imu_smooth_frequency: 400  # 1-1000 Hz, recommended 400 Hz
+  # 开启 SDK IMU 平滑发送
+  enable_imu_smooth: 1
 
-  # Odometry data
-  sendodom: 1             # 0: off; 1: on
+  # IMU 平滑发送频率
+  imu_smooth_frequency: 400
 
-  # TF from odom to base_link. Leave it on unless you specifically need it off.
-  # ATTENTION: critical for rviz to show cloud_raw.
-  send_odom_baselink_tf: 1 # 0: off; 1: on.
+  # Odin 里程计数据
+  sendodom: 1
 
-  # raw dtof data
-  senddtof: 0             # 0: off; 1: on
-  cloud_raw_confidence_threshold: 35 # please refer to readme for more details
-  
-  # dtof sensor frame rate. Supported values: 100 (10fps) or 145 (14.5fps)
-  # Higher frame rate provides smoother point cloud data but may increase data bandwidth
-  # Note: value is multiplied by 10 (e.g., 145 means 14.5fps)
-  dtof_fps: 100           # 100: 10fps; 145: 14.5fps
+  # 发布 odom -> odin1_base_link TF
+  send_odom_baselink_tf: 1
 
-  # slam cloud data
-  sendcloudslam: 1        # 0: off; 1: on
+  # 原始 DTOF 点云
+  senddtof: 1
 
-  # processed with raw point cloud, rgb image, and calib.yaml from device
-  # Processed on host device
-  sendcloudrender: 1      # 0: off; 1: on
+  # 原始点云置信度阈值
+  cloud_raw_confidence_threshold: 35
 
-  # depth completion demo, high computing resource usage. 
-  # for more information please refer to the readme file.
-  # Processed on host device
-  senddepth: 0            # 0: off; 1: on
+  # DTOF 最大支持帧率：145 表示 14.5 fps
+  dtof_fps: 145
 
-  # cloud reprojection demo, projects cloud_slam to camera image using odometry
-  # Processed on host device
-  sendreprojection: 1   # 0: off; 1: on
-  # image overlay settings - overlays reprojected points on camera image
-  # Processed on host device
-  sendoverlay: 1                                    # 0: off; 1: on
-  overlay_reprojected_topic: "/odin1/reprojected_image"  # reprojected image topic
-  overlay_camera_topic: "/odin1/image/undistorted"       # camera image topic (undistorted)
-  overlay_output_topic: "/odin1/overlay_image"           # output overlay image topic
-  overlay_alpha: 0.6                                     # blend alpha (0.0-1.0, higher = more reproj color)
-  # record rgb, odometry, and slam cloud data as proprietary olx format for further processing in MindCloud(TM) software. 
-  # save path: ws/src/odin_ros_driver/recorddata/{record_start_time}/
-  # ATTENTION: please copy the full folder for post-processing.
-  recorddata: 0           # 0: off; 1: on
+  # SLAM 点云
+  sendcloudslam: 1
 
-  # Save device runtime status info to ws/src/odin_ros_driver/log/Driver_{drvier_start_time}/Conn_{device_connection_time}/dev_status.csv
-  devstatuslog: 1         # 0: off; 1: on.
+  # 主机渲染点云
+  sendcloudrender: 1
 
-  save_log: 0 # 0: off; 1: on; 
+  # 深度补全，计算资源消耗较高
+  senddepth: 1
 
-  # raw dtof sensor intensity data in gray format, mostly for debug purpose.
-  pubintensitygray: 0     # 0: off; 1: on
+  # 点云重投影
+  sendreprojection: 1
 
-  showpath: 0             # 0: off; 1: on
-  showcamerapose: 0       # 0: off; 1: on
-  
-  custom_map_mode: 2    # 0: Odometry mode 1: SLAM mode 2: Relocalization mode
+  # 图像叠加
+  sendoverlay: 1
+
+  overlay_reprojected_topic: "/odin1/reprojected_image"
+  overlay_camera_topic: "/odin1/image/undistorted"
+  overlay_output_topic: "/odin1/overlay_image"
+  overlay_alpha: 0.6
+
+  # 记录 RGB、里程计和 SLAM 点云
+  recorddata: 1
+
+  # 保存设备运行状态
+  devstatuslog: 1
+
+  # 保存驱动日志
+  save_log: 1
+
+  # 发布 DTOF 原始灰度强度图
+  pubintensitygray: 1
+
+  # 显示运动路径
+  showpath: 1
+
+  # 显示相机位姿
+  showcamerapose: 1
+
+  # 2：重定位模式
+  custom_map_mode: 2
+
+  # 初始位姿：[x, y, z, qx, qy, qz, qw]
   custom_init_pos: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-  relocalization_map_abs_path: "/home/Elaina/ros2_ws/src/odin_ros_driver/map/map_merged (2).bin" # must be set for Relocalization mode or will fail
 
-  # To get the mapping result file, please use the set_param.sh script provided: "./set_param.sh save_map 1"
-  mapping_result_dest_dir: "" # "": if not specified, save to default location of {ws}/src/odin_ros_driver/map/{driver_start_time}/
-  mapping_result_file_name: "" # "": if not specified, save to location above with default file name of map_{map_save_time}.bin
-  
+  # 重定位地图绝对路径
+  relocalization_map_abs_path: "/home/Elaina/ros2_ws/src/odin_ros_driver/recorddata/20260702_094903/export_map/map_merged.bin"
+
+  # 地图保存配置；重定位模式下一般不会使用
+  mapping_result_dest_dir: ""
+  mapping_result_file_name: ""
