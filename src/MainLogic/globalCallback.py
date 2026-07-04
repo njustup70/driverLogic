@@ -134,6 +134,8 @@ def kfs_callback(data: bytes):
     """
     global zone2_kfs_state
 
+    print(f"[KFS] 原始帧数据 (hex): {data.hex()}")
+
     if len(data) < 12:
         print(f"[KFS] 帧长度不足: 期望12字节, 实际{len(data)}")
         return

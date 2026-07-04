@@ -14,9 +14,9 @@ async def async_main():
         await asyncio.sleep(0.05)
 
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, b'\xAA')
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, b'\xB3')
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
+    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.mcu_transmit_callback, b'\xAA')
+    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, b'\xB3')
+    #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.kfs_callback, b'\xC2')
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     
