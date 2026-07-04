@@ -196,7 +196,7 @@ def determine_column_stake_id(actions: List[Dict[str, Any]]) -> Optional[int]:
             parts = target.split("_")
             stake_id = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else None
         if stake_id is not None and stake_id in STAKE_3D_INFO:
-            return _stake_id_to_column(stake_id)
+            return stake_id
     return None
 
 
