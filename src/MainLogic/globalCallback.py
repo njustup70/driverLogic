@@ -171,8 +171,45 @@ def kfs_callback(data: bytes):
 
     ba_frame = encode_zone2_frame(result['filtered_nodes'])
 
+    # === 调试打印：动作序列 ===
+    _print_action_sequence(ba_frame)
+
     ros_bridge_module.RosBridgeNodeInstance.writeBytes(ba_frame)
     print(f"[Zone2] 0xBA 路径帧已下发，共 {len(ba_frame)} 字节")
+
+
+def _print_action_sequence(frame: bytes):
+    """解码 0xBA 帧并打印可读的动作序列（调试用）。"""
+    if len(frame) < 2:
+        return
+
+    n = frame[1]
+    yaw_names = {0b00: "↓(0.0)", 0b01: "→(1.57)", 0b10: "←(-1.57)", 0b11: "↑(3.14)"}
+
+    lines = [f"\n{'='*50}", f" 下发动作序列 ({n} 步)", f"{'='*50}"]
+    for i in range(n):
+        off = 2 + i * 2
+        if off + 1 >= len(frame):
+            break
+        b1, b2 = frame[off], frame[off + 1]
+        seq = b1 & 0b1111
+        yaw = (b1 >> 4) & 0b11
+        pick = (b1 >> 6) & 0b1
+        end = (b1 >> 7) & 0b1
+        aisle = (b2 >> 3) & 0b11111
+
+        flags = []
+        if pick: flags.append("抓取")
+        if end:  flags.append("终点")
+        if not flags: flags.append("经过")
+
+        lines.append(
+            f"  [{seq:2d}] 过道:{aisle:2d}  朝向:{yaw_names.get(yaw, '?')}  "
+            f"{' | '.join(flags)}  "
+            f"HEX: {b1:02X} {b2:02X}"
+        )
+    lines.append(f"{'='*50}\n")
+    print('\n'.join(lines))
 
 
 def mcu_transmit_callback(data: bytes):
