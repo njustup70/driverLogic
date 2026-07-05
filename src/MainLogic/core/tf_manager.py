@@ -118,7 +118,7 @@ class TFManager:
     FIELD_ZONE_MAP2BASE_CONFIG = {
         (0, 1): Odom(0.390, 5 - 0.352, -3.1415926 / 2),  # 红场一区 （现有参数）
         (0, 3): Odom(0.0, 0.0, 0.0),                       # 红场三区 PLACEHOLDER
-        (1, 1): Odom(0.0, 0.0, 0.0),                       # 蓝场一区 PLACEHOLDER
+        (1, 1): Odom(0.39, 1+0.352, math.pi/2),                       # 蓝场一区 PLACEHOLDER
         (1, 3): Odom(0.0, 0.0, 0.0),                       # 蓝场三区 PLACEHOLDER
     }
 
