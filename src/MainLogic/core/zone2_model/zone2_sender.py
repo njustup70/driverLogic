@@ -2,6 +2,7 @@ import asyncio
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
+from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.core.zone2_model.zone2_helpers import (
     _extract_pick_target_from_derived_node,
     _is_derived_node,
@@ -106,7 +107,12 @@ def generate_actions_from_result(
 
         # 1) 转向（起点不转）
         if turn_cost > 0.0 and turn_action != 0 and str(u) != "start":
-            actions.append({"type": "turn", "from": str(u), "code": turn_action})
+            # 180° 掉头拆成两个 90° 转向（硬件一次只能转 90°）
+            if turn_action == 3:  # TURN_ACTION_UTURN
+                actions.append({"type": "turn", "from": str(u), "code": 2})
+                actions.append({"type": "turn", "from": str(u), "code": 2})
+            else:
+                actions.append({"type": "turn", "from": str(u), "code": turn_action})
 
         # 2) 取块 / 升降+移动
         if is_pick:
