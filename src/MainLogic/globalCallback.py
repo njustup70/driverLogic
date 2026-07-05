@@ -266,7 +266,7 @@ def slam_reset_callback(msg: Empty):
     if bridge is None:
         return
 
-    bridge.writeBytes(SLAMRESET)# 发送 SLAM correct 指令，触发 SICK yaw 纠正
+    bridge.writeBytes(SLAMRESET)# 发送指令，让下位机知道slam有问题需要重试
 
 
 def slam_restart_callback(data: bytes):  # 0x13
