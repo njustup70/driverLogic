@@ -46,7 +46,8 @@ async def async_main():
     #    map2BaseInit=Odom(11.480, 0.450, 0.0) # 三区技能赛地图起点 12-0.52=11.48
     #else:
     #    map2BaseInit=Odom(11.480, -0.5317, 0.0) # 三区技能赛地图起点 12-0.52=11.48
-    map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
+    #map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
+    map2BaseInit=Odom(0.45, 6-0.9817+0.45, 0.0)
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
     base2laser=Odom(0.4775,-0.345, 1.6*math.pi/180) # 雷达底盘
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser)
