@@ -26,6 +26,7 @@ from MainLogic.app.zone2_model_api import (
     print_path_debug_info,
     solve_route,
 )
+from MainLogic.core.tf_manager import TFManagerInstance
 
 
 _STATE_TO_BLOCK = {
@@ -182,6 +183,23 @@ def run_solver_on_saved_map(
     return result
 
 
+def _mirror_heading(heading: Optional[str]) -> Optional[str]:
+    """镜像朝向：left ↔ right，up/down 不变。"""
+    if heading == "left":
+        return "right"
+    if heading == "right":
+        return "left"
+    return heading
+
+
+def _mirror_result_headings(result: dict) -> dict:
+    """将 result 中 path_steps 的 heading_in / heading_out 做左右镜像。"""
+    for step in result.get("path_steps", []):
+        step["heading_in"] = _mirror_heading(step.get("heading_in"))
+        step["heading_out"] = _mirror_heading(step.get("heading_out"))
+    return result
+
+
 def run_solver_on_states(
     states12: List[str],
     render_map: bool = True,
@@ -193,6 +211,10 @@ def run_solver_on_states(
     map_data = build_map_data_from_states(states12, map_id=map_id, seed=seed)
     result = solve_route(strategy="dijkstra", map_data=map_data)
     result["map_data"] = map_data
+
+    # 蓝场（field_color_flag=1）与红场左右镜像对称，需要翻转朝向
+    if TFManagerInstance.field_color_flag == 1:
+        _mirror_result_headings(result)
 
     if render_map:
         print("\n[merlin_map_debug] 地图内容：", flush=True)
