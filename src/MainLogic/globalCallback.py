@@ -163,10 +163,12 @@ def kfs_callback(data: bytes):
         print("[Zone2] 未检测到R1方块，跳过路径规划")
         return
 
+    # 红蓝半场决定离场过道：红场→11，蓝场→7
+    exit_node = 11 if TFManagerInstance.field_color_flag == 0 else 7
     result = compute_r1_zone2_path(
         r1_blocks=r1_blocks, r2_blocks=r2_blocks, fake_block=fake_block,
         auto_dog_flag=1, priority_block=[], start_candidates=[2, 0, 16],
-        exit_node=11, verbose=True,
+        exit_node=exit_node, verbose=True,
     )
 
     if not result['success']:

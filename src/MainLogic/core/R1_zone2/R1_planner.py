@@ -177,6 +177,9 @@ def compute_r1_zone2_path(
 ) -> dict:
     """根据方块配置计算 R1 二区最优路径。
 
+    Args:
+        exit_node: 离场过道编号。红半场使用 11，蓝半场使用 7。
+
     Returns: {success, filtered_nodes, best_start_id, r2_path, error}
     """
     if start_candidates is None:
