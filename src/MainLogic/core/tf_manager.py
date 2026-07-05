@@ -116,10 +116,10 @@ class TFManager:
     # field_color_flag: 0=红场, 1=蓝场
     # zone_retry_flag:  1=一区, 3=三区
     FIELD_ZONE_MAP2BASE_CONFIG = {
-        (0, 1): Odom(0.390, 5 - 0.352, -3.1415926 / 2),  # 红场一区 （现有参数）
-        (0, 3): Odom(0.0, 0.0, 0.0),                       # 红场三区 PLACEHOLDER
-        (1, 1): Odom(0.39, 1+0.352, math.pi/2),                       # 蓝场一区 PLACEHOLDER
-        (1, 3): Odom(0.0, 0.0, 0.0),                       # 蓝场三区 PLACEHOLDER
+        (0, 1): Odom(0.45, 0.45, 0),                       # 红场一区 （现有参数）
+        (0, 3): Odom(11.480, 0.45, 0.0),                   # 红场三区 PLACEHOLDER
+        (1, 1): Odom(0.45, 6-0.9817+0.45, 0.0),            # 蓝场一区 PLACEHOLDER
+        (1, 3): Odom(11.480, 6-0.9817+0.45, 0.0),          # 蓝场三区 PLACEHOLDER
     }
 
     def _check_and_apply_field_zone_config(self):
@@ -213,19 +213,16 @@ class TFManager:
         #base_without_prev = Odom(0,0,-self._sickYawCorrection) @ self.baseLinkOdom.value
         #sick_pose = base_without_prev @ self.sickToBaseLink.inverse()
         #print(sick_pose.x,sick_pose.y,sick_pose.yaw)
-        if self.sick_flag==0:
+        if self.sick_direction_flag==0:
             # 解超越方程
             # y_real=fsolve
             def calculate_y_real(theta):
                 return 0.45
-                #return (
-                #    self.sick_correct_width 
-                #    - sick_y * math.cos(theta + self._baseinitodom.yaw) 
-                #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
-                #)
             dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
 
-        if self.sick_flag==1:
+        if self.sick_direction_flag==1:
+            def calculate_y_real(theta):
+                return 6-0.9817+0.45
             dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
         
         print(self._mapToSlamInit)
@@ -233,7 +230,6 @@ class TFManager:
         self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw+dyaw)
         self._mapToSlamInit=self.mapToBaseInit@self.laser_to_base.inverse()
         print(self._mapToSlamInit)
-
 
         if self.rosBridge is not None:
             self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
@@ -311,28 +307,5 @@ class TFManager:
             tick_10ms = (tick_10ms + 1) % 10
             t_next += 0.01
             await asyncio.sleep(max(0, t_next - loop.time()))
-
-class TFOdin:
-    _instance = None  # 存放唯一实例的私有类属性
-    def __new__(cls, *args, **kwargs):
-        # 如果实例不存在，则创建一个新的
-        if cls._instance is None:
-            # 调用父类的 __new__ 来分配内存
-            cls._instance = super().__new__(cls)
-            # 在这里可以加一个初始化标志，防止 __init__ 被重复调用
-            cls._instance._is_initialized = False 
-        # 如果实例已存在，直接返回旧的内存地址
-        return cls._instance
-
-        
-    def __init__(self):
-        if getattr(self, '_is_initialized', False):
-                    return
-        self._is_initialized = True
-
-        # sick纠正场地分类Flag
-        self.flag = 0 #（0表示红场，1表示蓝场）
-        self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
-        self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
 
 TFManagerInstance = TFManager()
