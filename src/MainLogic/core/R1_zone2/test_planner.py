@@ -41,13 +41,13 @@ def zone2_stakes_to_r1_indices(stakes: list[int], field_color: int) -> list[int]
 #   kfs_raw[0]=左上, [1]=中上, [2]=右上, [3]=左二, ..., [11]=右下
 # 状态: 0=空  1=R1  2=R2  3=假块
 KFS_RAW = [
-    2, 2, 1,   # 上行: R2, R2, R1
-    1, 2, 0,   # 二行: R1, R2, 空
-    3, 0, 2,   # 三行: 假块, 空, R2
-    0, 1, 0,   # 下行: 空, R1, 空
+    1, 0, 0,   # 上行: R2, R2, R1
+    3, 0, 0,   # 二行: R1, R2, 空
+    2, 0, 2,   # 三行: 假块, 空, R2
+    2, 1, 1,   # 下行: 空, R1, 空
 ]
 
-FIELD_COLOR = 1   # 0=红半场, 1=蓝半场
+FIELD_COLOR = 0   # 0=红半场, 1=蓝半场
 # ============================================================
 
 if __name__ == "__main__":
@@ -127,11 +127,20 @@ if __name__ == "__main__":
         print(f"  无 R2 块，跳过 R2 路径推算")
 
     # ----------------------------------------------------------
-    # Step 2: R1 路径规划
+    # Step 2: R1 路径规划 (同 kfs_callback 优先级策略)
     # ----------------------------------------------------------
-    print(f"\n{'─' * 60}")
-    print(f"  Step 2: R1 路径规划")
-    print(f"  优先级块(先取): {r1_priority if r1_priority else '(无)'}")
+    if r1_priority:
+        auto_mode = 0
+        print(f"\n  R1 优先级来源: zone2_model 节点路径 → {r1_priority}")
+    elif r2_blocks:
+        auto_mode = 1
+        print(f"\n  R1 优先级来源: 格子级 R2 路线 (auto_dog_flag=1)")
+    else:
+        auto_mode = 0
+        print(f"\n  无 R2 块，R1 自由取块")
+
+    print(f"  R1块: {r1_blocks}")
+    print(f"  R2块: {r2_blocks}")
 
     if not r1_blocks:
         print("  ⚠ 无 R1 块，跳过")
@@ -141,7 +150,7 @@ if __name__ == "__main__":
         r1_blocks=r1_blocks,
         r2_blocks=r2_blocks,
         fake_block=fake_block,
-        auto_dog_flag=0,
+        auto_dog_flag=auto_mode,
         priority_block=r1_priority,
         start_candidates=[2, 0, 16],
         exit_node=11 if fc == 0 else 7,

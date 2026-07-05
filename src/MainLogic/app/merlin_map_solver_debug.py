@@ -62,12 +62,12 @@ def _build_fixed_adjacency() -> Dict[Any, List[Any]]:
             if c < cols - 1:
                 adjacency[cur].append(rc_to_id(r, c + 1))
 
-    adjacency["start"] = [1, 2, 3]
-    adjacency["end"] = [10, 11, 12]
+    adjacency["start"] = [10, 11, 12]
+    adjacency["end"] = [1, 2, 3]
 
-    for n in (1, 2, 3):
-        adjacency[n].append("start")
     for n in (10, 11, 12):
+        adjacency[n].append("start")
+    for n in (1, 2, 3):
         adjacency[n].append("end")
 
     return adjacency

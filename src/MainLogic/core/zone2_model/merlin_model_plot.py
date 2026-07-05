@@ -62,11 +62,11 @@ def _fixed_stake_pos() -> Dict[str, Tuple[float, float]]:
         y = float(3 - r)
         pos[str(i)] = (x, y)
 
-    # start 在 2 正上方；end 在 11 正下方
+    # start 在 11 正下方（一区进入）；end 在 2 正上方（三区离场）
     x2, y2 = pos["2"]
     x11, y11 = pos["11"]
-    pos["start"] = (x2, y2 + 1.0)
-    pos["end"] = (x11, y11 - 1.0)
+    pos["start"] = (x11, y11 - 1.0)
+    pos["end"] = (x2, y2 + 1.0)
 
     return pos
 

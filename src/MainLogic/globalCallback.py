@@ -218,7 +218,9 @@ def kfs_callback(data: bytes):
             print(f"[KFS] R2路径推算异常，回退到无优先级模式: {e}")
 
     # ============================================================
-    # Step 2: R1 路径规划（R2路径上的R1块置为高优先级）
+    # Step 2: R1 路径规划
+    #   优先用 zone2_model 节点路径 → priority_block
+    #   无结果时 fallback 到格子级 R2 路线 (auto_dog_flag=1, block_id in r2_path)
     # ============================================================
     if not r1_blocks:
         print("[Zone2] 未检测到R1方块，跳过R1路径规划")
@@ -227,10 +229,20 @@ def kfs_callback(data: bytes):
     # 红蓝半场决定离场过道：红场→11，蓝场→7
     exit_node = 11 if TFManagerInstance.field_color_flag == 0 else 7
 
+    if r1_priority_blocks:
+        auto_mode = 0
+        print(f"[KFS] R1 优先级来源: zone2_model 节点路径 → {r1_priority_blocks}")
+    elif r2_blocks:
+        auto_mode = 1
+        print(f"[KFS] R1 优先级来源: 格子级 R2 路线 (auto_dog_flag=1)")
+    else:
+        auto_mode = 0
+        print(f"[KFS] 无 R2 块，R1 自由取块")
+
     result = compute_r1_zone2_path(
         r1_blocks=r1_blocks, r2_blocks=r2_blocks, fake_block=fake_block,
-        auto_dog_flag=0,                      # 手动模式：由 priority_block 控制优先级
-        priority_block=r1_priority_blocks,    # R2路径上的R1块优先取
+        auto_dog_flag=auto_mode,
+        priority_block=r1_priority_blocks,
         start_candidates=[2, 0, 16],
         exit_node=exit_node, verbose=True,
     )

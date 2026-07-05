@@ -189,10 +189,10 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
 
     # ---- start 特殊规则 ----
     # 初始基础节点共 14 个：1~12 + start + end。
-    # start 只允许有 3 条向外连接（对应 1/2/3）：
+    # start 从一区/下方进入，只允许有 3 条向外连接（对应 10/11/12）：
     # - 若目标是 empty：start -> 目标
     # - 若目标是 R2：start -> D_start_to_x -> 目标
-    for t in (1, 2, 3):
+    for t in (10, 11, 12):
         if kinds[t] == "fake":
             continue
 
@@ -212,10 +212,10 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
             add_edge("start", str(t), "start_direct_to_adjacent")
 
     # start 衍生节点继承 start 的单向出边特性：
-    # D_start_to_r2 -> {1,2,3 中非 R2 且非 fake 的节点}
+    # D_start_to_r2 -> {10,11,12 中非 R2 且非 fake 的节点}
     start_inherit_targets = [
         str(t)
-        for t in (1, 2, 3)
+        for t in (10, 11, 12)
         if kinds[t] != "R2" and kinds[t] != "fake" and has_directed_edge("start", str(t))
     ]
     for dnode in sorted(set(derived_by_owner.get("start", []))):
@@ -225,9 +225,9 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
     # ---- start/end 硬约束过滤（最终兜底）----
     # start：
     # 1) 不能有入边
-    # 2) 只能有 3 条对外连接（对应 1/2/3 的直连或到衍生节点）
+    # 2) 只能有 3 条对外连接（对应 10/11/12 的直连或到衍生节点）
     allowed_start_out_targets = set()
-    for t in (1, 2, 3):
+    for t in (10, 11, 12):
         if kinds[t] == "R2":
             allowed_start_out_targets.add(f"D_start_to_{t}")
         else:
@@ -238,22 +238,21 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
         # start 不允许任何入边
         if dst == "start":
             continue
-        # start 只允许指向 1/2/3（或对应衍生节点）
+        # start 只允许指向 10/11/12（或对应衍生节点）
         if src == "start" and dst not in allowed_start_out_targets:
             continue
         filtered_after_start.add((src, dst, rule))
     edge_set = filtered_after_start
 
-    # end：
+    # end（三区/上方离场）：
     # 1) end 不允许任何出边
-    # 2) 只允许 10/11/12（非 fake）及其衍生节点指向 end
-    # 3) 若其中有 fake，则 fake 本体不能连 end，最终为 2 或 3 条本体入边
+    # 2) 只允许 1/2/3（非 fake）及其衍生节点指向 end
     filtered_end: Set[Tuple[str, str, str]] = set()
     for src, dst, rule in edge_set:
         if src == "end":
             continue
         if dst == "end":
-            if src not in {"10", "11", "12"}:
+            if src not in {"1", "2", "3"}:
                 continue
             src_id = int(src)
             if kinds[src_id] == "fake":
@@ -261,8 +260,8 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
         filtered_end.add((src, dst, rule))
     edge_set = filtered_end
 
-    # 强制补齐 end 入边：10/11/12 中非 fake 的节点必须直连 end
-    for n in (10, 11, 12):
+    # 强制补齐 end 入边：1/2/3 中非 fake 的节点必须直连 end
+    for n in (1, 2, 3):
         if kinds[n] != "fake":
             add_edge(str(n), "end", "forced_to_end")
 
@@ -312,8 +311,8 @@ def build_merlin_model(map_data: Optional[dict] = None) -> dict:
                 add_edge(dnode, str(x), "step2_derived_inherit_adj")
 
 
-    # 若 10/11/12 为非 fake，则其衍生节点也可直接指向 end。
-    for owner in ("10", "11", "12"):
+    # 若 1/2/3 为非 fake，则其衍生节点也可直接指向 end（三区离场）。
+    for owner in ("1", "2", "3"):
         if kinds[int(owner)] == "fake":
             continue
         for dnode in sorted(set(derived_by_owner.get(owner, []))):

@@ -117,14 +117,34 @@ def generate_full_route(start_id, start_yaw, r1_blocks, r2_path, exit_id, auto_d
                 return priority_block.index(block_id)
             return 999
 
+    # 构建目标列表并按优先级分组
     targets = [{'id': b, 'priority': get_priority(b)} for b in r1_blocks]
+    # 先按优先级排序
     targets.sort(key=lambda x: x['priority'])
 
     curr_id, curr_yaw = start_id, start_yaw
+    remaining = list(targets)  # 待处理目标
 
-    for tgt in targets:
-        options = get_valid_pickups(tgt['id'])
-        if not options: continue
+    while remaining:
+        # 当前优先级层：取最高优先级（最小值）
+        best_prio = remaining[0]['priority']
+        same_prio = [t for t in remaining if t['priority'] == best_prio]
+
+        # 在同优先级中，贪心选离当前位置最近的目标
+        def dist_to(tgt):
+            options = get_valid_pickups(tgt['id'])
+            if not options:
+                return float('inf')
+            aisle, yaw = options[0]
+            seg = find_shortest_path(curr_id, curr_yaw, aisle, yaw)
+            return len(seg) if seg else (0 if curr_id == aisle and abs(curr_yaw - yaw) < 0.1 else float('inf'))
+
+        nearest = min(same_prio, key=dist_to)
+        remaining.remove(nearest)
+
+        options = get_valid_pickups(nearest['id'])
+        if not options:
+            continue
 
         target_aisle, target_yaw = options[0]
         segment = find_shortest_path(curr_id, curr_yaw, target_aisle, target_yaw)
@@ -132,11 +152,11 @@ def generate_full_route(start_id, start_yaw, r1_blocks, r2_path, exit_id, auto_d
         if not segment and curr_id == target_aisle and abs(curr_yaw - target_yaw) < 0.1:
             full_path[-1]['is_pick'] = True
             full_path[-1]['is_at_point'] = True
-            full_path[-1]['target_block'] = tgt['id']
+            full_path[-1]['target_block'] = nearest['id']
         elif segment:
             segment[-1]['is_pick'] = True
             segment[-1]['is_at_point'] = True
-            segment[-1]['target_block'] = tgt['id']
+            segment[-1]['target_block'] = nearest['id']
             full_path.extend(segment)
             curr_id, curr_yaw = segment[-1]['id'], segment[-1]['yaw']
 

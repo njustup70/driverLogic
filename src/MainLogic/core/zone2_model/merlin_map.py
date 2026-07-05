@@ -158,14 +158,14 @@ def _build_adjacency() -> Dict[Node, List[Node]]:
             if c < cols - 1:
                 adj[cur].append(rc_to_id(r, c + 1))
 
-    # 加 start / end
-    adj["start"] = [1, 2, 3]
-    adj["end"] = [10, 11, 12]
+    # 加 start / end（R2 从一区/下方进入，向三区/上方离场）
+    adj["start"] = [10, 11, 12]
+    adj["end"] = [1, 2, 3]
 
-    # 双向补充：1/2/3 连 start，10/11/12 连 end
-    for n in (1, 2, 3):
-        adj[n].append("start")
+    # 双向补充：10/11/12 连 start，1/2/3 连 end
     for n in (10, 11, 12):
+        adj[n].append("start")
+    for n in (1, 2, 3):
         adj[n].append("end")
 
     return adj

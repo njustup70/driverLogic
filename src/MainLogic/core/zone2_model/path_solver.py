@@ -86,8 +86,8 @@ def _fixed_stake_pos() -> Dict[str, Tuple[float, float]]:
 
     x2, y2 = pos["2"]
     x11, y11 = pos["11"]
-    pos["start"] = (x2, y2 + 1.0)
-    pos["end"] = (x11, y11 - 1.0)
+    pos["start"] = (x11, y11 - 1.0)
+    pos["end"] = (x2, y2 + 1.0)
     return pos
 
 
@@ -145,9 +145,12 @@ _COLUMN_NODES: Dict[int, List[int]] = {
 
 
 def _column_stats(col: int, blocks: Dict[int, str]) -> Tuple[int, int, int, int]:
-    """返回一列的统计信息：顶排R2数、R2数、R1数、fake标记。"""
-    top_node = _COLUMN_NODES[col][0]
-    top_has_r2 = 1 if blocks.get(top_node) == "R2" else 0
+    """返回一列的统计信息：底排R2数、R2数、R1数、fake标记。
+
+    R2 从下方(一区)进入，因此关注底排(10/11/12)的 R2 分布。
+    """
+    bottom_node = _COLUMN_NODES[col][3]
+    bottom_has_r2 = 1 if blocks.get(bottom_node) == "R2" else 0
     r2_count = 0
     r1_count = 0
     fake_count = 0
@@ -159,7 +162,7 @@ def _column_stats(col: int, blocks: Dict[int, str]) -> Tuple[int, int, int, int]
             r1_count += 1
         elif block_type == "fake":
             fake_count = 1
-    return top_has_r2, r2_count, r1_count, fake_count
+    return bottom_has_r2, r2_count, r1_count, fake_count
 
 
 def _get_fake_column(blocks: Dict[int, str]) -> Optional[int]:
@@ -173,12 +176,12 @@ def _get_fake_column(blocks: Dict[int, str]) -> Optional[int]:
 def choose_straight_line_route(map_data: Optional[dict] = None, blocks: Optional[Dict[int, str]] = None) -> List[str]:
     """选择直线策略要走的节点序列（可包含衍生节点）。
 
-    新规则（基于顶排 1/2/3 的 R2 情况）：
-    1) 顶排无 R2：排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列，走单列直线。
-    2) 顶排仅 1 个 R2 且不与 fake 同列：直接走该 R2 所在列，走单列直线。
-    3) 顶排仅 1 个 R2 且与 fake 同列：先通过 D_start_to_X 取 R2，
+    R2 从下方(一区)进入、上方(三区)离场，因此关注底排(10/11/12)的 R2 情况：
+    1) 底排无 R2：排除 fake 列，从剩下两列中选 R2 多且 R1 少的一列，走单列直线。
+    2) 底排仅 1 个 R2 且不与 fake 同列：直接走该 R2 所在列。
+    3) 底排仅 1 个 R2 且与 fake 同列：先通过 D_start_to_X 取 R2，
        再登上最优非 fake 列走直线。
-    4) 顶排有 >=2 个 R2：选一个与 fake 不同列的顶排 R2 列，且 R2 多 R1 少，走单列直线。
+    4) 底排有 >=2 个 R2：选一个与 fake 不同列的底排 R2 列，且 R2 多 R1 少。
     """
     if map_data is not None:
         blocks = map_data["blocks"]
@@ -187,8 +190,8 @@ def choose_straight_line_route(map_data: Optional[dict] = None, blocks: Optional
 
     candidate_cols = [0, 1, 2]
     fake_col = _get_fake_column(blocks)
-    top_r2_cols = [col for col in candidate_cols if blocks.get(_COLUMN_NODES[col][0]) == "R2"]
-    top_r2_count = len(top_r2_cols)
+    bottom_r2_cols = [col for col in candidate_cols if blocks.get(_COLUMN_NODES[col][3]) == "R2"]
+    bottom_r2_count = len(bottom_r2_cols)
 
     def _score_col(col: int) -> Tuple[int, int]:
         _, r2_count, r1_count, _ = _column_stats(col, blocks)
@@ -200,28 +203,28 @@ def choose_straight_line_route(map_data: Optional[dict] = None, blocks: Optional
             non_fake = candidate_cols
         return max(non_fake, key=_score_col)
 
-    if top_r2_count == 0:
-        # 情况1：顶排无 R2，排除 fake 列，选最优列
+    if bottom_r2_count == 0:
+        # 情况1：底排无 R2，排除 fake 列，选最优列
         return [str(n) for n in _COLUMN_NODES[_best_non_fake()]]
 
-    if top_r2_count == 1:
-        r2_col = top_r2_cols[0]
-        r2_node = _COLUMN_NODES[r2_col][0]
+    if bottom_r2_count == 1:
+        r2_col = bottom_r2_cols[0]
+        r2_node = _COLUMN_NODES[r2_col][3]
         if r2_col != fake_col:
-            # 情况2：顶排仅 1 个 R2 且不与 fake 同列，直接走该列
+            # 情况2：底排仅 1 个 R2 且不与 fake 同列，直接走该列
             return [str(n) for n in _COLUMN_NODES[r2_col]]
-        # 情况3：顶排仅 1 个 R2 且与 fake 同列
+        # 情况3：底排仅 1 个 R2 且与 fake 同列
         # 先通过 start → D_start_to_X 取 R2，再登上最优非 fake 列走直线。
         # waypoints 必须包含衍生节点 D_start_to_X，否则 _find_model_path 会走直连边 start→r2_node 跳过拾取。
         derived = f"D_start_to_{r2_node}"
         best_col_nodes = [str(n) for n in _COLUMN_NODES[_best_non_fake()]]
         return [derived] + best_col_nodes
 
-    # 情况4：顶排有 >=2 个 R2，选一个与 fake 不同列的顶排 R2 列
-    non_fake_top = [c for c in top_r2_cols if c != fake_col]
-    if not non_fake_top:
+    # 情况4：底排有 >=2 个 R2，选一个与 fake 不同列的底排 R2 列
+    non_fake_bottom = [c for c in bottom_r2_cols if c != fake_col]
+    if not non_fake_bottom:
         return [str(n) for n in _COLUMN_NODES[_best_non_fake()]]
-    return [str(n) for n in _COLUMN_NODES[max(non_fake_top, key=_score_col)]]
+    return [str(n) for n in _COLUMN_NODES[max(non_fake_bottom, key=_score_col)]]
 
 
 def _override_edge_heading(
@@ -232,19 +235,19 @@ def _override_edge_heading(
 ) -> str:
     """覆写特殊边的朝向，避免误计转向。
 
-    - start 及其衍生节点链路 → 强制 "down"
-    - 底排(10/11/12) → end → 强制 "down"
+    - start（一区/下方进入）及其衍生节点链路 → 强制 "up"
+    - 顶排(1/2/3) → end（三区/上方离场）→ 强制 "up"
     """
     if str(u) == "start":
-        return "down"
+        return "up"
     u_meta = graph_nodes.get(str(u), {})
     v_meta = graph_nodes.get(str(v), {})
     if u_meta.get("kind") == "derived" and str(u_meta.get("owner")) == "start":
-        return "down"
+        return "up"
     if v_meta.get("kind") == "derived" and str(v_meta.get("owner")) == "start":
-        return "down"
-    if str(u) in {"10", "11", "12"} and str(v) == "end":
-        return "down"
+        return "up"
+    if str(u) in {"1", "2", "3"} and str(v) == "end":
+        return "up"
     return raw_heading
 
 
@@ -388,7 +391,7 @@ def _build_straight_line_result(
         "total_turn_cost": total_turn_cost,
         "total_move_cost": total_move_cost,
         "total_pick_cost": total_pick_cost,
-        "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and any(stake_kinds.get(i) == "R2" for i in (1, 2, 3))),
+        "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and any(stake_kinds.get(i) == "R2" for i in (10, 11, 12))),
         "solver_strategy": "straight_line",
     }
 
@@ -632,18 +635,18 @@ def dijkstra_min_cost_path(
     def _mask_count(mask: int) -> int:
         return mask.bit_count()
 
-    # 业务约束：
-    # 若 1/2/3 中存在 R2，则进入 1/2/3 中的 empty 节点前，必须已获取至少 1 个 R2。
-    top_row_ids = (1, 2, 3)
-    top_has_r2 = any(stake_kinds.get(i) == "R2" for i in top_row_ids)
-    top_empty_targets: Set[str] = {str(i) for i in top_row_ids if stake_kinds.get(i) == "empty"}
+    # 业务约束：R2 从下方(一区)进入，底排(10/11/12)是入口行。
+    # 若底排存在 R2，则进入底排 empty 节点前必须已获取至少 1 个 R2。
+    entry_row_ids = (10, 11, 12)
+    entry_has_r2 = any(stake_kinds.get(i) == "R2" for i in entry_row_ids)
+    entry_empty_targets: Set[str] = {str(i) for i in entry_row_ids if stake_kinds.get(i) == "empty"}
 
     def _is_transition_allowed(v: str, current_mask: int) -> bool:
         if not enforce_top_entry_after_one_pick:
             return True
-        if not top_has_r2:
+        if not entry_has_r2:
             return True
-        if v in top_empty_targets and _mask_count(current_mask) < 1:
+        if v in entry_empty_targets and _mask_count(current_mask) < 1:
             return False
         return True
 
@@ -750,7 +753,7 @@ def dijkstra_min_cost_path(
             "total_turn_cost": 0.0,
             "total_move_cost": 0.0,
             "total_pick_cost": 0.0,
-            "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and top_has_r2),
+            "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and entry_has_r2),
             "solver_strategy": "dijkstra",
         }
 
@@ -813,7 +816,7 @@ def dijkstra_min_cost_path(
         "total_turn_cost": total_turn_cost,
         "total_move_cost": total_move_cost,
         "total_pick_cost": total_pick_cost,
-        "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and top_has_r2),
+        "top_entry_constraint_active": bool(enforce_top_entry_after_one_pick and entry_has_r2),
         "solver_strategy": "dijkstra",
     }
 
