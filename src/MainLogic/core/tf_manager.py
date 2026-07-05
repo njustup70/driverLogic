@@ -322,6 +322,9 @@ class TFManager:
                     self.slam_100ms()
                     self._check_and_apply_field_zone_config()
                     self.odom_10ms()
+                    # 持续下发场地/区域反馈给下位机（上位机端确认）
+                    # 帧格式：0xFA 0x78 [field_color_flag] [zone_retry_flag]
+                    self.rosBridge.writeBytes(bytes([0xFA, 0x78, self.field_color_flag, self.zone_retry_flag]))
                 else:
                     self.odom_10ms()
             except Exception as e:
