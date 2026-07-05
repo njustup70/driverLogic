@@ -275,16 +275,17 @@ def slam_restart_callback(data: bytes):  # 0x13
     print("SLAM 重启指令已触发，重启 SLAM 容器")
     import subprocess
     try:
+        # -t 3: 仅控制关停旧容器的超时(SIGTERM 3s → SIGKILL)，不影响启动过程
         subprocess.run(
-            ["docker", "restart", "voxel_slam_ros2_runtime"],
+            ["docker", "restart", "-t", "3", "voxel_slam_ros2_runtime"],
             check=True,
-            timeout=15,
+            timeout=30,
         )
-        print("✓ voxel_slam_ros2_runtime 容器重启成功，entrypoint 已重新运行")
+        print("✓ voxel_slam_ros2_runtime 容器重启成功")
     except subprocess.CalledProcessError as e:
         print(f"✗ voxel_slam_ros2_runtime 容器重启失败 (exit={e.returncode}): {e.stderr}")
     except subprocess.TimeoutExpired:
-        print("✗ voxel_slam_ros2_runtime 容器重启超时（超过 15 秒）")
+        print("✗ voxel_slam_ros2_runtime 容器重启超时（超过 30 秒），请检查容器状态")
     except FileNotFoundError:
         print("✗ docker CLI 未找到，请确认容器内已安装 docker")
 # def example_serial_callback(data: bytes):
