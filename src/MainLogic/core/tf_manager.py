@@ -38,9 +38,9 @@ class TFManager:
 
         # 三个场地标志位
         # sick纠正选择墙体分边Flag
-        self.sick_direction_flag = 1 #（0表示左侧场，1表示右侧场）
+        self.sick_direction_flag = 0 #（0表示左侧场，1表示右侧场）
         # 场地红蓝场标志位
-        self.field_color_flag = 1 #（0表示红场，1表示蓝场）
+        self.field_color_flag = 0 #（0表示红场，1表示蓝场）
         # 一三区重启标志位
         self.zone_retry_flag = 1 #（1表示一区，3表示三区）
 
