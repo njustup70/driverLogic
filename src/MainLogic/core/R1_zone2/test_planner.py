@@ -1,43 +1,163 @@
-"""R1 二区路径规划测试脚本
+"""R1 二区 完整链路测试脚本
+
+模拟 kfs_callback 的完整流水线：
+  1. 12 字节 KFS 帧 (R1 编号, 0-11)
+  2. 按红/蓝半场转换为 zone2_model 状态
+  3. zone2_model 推算 R2 最优路径
+  4. 提取 R2 路径上的 R1 节点 → R1 优先级
+  5. R1 Planner 规划路径
+  6. 编码 0xBA 帧
 
 用法：
     cd /home/Elaina/ros2_ws
     PYTHONPATH=src:$PYTHONPATH python3 src/MainLogic/core/R1_zone2/test_planner.py
-
-修改下方 R1_BLOCKS / R2_BLOCKS / FAKE_BLOCK 即可测试不同配置。
 """
 
 from R1_planner import compute_r1_zone2_path
 from encoder import encode_zone2_frame
 
-# ====== 在这里修改配置 ======
-R1_BLOCKS = [9, 10, 11]    # R1 要抓的方块
-R2_BLOCKS = [1, 3, 4, 5]   # R2 拥有的方块
-FAKE_BLOCK = [0]            # 假方块
+# ============================================================
+# R1 ↔ zone2_model 坐标转换 (同 globalCallback.py)
+# ============================================================
+_R1_TO_ZONE2_RED  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+_R1_TO_ZONE2_BLUE = [2, 1, 0, 5, 4, 3, 8, 7, 6, 11, 10, 9]
+_STATE_MAP = {0: "EMPTY", 1: "R1", 2: "R2", 3: "FAKE"}
 
-AUTO_MODE = 1               # 1=自动避让R2, 0=手动优先级
-PRIORITY = []               # 手动模式下的优先级，如 [11, 9, 10]
-# ============================
+
+def r1_kfs_to_zone2_states(kfs_raw: list[int], field_color: int) -> list[str]:
+    mapping = _R1_TO_ZONE2_RED if field_color == 0 else _R1_TO_ZONE2_BLUE
+    return [_STATE_MAP[kfs_raw[mapping[z]]] for z in range(12)]
+
+
+def zone2_stakes_to_r1_indices(stakes: list[int], field_color: int) -> list[int]:
+    mapping = _R1_TO_ZONE2_RED if field_color == 0 else _R1_TO_ZONE2_BLUE
+    return [mapping[n - 1] for n in stakes]
+
+
+# ============================================================
+# 测试配置
+# ============================================================
+# KFS 原始帧: 12 字节, R1 编号 0-11 (俯视从上到下、从左到右)
+#   kfs_raw[0]=左上, [1]=中上, [2]=右上, [3]=左二, ..., [11]=右下
+# 状态: 0=空  1=R1  2=R2  3=假块
+KFS_RAW = [
+    2, 2, 1,   # 上行: R2, R2, R1
+    1, 2, 0,   # 二行: R1, R2, 空
+    3, 0, 2,   # 三行: 假块, 空, R2
+    0, 1, 0,   # 下行: 空, R1, 空
+]
+
+FIELD_COLOR = 1   # 0=红半场, 1=蓝半场
+# ============================================================
 
 if __name__ == "__main__":
+    fc = FIELD_COLOR
+    field_name = "红半场" if fc == 0 else "蓝半场"
+
+    # 确保 KFS 长度正确
+    kfs_raw = list(KFS_RAW[:12])
+    assert len(kfs_raw) == 12, f"KFS_RAW 必须为 12 个元素，当前 {len(kfs_raw)}"
+
+    # R1 视角解析
+    r1_blocks = [i for i, v in enumerate(kfs_raw) if v == 1]
+    r2_blocks = [i for i, v in enumerate(kfs_raw) if v == 2]
+    fake_block = [i for i, v in enumerate(kfs_raw) if v == 3]
+
+    print("=" * 60)
+    print(f"  R1 二区完整链路测试 — {field_name}")
+    print("=" * 60)
+    print(f"\n📦 KFS 原始帧 (R1编号):")
+    for row in range(4):
+        start = row * 3
+        labels = [f"{kfs_raw[i]}" for i in range(start, start + 3)]
+        print(f"     [{start}] [{start+1}] [{start+2}]  →  {', '.join(labels)}")
+    print(f"  R1块(kfs下标): {r1_blocks}")
+    print(f"  R2块(kfs下标): {r2_blocks}")
+    print(f"  假块(kfs下标): {fake_block}")
+
+    # ----------------------------------------------------------
+    # Step 1: R1 → zone2_model 转换 + R2 路径推算
+    # ----------------------------------------------------------
+    print(f"\n{'─' * 60}")
+    print(f"  Step 1: R1 → zone2_model 坐标映射 ({field_name})")
+    print(f"  映射表: {_R1_TO_ZONE2_RED if fc == 0 else _R1_TO_ZONE2_BLUE}")
+    meilin_states = r1_kfs_to_zone2_states(kfs_raw, fc)
+    print(f"  zone2 states: {meilin_states}")
+
+    r1_priority = []
+    if r2_blocks:
+        try:
+            # 直接导入核心模块，避免经过 globalCallback → actions 的循环依赖
+            from MainLogic.core.zone2_model.merlin_map import get_merlin_map
+            from MainLogic.core.zone2_model.path_solver import solve_route
+            from MainLogic.core.zone2_model.zone2_format import extract_r1_nodes_on_path
+
+            # 绕过 run_solver_on_states，直接构造 map_data + 求解
+            blocks = {}
+            for i, s in enumerate(meilin_states, start=1):
+                blocks[i] = s.lower() if s != "EMPTY" else "empty"
+
+            map_data = {
+                "name": "merlin",
+                "shape": {"rows": 4, "cols": 3},
+                "nodes": ["start"] + list(range(1, 13)) + ["end"],
+                "adjacency": get_merlin_map()["adjacency"],
+                "blocks": blocks,
+            }
+
+            r2_result = solve_route(strategy="dijkstra", map_data=map_data)
+            r2_result["map_data"] = map_data
+
+            print(f"\n  R2 求解结果: found={r2_result.get('found')}, "
+                  f"cost={r2_result.get('cost')}, "
+                  f"collected_r2={r2_result.get('collected_r2')}")
+
+            r1_on_path = extract_r1_nodes_on_path(r2_result)
+            r1_priority = [
+                idx for idx in zone2_stakes_to_r1_indices(r1_on_path, fc)
+                if idx in r1_blocks
+            ]
+            print(f"  R2路径上的R1(zone2 stake): {r1_on_path}")
+            print(f"  → R1优先级(kfs下标): {r1_priority}")
+        except Exception as e:
+            print(f"  ⚠ zone2_model 求解失败: {e}")
+            import traceback; traceback.print_exc()
+            print(f"  回退: 不设置优先级")
+    else:
+        print(f"  无 R2 块，跳过 R2 路径推算")
+
+    # ----------------------------------------------------------
+    # Step 2: R1 路径规划
+    # ----------------------------------------------------------
+    print(f"\n{'─' * 60}")
+    print(f"  Step 2: R1 路径规划")
+    print(f"  优先级块(先取): {r1_priority if r1_priority else '(无)'}")
+
+    if not r1_blocks:
+        print("  ⚠ 无 R1 块，跳过")
+        exit(0)
+
     result = compute_r1_zone2_path(
-        r1_blocks=R1_BLOCKS,
-        r2_blocks=R2_BLOCKS,
-        fake_block=FAKE_BLOCK,
-        auto_dog_flag=AUTO_MODE,
-        priority_block=PRIORITY,
+        r1_blocks=r1_blocks,
+        r2_blocks=r2_blocks,
+        fake_block=fake_block,
+        auto_dog_flag=0,
+        priority_block=r1_priority,
+        start_candidates=[2, 0, 16],
+        exit_node=11 if fc == 0 else 7,
         verbose=True,
     )
 
     if not result['success']:
-        print(f"\n❌ 失败: {result['error']}")
+        print(f"\n  ❌ R1 规划失败: {result['error']}")
         exit(1)
 
+    # ----------------------------------------------------------
+    # 编码输出
+    # ----------------------------------------------------------
     frame = encode_zone2_frame(result['filtered_nodes'])
-
-    print()
-    print("=" * 50)
-    print(f"上位机下发帧 (0xFA 头):")
-    print(f"  FA {frame.hex(' ')}")
-    print(f"  共 {len(frame)} 字节, {len(result['filtered_nodes'])} 个动作")
-    print("=" * 50)
+    print(f"\n{'=' * 60}")
+    print(f"  上位机下发帧 (0xFA 头):")
+    print(f"    FA {frame.hex(' ')}")
+    print(f"    共 {len(frame)} 字节, {len(result['filtered_nodes'])} 个动作")
+    print(f"{'=' * 60}")

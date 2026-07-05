@@ -119,9 +119,44 @@ from MainLogic.core.R1_zone2 import compute_r1_zone2_path, encode_zone2_frame
 KFS_LABELS = {0: "空", 1: "R1", 2: "R2", 3: "假块"}
 zone2_kfs_state: list[int] = [0] * 12
 
+# === R1 ↔ zone2_model KFS 坐标转换 ===
+# R1 与 zone2_model 的 KFS 编号体系不同，按红蓝半场做物理位置映射。
+#   kfs_raw 字节顺序: 俯视从上到下、从左到右 (12 字节，下标 0-11)
+#   红半场: zone2 stake 列序与 R1 相同 (恒等映射)
+#   蓝半场: zone2 stake 列序与 R1 相反 (镜像)
+_R1_TO_ZONE2_RED  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+_R1_TO_ZONE2_BLUE = [2, 1, 0, 5, 4, 3, 8, 7, 6, 11, 10, 9]
+
+_STATE_MAP = {0: "EMPTY", 1: "R1", 2: "R2", 3: "FAKE"}
+
+
+def r1_kfs_to_zone2_states(kfs_raw: list[int], field_color_flag: int) -> list[str]:
+    """R1 KFS 原始数据 → zone2_model 状态列表 (stake 1~12 顺序)。
+
+    _R1_TO_ZONE2[z] = zone2 stake (z+1) 对应的 kfs_raw 下标。
+    """
+    mapping = _R1_TO_ZONE2_RED if field_color_flag == 0 else _R1_TO_ZONE2_BLUE
+    return [_STATE_MAP[kfs_raw[mapping[z]]] for z in range(12)]
+
+
+def zone2_stakes_to_r1_indices(stakes: list[int], field_color_flag: int) -> list[int]:
+    """zone2 stake 编号 (1-based) → R1 kfs_raw 下标。
+
+    查 _R1_TO_ZONE2[N-1] 即得 zone2 stake N 对应的 kfs_raw 下标。
+    """
+    mapping = _R1_TO_ZONE2_RED if field_color_flag == 0 else _R1_TO_ZONE2_BLUE
+    return [mapping[n - 1] for n in stakes]
+
 
 def kfs_callback(data: bytes):
-    """解析 0xC2 KFS 属性帧 → 路径规划 → 编码0xBA帧 → 串口下发。
+    """解析 0xC2 KFS 属性帧 → 推算R2路径 → R1路径规划(基于R2优先级) → 下发R1帧。
+
+    完整流水线：
+      1. 解析12个KFS状态
+      2. 调用 zone2_model 推算 R2 最优路径（仅用于优先级参考，不下发）
+      3. 提取 R2 路径上的 R1 节点作为 R1 高优先级取块目标
+      4. R1 根据 R2 优先级规划自身路径
+      5. 下发 R1 0xBA 帧
 
     方块编号顺序（俯视图，一区面向机器人）：
         三区
@@ -155,24 +190,53 @@ def kfs_callback(data: bytes):
     fake_block = [i for i, v in enumerate(kfs_raw) if v == 3]
     print(f"[KFS] 二区属性更新: R1={r1_blocks}, R2={r2_blocks}, Fake={fake_block}")
 
-    # === 触发路径规划与下发 ===
     if len(fake_block) > 1:
         print("[Zone2] 假块数量超过1个，无法规划")
         return
+
+    # ============================================================
+    # Step 1: R2 路径推算 (zone2_model) — 仅供 R1 优先级参考
+    # ============================================================
+    r1_priority_blocks: list[int] = []
+
+    if r2_blocks:
+        try:
+            fc = TFManagerInstance.field_color_flag
+            meilin_states = r1_kfs_to_zone2_states(kfs_raw, fc)
+
+            print("[KFS] → 推算 R2 路径用以确定 R1 优先级...")
+            r2_result = run_solver_on_states(meilin_states, render_map=True)
+
+            r1_nodes_on_r2_path = extract_r1_nodes_on_path(r2_result)
+            r1_priority_blocks = [
+                idx for idx in zone2_stakes_to_r1_indices(r1_nodes_on_r2_path, fc)
+                if idx in r1_blocks
+            ]
+            print(f"[KFS] zone2 stake: {r1_nodes_on_r2_path} → R1优先(kfs下标): {r1_priority_blocks}")
+
+        except Exception as e:
+            print(f"[KFS] R2路径推算异常，回退到无优先级模式: {e}")
+
+    # ============================================================
+    # Step 2: R1 路径规划（R2路径上的R1块置为高优先级）
+    # ============================================================
     if not r1_blocks:
-        print("[Zone2] 未检测到R1方块，跳过路径规划")
+        print("[Zone2] 未检测到R1方块，跳过R1路径规划")
         return
 
     # 红蓝半场决定离场过道：红场→11，蓝场→7
     exit_node = 11 if TFManagerInstance.field_color_flag == 0 else 7
+
     result = compute_r1_zone2_path(
         r1_blocks=r1_blocks, r2_blocks=r2_blocks, fake_block=fake_block,
-        auto_dog_flag=1, priority_block=[], start_candidates=[2, 0, 16],
+        auto_dog_flag=0,                      # 手动模式：由 priority_block 控制优先级
+        priority_block=r1_priority_blocks,    # R2路径上的R1块优先取
+        start_candidates=[2, 0, 16],
         exit_node=exit_node, verbose=True,
     )
 
     if not result['success']:
-        print(f"[Zone2] 路径规划失败: {result['error']}")
+        print(f"[Zone2] R1路径规划失败: {result['error']}")
         return
 
     ba_frame = encode_zone2_frame(result['filtered_nodes'])
@@ -186,7 +250,7 @@ def kfs_callback(data: bytes):
     def _repeat_send(frame, count, interval):
         for i in range(count):
             ros_bridge_module.RosBridgeNodeInstance.writeBytes(frame)
-            print(f"已下发 ({i+1}/{count})")
+            print(f"R1 BA帧已下发 ({i+1}/{count})")
             if i < count - 1:
                 time.sleep(interval)
 
