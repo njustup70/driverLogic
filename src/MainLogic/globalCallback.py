@@ -106,7 +106,7 @@ from std_msgs.msg import Empty, Float32, String
 
 
 SPEAR_OFFSET_COMMAND = b'\xB1'
-YOLO_CLASSNAME_COMMAND = b'\xB4'
+YOLO_CLASSNAME_COMMAND = b'\xEA'
 SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
 SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
@@ -396,24 +396,14 @@ def ros_qr_callback(msg):
         return
     except:
         return
-
-
-
-
-
-   
-
-
+    
 
 def yolo_classname_callback(msg: String):
-    """YOLO 检测类别名回调：接收 YOLO_detection 话题的 class_name，下发到下位机。
+    """YOLO 检测类别名回调：根据 class_name 向下位机发送警示/正常帧。
 
-    仿照 debug_spear_offset_callback 的方式：
-    - 从 String 消息中取出类别名
-    - 拼装 payload: YOLO_CLASSNAME_COMMAND + class_name.encode('utf-8')
-    - 通过 writeBytes 下发（0xFA 帧头由 writeBytes 自动添加）
-
-    串口帧格式：0xFA 0xB4 [class_name UTF-8 bytes]
+    帧格式：0xFA 0xEA [data_0] [data_1]（0xFA 由 writeBytes 自动添加）
+      - class_name 为 R_R1 或 B_R1 → 0x01 0x01（警示）
+      - 其他 → 0x00 0x00（正常）
     """
     class_name = msg.data
     if not class_name:
@@ -423,7 +413,6 @@ def yolo_classname_callback(msg: String):
     if bridge is None:
         return
 
-    payload = YOLO_CLASSNAME_COMMAND + turn_to_bytes([ord(c) for c in class_name])
-    frame = b'\xFA' + payload
-    bridge.writeBytes(payload)
-    print(f"[YOLO] 下发类别名: {class_name}, frame={frame.hex(' ')}")
+    warn = 0x01 if class_name in ("R_R1", "B_R1") else 0x00
+    bridge.writeBytes(YOLO_CLASSNAME_COMMAND + turn_to_bytes([warn, warn]))
+    print(f"[YOLO] class_name={class_name}")
