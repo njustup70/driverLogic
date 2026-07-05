@@ -18,6 +18,7 @@ from typing import List
 from MainLogic.app.zone2_model_api import generate_actions_from_result, determine_start_position, encode_action_sequence, send_actions, send_r1_nodes, extract_r1_nodes_on_path,send_actions_one_by_one
 from MainLogic.core.zone2_model.zone2_sender import action_ack_event
 _MEILIN_MAP_FRAME_LEN = 12
+SLAMRESET = b'\x52'  # SLAM correct 指令帧
 
 def action_callback(data: bytes):
     """动作执行完成回调函数，收到 FF 6F 帧时触发 ack_event 通知下一帧发送"""
@@ -261,6 +262,11 @@ def zone_retry_callback(data: bytes):  # 0x69
 def slam_reset_callback(msg: Empty):
     """SLAM Reset 话题回调：监听 /slam_reset (std_msgs/Empty)，当 VoxelSLAM 内部触发 system_reset 时被调用。"""
     print("⚠️  SLAM Reset 话题已触发！VoxelSLAM 内部执行了 system_reset")
+    bridge = ros_bridge_module.RosBridgeNodeInstance
+    if bridge is None:
+        return
+
+    bridge.writeBytes(SLAMRESET)# 发送 SLAM correct 指令，触发 SICK yaw 纠正
 
 
 def slam_restart_callback(data: bytes):  # 0x13
