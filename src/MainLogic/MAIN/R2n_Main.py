@@ -65,6 +65,8 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("spear_status", gcb.spear_callback, type=UInt8MultiArray) 
     # 订阅这个话题给下位机发送矛头偏移
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/arucopnp/offset_mm", debug_spear_offset_callback, type=PointStamped)
+    # 订阅 YOLO 检测结果，将类别名下发到下位机
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("YOLO_detection", gcb.yolo_classname_callback, type=String)
     # 这个异步函数完成用来矛头对齐
     await asyncio.sleep(0.5)
     # await asyncio.sleep(1.5)

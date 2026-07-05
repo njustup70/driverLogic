@@ -101,10 +101,11 @@ from MainLogic.app.climb_manager import ClimbManagerInstance
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
 from MainLogic.Lib.bytes import turn_to_bytes
-from std_msgs.msg import Empty, Float32
+from std_msgs.msg import Empty, Float32, String
 
 
 SPEAR_OFFSET_COMMAND = b'\xB1'
+YOLO_CLASSNAME_COMMAND = b'\xB4'
 SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
 SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
@@ -397,3 +398,26 @@ def ros_qr_callback(msg):
    
 
 
+
+def yolo_classname_callback(msg: String):
+    """YOLO 检测类别名回调：接收 YOLO_detection 话题的 class_name，下发到下位机。
+
+    仿照 debug_spear_offset_callback 的方式：
+    - 从 String 消息中取出类别名
+    - 拼装 payload: YOLO_CLASSNAME_COMMAND + class_name.encode('utf-8')
+    - 通过 writeBytes 下发（0xFA 帧头由 writeBytes 自动添加）
+
+    串口帧格式：0xFA 0xB4 [class_name UTF-8 bytes]
+    """
+    class_name = msg.data
+    if not class_name:
+        return
+
+    bridge = ros_bridge_module.RosBridgeNodeInstance
+    if bridge is None:
+        return
+
+    payload = YOLO_CLASSNAME_COMMAND + turn_to_bytes([ord(c) for c in class_name])
+    frame = b'\xFA' + payload
+    bridge.writeBytes(payload)
+    print(f"[YOLO] 下发类别名: {class_name}, frame={frame.hex(' ')}")
