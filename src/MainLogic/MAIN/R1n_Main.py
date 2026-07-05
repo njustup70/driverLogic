@@ -2,6 +2,7 @@ from MainLogic import globalCallback as gcb
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
 import asyncio,math
+from std_msgs.msg import Empty
 from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.Lib.odomVec import Odom
 async def async_main():
@@ -18,6 +19,10 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, b'\xB3')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.kfs_callback, b'\xC2')
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.field_color_callback, 0x78)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.zone_retry_callback, 0x69)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.slam_restart_callback, 0x13)
+    ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/slam_reset", gcb.slam_reset_callback, type=Empty)
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     
     # 注册红蓝场标志位
