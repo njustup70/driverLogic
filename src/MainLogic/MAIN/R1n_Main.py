@@ -19,9 +19,9 @@ async def async_main():
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.sick_callback, b'\xB3')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.serial_correct_callback, b'\xB2')
     ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.kfs_callback, b'\xC2')
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.field_color_callback, 0x78)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.zone_retry_callback, 0x69)
-    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.slam_restart_callback, 0x13)
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.field_color_callback, b'\x78')
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.zone_retry_callback, b'\x69')
+    ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.slam_restart_callback, b'\x13')
     ros_bridge_module.RosBridgeNodeInstance.register_ros2_sub("/slam_reset", gcb.slam_reset_callback, type=Empty)
     #ros_bridge_module.RosBridgeNodeInstance.register_serial_sub(gcb.climb_type_callback, b'\xB1')
     
@@ -46,8 +46,8 @@ async def async_main():
     #    map2BaseInit=Odom(11.480, 0.450, 0.0) # 三区技能赛地图起点 12-0.52=11.48
     #else:
     #    map2BaseInit=Odom(11.480, -0.5317, 0.0) # 三区技能赛地图起点 12-0.52=11.48
-    #map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
-    map2BaseInit=Odom(0.45, 6-0.9817+0.45, 0.0)
+    map2BaseInit=Odom(0.450, 0.450, 0.0) # 地图起点(0.451,0.453)
+    #map2BaseInit=Odom(0.45, 6-0.9817+0.45, 0.0)
     laser2Base=Odom(-0.4775,0.345, 0.0) # 雷达底盘
     base2laser=Odom(0.4775,-0.345, 1.6*math.pi/180) # 雷达底盘
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser)
