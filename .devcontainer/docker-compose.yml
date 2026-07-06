@@ -25,6 +25,8 @@ services:
     image: elainasuki/rc2026:driverLogic
     container_name: driverLogic_container_dev
     <<: *common
+    group_add:
+      - "${DOCKER_GID:-999}"
     environment:
       <<: *common_env # 这里会把公共变量展开到这一层
       PYTHONPATH: /home/Elaina/ros2_ws/src:$$PYTHONPATH # 注意：使用 $$ 避免 Compose 报错
