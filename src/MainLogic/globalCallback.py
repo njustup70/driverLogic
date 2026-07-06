@@ -178,10 +178,13 @@ def kfs_callback(data: bytes):
         return
 
     kfs_raw = list(data[:12])
+    has_abnormal = False
     for i, v in enumerate(kfs_raw):
         if v not in (0, 1, 2, 3):
-            print(f"[KFS] 方块{i+1}属性值异常: {v}, 已修正为0(空)")
-            kfs_raw[i] = 0
+            print(f"[KFS] 方块{i+1}属性值异常: {v}, 终止路径规划")
+            has_abnormal = True
+    if has_abnormal:
+        return
 
     zone2_kfs_state = kfs_raw
 
