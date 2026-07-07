@@ -36,6 +36,7 @@ from MainLogic.core.zone2_model.zone2_helpers import *
 from MainLogic.core.zone2_model.zone2_format import *
 from MainLogic.core.zone2_model.zone2_encoder import *
 from MainLogic.core.zone2_model.zone2_sender import *
+from MainLogic.core.zone2_model.zone2_sender import schedule_repeated_send, stop_repeated_send
 
 
 def visualize_path_result(result: dict, save_path: str = "/tmp/merlin_random_demo.png", show: bool = True) -> str:
@@ -202,6 +203,8 @@ __all__ = [
     "encode_action_sequence",
     "send_actions",
     "send_r1_nodes",
+    "schedule_repeated_send",
+    "stop_repeated_send",
     "extract_r1_nodes_on_path",
     "list_saved_merlin_maps",
     "load_saved_merlin_map",

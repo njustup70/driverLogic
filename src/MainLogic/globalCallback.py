@@ -15,7 +15,7 @@ from MainLogic.app.merlin_map_solver_debug import run_solver_on_states
 from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 from typing import List
-from MainLogic.app.zone2_model_api import generate_actions_from_result, determine_start_position, encode_action_sequence, send_actions, send_r1_nodes, extract_r1_nodes_on_path,send_actions_one_by_one
+from MainLogic.app.zone2_model_api import generate_actions_from_result, determine_start_position, encode_action_sequence, send_actions, send_r1_nodes, extract_r1_nodes_on_path,send_actions_one_by_one, schedule_repeated_send, stop_repeated_send
 from MainLogic.core.zone2_model.zone2_sender import action_ack_event
 _MEILIN_MAP_FRAME_LEN = 12
 SLAMRESET = b'\x52'  # SLAM correct 指令帧
@@ -77,10 +77,9 @@ def meilin_map_frame_callback(data: bytes):
         # start_pos = determine_start_position(actions, approach_distance=500)
         # print(f" {start_pos}")
         encode_action_sequence(actions)
-        send_actions(actions)
-        # asyncio.run_coroutine_threadsafe(send_actions_one_by_one(actions, timeout=10.0), RosBridgeNodeInstance._loop)
         R1 = extract_r1_nodes_on_path(result)
-        send_r1_nodes(R1)
+        # 使用定时重复发送：每隔 1 秒发送一次 actions 和 R1 节点帧，直到新的回调触发或被取消
+        schedule_repeated_send(actions, R1, interval=5.0)
         return True
     except Exception as e:
         print(f"梅林地图编码帧处理错误: {e}")

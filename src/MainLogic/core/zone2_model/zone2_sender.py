@@ -304,3 +304,89 @@ async def send_actions_one_by_one(
     RosBridgeNodeInstance.writeBytes(actions_finish_frame)
     print("[send_actions] 所有帧发送完成，动作序列结束帧已发送")
     return True
+
+
+# =============================================================================
+# 定时重复发送
+# =============================================================================
+_repeated_task: Optional[asyncio.Task] = None
+
+
+async def _repeated_send_loop(
+    actions: List[Dict[str, Any]],
+    r1_nodes: List[int],
+    interval: float,
+) -> None:
+    """以固定时间间隔循环发送 actions 和 R1 节点帧。
+
+    此协程会一直运行，直到被外部 cancel 取消。
+    """
+    import time as _time
+    from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
+
+    cnt = 0
+    while True:
+        cnt += 1
+        print(f"[repeated_send] 第 {cnt} 次发送 (间隔={interval}s)")
+
+        # 发送动作序列
+        start_stake_id = determine_start_position(actions) or 0
+        column_stake_id = determine_column_stake_id(actions) or 0
+        data = encode_action_sequence(actions, start_stake_id=start_stake_id, column_stake_id=column_stake_id)
+        if data:
+            print(f"[repeated_send] actions #{cnt}: 起始桩={start_stake_id}, 列桩={column_stake_id}, {len(actions)} 个动作 → {data.hex(' ')}")
+            RosBridgeNodeInstance.writeBytes(data)
+
+        # 发送 R1 节点
+        r1_data = encode_r1_frame([n - 1 for n in r1_nodes])
+        if r1_data and r1_data[0] != 0:
+            print(f"[repeated_send] R1 #{cnt}: {r1_nodes} → {r1_data.hex(' ')}")
+            RosBridgeNodeInstance.writeBytes(r1_data)
+
+        await asyncio.sleep(interval)
+
+
+def schedule_repeated_send(
+    actions: List[Dict[str, Any]],
+    r1_nodes: List[int],
+    interval: float = 1.0,
+) -> None:
+    """调度定时重复发送：先取消旧任务，再启动新任务。
+
+    在非 async 上下文中调用（如串口回调），通过 RosBridgeNodeInstance._loop
+    调度异步协程。每次调用会取消之前的重复发送任务，避免多个任务同时运行。
+
+    Args:
+        actions: 动作列表。
+        r1_nodes: R1 节点列表。
+        interval: 发送间隔（秒），默认 1.0。
+    """
+    global _repeated_task
+    from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
+
+    loop = getattr(RosBridgeNodeInstance, "_loop", None)
+    if loop is None:
+        print("[schedule_repeated_send] 事件循环未就绪，使用单次发送作为降级")
+        send_actions(actions)
+        send_r1_nodes(r1_nodes)
+        return
+
+    # 取消旧任务
+    if _repeated_task is not None and not _repeated_task.done():
+        _repeated_task.cancel()
+        print("[schedule_repeated_send] 已取消旧的重复发送任务")
+
+    # 启动新任务
+    _repeated_task = asyncio.run_coroutine_threadsafe(
+        _repeated_send_loop(actions, r1_nodes, interval), loop
+    )
+    print(f"[schedule_repeated_send] 已启动重复发送: {len(actions)} 个动作, {len(r1_nodes)} 个 R1 节点, 间隔={interval}s")
+
+
+def stop_repeated_send() -> None:
+    """取消当前正在运行的重复发送任务。"""
+    global _repeated_task
+    if _repeated_task is not None and not _repeated_task.done():
+        _repeated_task.cancel()
+        print("[stop_repeated_send] 已取消重复发送任务")
+    _repeated_task = None
