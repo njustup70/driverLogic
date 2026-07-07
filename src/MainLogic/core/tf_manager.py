@@ -117,9 +117,9 @@ class TFManager:
     # zone_retry_flag:  1=一区, 3=三区
     FIELD_ZONE_MAP2BASE_CONFIG = {
         (0, 1): Odom(0.45, 0.45, 0),                       # 红场一区 （现有参数）
-        (0, 3): Odom(11.480, 0.45, 0.0),                   # 红场三区 PLACEHOLDER
+        (0, 3): Odom(8+0.45+0.025, 0.6533, 0.0),               # 红场三区 PLACEHOLDER
         (1, 1): Odom(0.45, 6-0.9817+0.45, 0.0),            # 蓝场一区 PLACEHOLDER
-        (1, 3): Odom(11.480, 6-0.9817+0.45, 0.0),          # 蓝场三区 PLACEHOLDER
+        (1, 3): Odom(8+0.45+0.025, 4.8+0.025+0.45, 0.0),          # 蓝场三区 PLACEHOLDER
     }
 
     def _check_and_apply_field_zone_config(self):
@@ -203,9 +203,9 @@ class TFManager:
 
     def apply_sick_initial_yaw_correction(self) -> bool:
         """使用 sick 缓存值修正 map->slam_init 的初始 yaw（增量更新，可撤销前次修正）。"""
-        if not self.left_sick_buffer or not self.right_sick_buffer or not self._has_slam_pose:
-            return False
-        sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
+        #if not self.left_sick_buffer or not self.right_sick_buffer or not self._has_slam_pose:
+        #    return False
+        #sick_y = sum(self.sick_buffer) / len(self.sick_buffer)
         self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw)
         #在当前座标系下求BaseInit->Base的值
         baseinit2base=self.laser_to_base.inverse()@self._slamBaseOdom
@@ -223,13 +223,14 @@ class TFManager:
         if self.sick_direction_flag==1:
             def calculate_y_real(theta):
                 return 6-0.9817+0.45
-            dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            #dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
         
-        print(self._mapToSlamInit)
+        #print(self._mapToSlamInit)
         #self._mapToSlamInit = Odom(0,0,-self._sickYawCorrection) @ Odom(0,0,nominal_yaw+new_yaw_correction) @ self._mapToSlamInit 
         self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw+dyaw)
         self._mapToSlamInit=self.mapToBaseInit@self.laser_to_base.inverse()
-        print(self._mapToSlamInit)
+        #print(self._mapToSlamInit)
 
         if self.rosBridge is not None:
             self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
