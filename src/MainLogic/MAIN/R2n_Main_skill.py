@@ -52,7 +52,7 @@ async def async_main():
     
 
     sick2Base=Odom(0.0, -0.3511, 0.0)
-    map2BaseInit=Odom(7.152, 0.39, 0) # 704 * 780
+    map2BaseInit=Odom(7.152, 1.2-0.39, 0) # 704 * 780
     # laser2Base=Odom(-0.10, -0.336, 0.0)
     base2laser=Odom(0.10, 0.336, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser, sick_correct_width=6.0)
@@ -61,12 +61,11 @@ async def async_main():
     # R2n Skill 场地坐标
     # ============================================================
     TFManagerInstance.FIELD_ZONE_MAP2BASE_CONFIG.update({
-        (0, 1): Odom(7.152, 1.2-0.39, 0),       # 红场启动区（等效一区）
-        (0, 3): Odom(0.0, 0.0, 0.0),        # 红场三区
+        (0, 1): Odom(7.152, 1.2-0.39, 0.0),       # 红场启动区（等效一区）
+        (0, 3): Odom(12-0.352, 0.39, 0.0),        # 红场三区
         (1, 1): Odom(7.152, 6-(1.2-0.39), 0.0),   # 蓝场启动区（等效一区）
-        (1, 3): Odom(0.0, 0.0, 0.0),        # 蓝场三区
+        (1, 3): Odom(12-0.352, 6-0.39, 0.0),        # 蓝场三区
     })
-    TFManagerInstance.zone_retry_flag = 3
 
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
