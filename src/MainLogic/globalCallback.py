@@ -256,7 +256,7 @@ def zone_retry_callback(data: bytes):  # 0x69
     _last_zone_retry_value = zone
     if zone == 0x01:
         TFManagerInstance.zone_retry_flag = 1
-        print("场地重试：一区重试")
+        print("场地重试：一区/等效一区重试")
     elif zone == 0x03:
         TFManagerInstance.zone_retry_flag = 3
         print("场地重试：三区重试")

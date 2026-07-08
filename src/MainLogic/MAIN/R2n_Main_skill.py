@@ -2,7 +2,7 @@
 Author: Nagisa 2964793117@qq.com
 Date: 2026-06-26 11:01:15
 LastEditors: Nagisa 2964793117@qq.com
-LastEditTime: 2026-07-04 21:07:22
+LastEditTime: 2026-07-08 16:08:05
 FilePath: \driverLogic\src\MainLogic\MAIN\R2n_Main.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -12,6 +12,7 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 from MainLogic.core import ros_bridge_node as ros_bridge_module
 from MainLogic.core.serial_node import start_serial_process
 import asyncio
+import math
 from MainLogic.core.tf_manager import TFManagerInstance,TFOdin
 import MainLogic.core.tf_manager as tf_manager
 import MainLogic.core.nav.observer as observer_module
@@ -55,6 +56,18 @@ async def async_main():
     # laser2Base=Odom(-0.10, -0.336, 0.0)
     base2laser=Odom(0.10, 0.336, 0.0)
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser, sick_correct_width=6.0)
+
+    # ============================================================
+    # R2n Skill 场地坐标
+    # ============================================================
+    TFManagerInstance.FIELD_ZONE_MAP2BASE_CONFIG.update({
+        (0, 1): Odom(7.152, 0.39, 0),       # 红场启动区（等效一区）
+        (0, 3): Odom(0.0, 0.0, 0.0),        # 红场三区
+        (1, 1): Odom(7.152, 6-0.39, 0.0),   # 蓝场启动区（等效一区）
+        (1, 3): Odom(0.0, 0.0, 0.0),        # 蓝场三区
+    })
+    TFManagerInstance.zone_retry_flag = 3
+
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
     # 这个回调用来检测build_spear动作是否完成
