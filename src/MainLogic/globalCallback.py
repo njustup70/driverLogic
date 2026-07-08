@@ -149,7 +149,7 @@ def sick_callback(data: bytes): # 0xAA
         sick_data = data[3:19]
         try:
             sick_floats = struct.unpack('<4f', sick_data)
-            left_distance = sick_floats[0]
+            left_distance = 1.0160 * sick_floats[0] + 0.0105
             # print(id(TFManagerInstance), id(TFOdinInstance))
             TFManagerInstance.left_sick(float(left_distance))
             # TFOdinInstance.sick(float(left_distance))
@@ -159,7 +159,7 @@ def sick_callback(data: bytes): # 0xAA
             )
             # print(f"SICK数据解析成功: distance={left_distance:.3f} m")
 
-            right_distance = sick_floats[1]
+            right_distance = 0.9946 * sick_floats[1] + 0.0738
             TFManagerInstance.right_sick(float(right_distance))
             # TFOdinInstance.sick_right(float(right_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
