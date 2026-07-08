@@ -232,8 +232,8 @@ class TFManager:
         # elif self.sick_direction_flag==1:
             # dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
             print(f"{-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(self._baseinitodom.yaw+self._baseinitYaw)}")
-        if self.sick_direction_flag==1:
-            dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+        # if self.sick_direction_flag==1:
+        #     dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
             
         else:
             self.left_sick_buffer.clear()

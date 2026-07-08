@@ -154,6 +154,10 @@ def sick_callback(data: bytes): # 0xAA
             TFManagerInstance.left_sick(float(left_distance))
             # TFOdinInstance.sick(float(left_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
+                'left_sick_raw',
+                Float32(data=float(sick_floats[0]))
+            )
+            ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
                 SICK_LEFT_DISTANCE_TOPIC,
                 Float32(data=float(left_distance))
             )
