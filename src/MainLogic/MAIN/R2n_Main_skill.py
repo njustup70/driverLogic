@@ -2,7 +2,7 @@
 Author: Nagisa 2964793117@qq.com
 Date: 2026-06-26 11:01:15
 LastEditors: Nagisa 2964793117@qq.com
-LastEditTime: 2026-07-08 18:31:55
+LastEditTime: 2026-07-08 19:32:14
 FilePath: \driverLogic\src\MainLogic\MAIN\R2n_Main.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -52,20 +52,24 @@ async def async_main():
     
 
     sick2Base=Odom(0.0, -0.3511, 0.0)
-    map2BaseInit=Odom(7.152, 1.2-0.39, 0) # 704 * 780
-    # laser2Base=Odom(-0.10, -0.336, 0.0)
     base2laser=Odom(0.10, 0.336, 0.0)
-    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser, sick_correct_width=6.0)
 
     # ============================================================
-    # R2n Skill 场地坐标
+    # R2n Skill 场地坐标（在 register_tf_chain 之前注入）
     # ============================================================
     TFManagerInstance.FIELD_ZONE_MAP2BASE_CONFIG.update({
-        (0, 1): Odom(7.152, 1.2-0.39, 0.0),       # 红场启动区（等效一区）
-        (0, 3): Odom(12-0.352, 0.39, 0.0),        # 红场三区
-        (1, 1): Odom(7.152, 6-(1.2-0.39), 0.0),   # 蓝场启动区（等效一区）
-        (1, 3): Odom(12-0.352, 6-0.39, 0.0),        # 蓝场三区
+        (0, 1): Odom(7.152, 1.2 - 0.39, 0.0),            # 红场一区
+        (0, 3): Odom(12 - 0.352, 0.39, 0.0),             # 红场三区
+        (1, 1): Odom(7.152, 6 - (1.2 - 0.39), 0.0),      # 蓝场一区
+        (1, 3): Odom(12 - 0.352, 6 - 0.39, 0.0),         # 蓝场三区
     })
+    TFManagerInstance.zone_retry_flag = 1
+
+    # map2BaseInit 从 FIELD_ZONE_MAP2BASE_CONFIG 中取当前 (field, zone) 对应的值
+    map2BaseInit = TFManagerInstance.FIELD_ZONE_MAP2BASE_CONFIG[
+        (TFManagerInstance.field_color_flag, TFManagerInstance.zone_retry_flag)
+    ]  
+    TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser, sick_correct_width=6.0)
 
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
