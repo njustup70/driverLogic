@@ -22,7 +22,7 @@ def generate_launch_description():
             {'camera_topic': '/hik_camera/image_raw'},
             {'exposure_time': 10000},
             {'gain': 0.0},
-            {'acquisition_frame_rate': 50.0},
+            {'acquisition_frame_rate': 25.0},
             {'pixel_format': 'BayerGB8'},
         ],
     )
