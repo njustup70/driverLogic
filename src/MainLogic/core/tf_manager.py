@@ -4,6 +4,7 @@
 
 import asyncio
 import math
+import time
 from typing import cast
 import numpy as np
 from scipy.optimize import fsolve
@@ -293,6 +294,7 @@ class TFManager:
                 self.slam_odom_frame,
                 self.slam_base_frame,
                 rclpy.time.Time(),
+                timeout=rclpy.duration.Duration(seconds=0.05),
             )
         except Exception:
             return
@@ -309,7 +311,15 @@ class TFManager:
         self._slamInitToOdom = slam_base_pose @ wheel_pose.inverse()
         self.rosBridge.publish_static_tf(self.slam_init_frame, self.odom_frame, self._slamInitToOdom)
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
-        PathVisualInstance.add_point("/state/base_link_path",self.baseLinkOdom.value)
+        _t0 = time.perf_counter()
+        PathVisualInstance.add_point("/state/base_link_path", self.baseLinkOdom.value)
+        _dt = (time.perf_counter() - _t0) * 1000.0
+        if _dt > 1.0:
+            try:
+                _plen = len(PathVisualInstance.path_cache.get("/state/base_link_path", []).poses)  # type: ignore[union-attr]
+            except Exception:
+                _plen = -1
+            print(f"[perf] add_point cost: {_dt:.1f}ms  path_len={_plen}")
     async def tf_update_loop(self):
         """统一更新任务：10ms 执行 odom 更新，每 100ms 执行一次 slam 更新。"""
         tick_10ms = 0
