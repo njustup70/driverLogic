@@ -2,7 +2,7 @@
 Author: Nagisa 2964793117@qq.com
 Date: 2026-06-26 11:01:15
 LastEditors: Nagisa 2964793117@qq.com
-LastEditTime: 2026-07-08 19:32:14
+LastEditTime: 2026-07-09 16:21:59
 FilePath: \driverLogic\src\MainLogic\MAIN\R2n_Main.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -52,8 +52,7 @@ async def async_main():
     
 
     sick2Base=Odom(0.0, -0.3511, 0.0)
-    base2laser=Odom(0.10, 0.336, 0.0)
-
+    base2laser=Odom(0.10, 0.336, -0.8*3.1415926/180)
     # ============================================================
     # R2n Skill 场地坐标（在 register_tf_chain 之前注入）
     # ============================================================
