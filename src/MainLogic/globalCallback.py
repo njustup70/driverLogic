@@ -201,36 +201,48 @@ def serial_correct_callback(data: bytes): # 0xB2
 
 # 场地/区域回调的去重缓存（看门狗双去重：回调层 + 看门狗层）
 _last_field_color_value = None
+_last_match_type_value = None
 _last_zone_retry_value = None
 
 def field_color_callback(data: bytes):  # 0x78
     """
-    红蓝场决定指令回调
-    帧格式：0xFF 0x78 [场地决定帧] 0xFF (4 字节)
-    场地决定帧：0x01 = 蓝场，0x00 = 红场
+    红蓝场决定指令回调（二次更新）
+    帧格式：0xFF 0x78 [场地决定帧] [正赛/技能赛决定帧] 0xFF (5 字节)
+    场地决定帧：0x00 = 红场，0x01 = 蓝场
+    赛场决定帧：0x00 = 竞技赛/崇武探幽，0x01 = 九宫藏宝
     """
-    global _last_field_color_value
-    if not data or len(data) != 2:
+    global _last_field_color_value, _last_match_type_value
+    if not data or len(data) != 3:
         return
-    if data[1] != 0xFF:
+    if data[2] != 0xFF:
         return
 
     field = data[0]
+    match_type = data[1]
     if field not in (0x00, 0x01):
         print(f"场地决定：未知场地码 0x{field:02X}")
         return
+    if match_type not in (0x00, 0x01):
+        print(f"赛场决定：未知赛场码 0x{match_type:02X}")
+        return
     # 回调层去重：数据内容没变则不重复设 flag
-    if field == _last_field_color_value:
+    if field == _last_field_color_value and match_type == _last_match_type_value:
         return
     _last_field_color_value = field
+    _last_match_type_value = match_type
+
     if field == 0x01:
         TFManagerInstance.field_color_flag = 1
         TFManagerInstance.sick_direction_flag = 1
-        print("场地决定：蓝场")
-    elif field == 0x00:
+        field_name = "蓝场"
+    else:
         TFManagerInstance.field_color_flag = 0
         TFManagerInstance.sick_direction_flag = 0
-        print("场地决定：红场")
+        field_name = "红场"
+
+    TFManagerInstance.match_type_flag = match_type
+    match_name = "九宫藏宝" if match_type == 0x01 else "竞技赛/崇武探幽"
+    print(f"场地决定：{field_name}，赛场类型：{match_name}")
 
 
 def zone_retry_callback(data: bytes):  # 0x69

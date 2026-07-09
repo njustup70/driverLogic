@@ -42,6 +42,8 @@ class TFManager:
         self.field_color_flag = 0 #（0表示红场，1表示蓝场）
         # 一三区重启标志位
         self.zone_retry_flag = 1 #（1表示一区，3表示三区）
+        # 赛场类型标志位（0x00=竞技赛/崇武探幽, 0x01=九宫藏宝）
+        self.match_type_flag = 0
 
         self.baseLinkOdom: AsyncVariable[Odom] = AsyncVariable(Odom(0.0, 0.0, 0.0))
         self.baseLinkOdom.value = Odom(0.0, 0.0, 0.0)
@@ -67,9 +69,10 @@ class TFManager:
         # 控制标志
         self._tf_chain_registered = False
         self._has_slam_pose = False
-        # 场地/区域看门狗：追踪上次已应用的组合状态
+        # 场地/区域/赛场看门狗：追踪上次已应用的组合状态
         self._last_applied_field_color = None
         self._last_applied_zone_retry = None
+        self._last_applied_match_type = None
         self._field_zone_config_applied = False
         # sick 修正缓存
         self.sick_lateral_offset = 0.0
@@ -108,23 +111,29 @@ class TFManager:
         # 同步看门狗状态：记录 register_tf_chain 时的初始 flag 组合
         self._last_applied_field_color = self.field_color_flag
         self._last_applied_zone_retry = self.zone_retry_flag
+        self._last_applied_match_type = self.match_type_flag
         self._field_zone_config_applied = True
 
     # ==================== 场地/区域 看门狗 ====================
-    # (field_color_flag, zone_retry_flag) → map2BaseInit 映射表
+    # (field_color_flag, zone_retry_flag, match_type_flag) → map2BaseInit 映射表
     # field_color_flag: 0=红场, 1=蓝场
     # zone_retry_flag:  1=一区, 3=三区
+    # match_type_flag:  0=竞技赛/崇武探幽, 1=九宫藏宝
     FIELD_ZONE_MAP2BASE_CONFIG = {
-        (0, 1): Odom(0.390, 5 - 0.352, -math.pi/2),     # 红场一区 （现有参数）
-        (0, 3): Odom(12-0.39, 0.352, math.pi/2),        # 红场三区
-        (1, 1): Odom(0.39, 1 + 0.352, math.pi/2),       # 蓝场一区 PLACEHOLDER
-        (1, 3): Odom(12-0.39, 6 - 0.352, -math.pi/2),   # 蓝场三区 PLACEHOLDER
+        (0, 1, 0): Odom(0.352, 5 - 0.39, 0.0),              # 红场一区 竞技赛/崇武探幽
+        (0, 1, 1): Odom(8+0.352, 2.4 - 0.39, 0.0),          # 红场启动区 九宫藏宝
+        (0, 3, 0): Odom(12-0.39, 0.352, math.pi/2),         # 红场三区 竞技赛/崇武探幽（同）
+        (0, 3, 1): Odom(12-0.39, 0.352, math.pi/2),         # 红场三区 九宫藏宝（同）
+        (1, 1, 0): Odom(0.352, 1 + 0.39, 0.0),              # 蓝场一区 竞技赛/崇武探幽
+        (1, 1, 1): Odom(8+0.352, 6 - (2.4 - 0.39), 0.0),    # 蓝场启动区 九宫藏宝
+        (1, 3, 0): Odom(12-0.39, 6 - 0.352, -math.pi/2),    # 蓝场三区 竞技赛/崇武探幽（同）
+        (1, 3, 1): Odom(12-0.39, 6 - 0.352, -math.pi/2),    # 蓝场三区 九宫藏宝（同）
     }
 
     def _check_and_apply_field_zone_config(self):
-        """看门狗检查：若场地/区域组合状态变化，更新 map2BaseInit 并重发静态 TF。
+        """看门狗检查：若场地/区域/赛场组合状态变化，更新 map2BaseInit 并重发静态 TF。
 
-        仅当 (field_color_flag, zone_retry_flag) 组合与上次已应用的不同时才执行：
+        仅当 (field_color_flag, zone_retry_flag, match_type_flag) 组合与上次已应用的不同时才执行：
         1. 用新的 map2BaseInit 覆盖 self.mapToBaseInit
         2. 按 register_tf_chain 相同的公式重算 _mapToSlamInit
         3. 重新发布 map → slam_init 静态 TF
@@ -134,20 +143,24 @@ class TFManager:
 
         fc = self.field_color_flag
         zr = self.zone_retry_flag
+        mt = self.match_type_flag
 
         # 看门狗层去重：组合状态没变则跳过
         if self._field_zone_config_applied:
-            if fc == self._last_applied_field_color and zr == self._last_applied_zone_retry:
+            if (fc == self._last_applied_field_color and
+                zr == self._last_applied_zone_retry and
+                mt == self._last_applied_match_type):
                 return
 
-        new_map2base = self.FIELD_ZONE_MAP2BASE_CONFIG.get((fc, zr))
+        new_map2base = self.FIELD_ZONE_MAP2BASE_CONFIG.get((fc, zr, mt))
         if new_map2base is None:
-            print(f"[FieldZone] 未知场地/区域组合: field={fc}, zone={zr}，跳过")
+            print(f"[FieldZone] 未知场地/区域/赛场组合: field={fc}, zone={zr}, match_type={mt}，跳过")
             return
 
         field_name = "蓝场" if fc else "红场"
         zone_name = f"{zr}区"
-        print(f"[FieldZone] 配置变更: {field_name} {zone_name} → map2BaseInit={new_map2base}")
+        match_name = "九宫藏宝" if mt else "竞技赛/崇武探幽"
+        print(f"[FieldZone] 配置变更: {field_name} {zone_name} {match_name} → map2BaseInit={new_map2base}")
 
         self.mapToBaseInit = new_map2base
         self._mapToSlamInit = self.mapToBaseInit @ self.laser_to_base.inverse()
@@ -159,6 +172,7 @@ class TFManager:
 
         self._last_applied_field_color = fc
         self._last_applied_zone_retry = zr
+        self._last_applied_match_type = mt
         self._field_zone_config_applied = True
 
     def odom(self, x: float, y: float, yaw: float):
@@ -321,10 +335,14 @@ class TFManager:
                     self.slam_100ms()
                     self._check_and_apply_field_zone_config()
                     self.odom_10ms()
-                    # 持续下发场地/区域反馈给下位机（上位机端确认）
-                    # 帧格式：0xFA 0x78 [field_color_flag] [zone_retry_flag]
-                    # （0xFA 帧头由 writeBytes 自动添加）
-                    self.rosBridge.writeBytes(b'\x78' + turn_to_bytes([self.field_color_flag, self.zone_retry_flag]))
+                    # 持续下发场地/区域/赛场反馈给下位机（上位机端确认）
+                    # 帧格式：0xFA 0x78 [field_color_flag] [zone_retry_flag] [match_type_flag]
+                    # match_type_flag: 0x00=竞技赛/崇武探幽, 0x01=九宫藏宝
+                    self.rosBridge.writeBytes(b'\x78' + turn_to_bytes([
+                        self.field_color_flag,
+                        self.zone_retry_flag,
+                        self.match_type_flag,
+                    ]))
                 else:
                     self.odom_10ms()
             except Exception as e:
