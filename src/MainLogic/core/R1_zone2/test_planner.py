@@ -14,7 +14,7 @@
 """
 
 from R1_planner import compute_r1_zone2_path
-from encoder import encode_zone2_frame
+from encoder import compute_r2_entry_col, encode_zone2_frame
 
 # ============================================================
 # R1 ↔ zone2_model 坐标转换 (同 globalCallback.py)
@@ -41,10 +41,10 @@ def zone2_stakes_to_r1_indices(stakes: list[int], field_color: int) -> list[int]
 #   kfs_raw[0]=左上, [1]=中上, [2]=右上, [3]=左二, ..., [11]=右下
 # 状态: 0=空  1=R1  2=R2  3=假块
 KFS_RAW = [
-    1, 0, 0,   # 上行: R2, R2, R1
-    3, 0, 0,   # 二行: R1, R2, 空
-    2, 0, 2,   # 三行: 假块, 空, R2
-    2, 1, 1,   # 下行: 空, R1, 空
+    2, 0, 0,   # 上行: R2, R2, R1
+    0, 0, 1,   # 二行: R1, R2, 空
+    0, 3, 0,   # 三行: 假块, 空, R2
+    2, 1, 0,   # 下行: 空, R1, 空
 ]
 
 FIELD_COLOR = 0   # 0=红半场, 1=蓝半场
@@ -85,6 +85,7 @@ if __name__ == "__main__":
     print(f"  zone2 states: {meilin_states}")
 
     r1_priority = []
+    r2_traversal_kfs = []
     if r2_blocks:
         try:
             # 直接导入核心模块，避免经过 globalCallback → actions 的循环依赖
@@ -93,9 +94,10 @@ if __name__ == "__main__":
             from MainLogic.core.zone2_model.zone2_format import extract_r1_nodes_on_path
 
             # 绕过 run_solver_on_states，直接构造 map_data + 求解
+            _STATE_TO_BLOCK = {"EMPTY": "empty", "R1": "R1", "R2": "R2", "FAKE": "fake"}
             blocks = {}
             for i, s in enumerate(meilin_states, start=1):
-                blocks[i] = s.lower() if s != "EMPTY" else "empty"
+                blocks[i] = _STATE_TO_BLOCK.get(s, s.lower())
 
             map_data = {
                 "name": "merlin",
@@ -105,12 +107,29 @@ if __name__ == "__main__":
                 "blocks": blocks,
             }
 
-            r2_result = solve_route(strategy="dijkstra", map_data=map_data)
+            r2_result = solve_route(strategy="dijkstra", map_data=map_data, required_r2_count=2)
             r2_result["map_data"] = map_data
 
             print(f"\n  R2 求解结果: found={r2_result.get('found')}, "
                   f"cost={r2_result.get('cost')}, "
                   f"collected_r2={r2_result.get('collected_r2')}")
+
+            # 输出 R2 路径序列
+            r2_path_nodes = r2_result.get("path", [])
+            r2_path_steps = r2_result.get("path_steps", [])
+            print(f"  R2 路径节点序列 ({len(r2_path_nodes)} 步):")
+            print(f"    {' → '.join(str(n) for n in r2_path_nodes)}")
+            if r2_path_steps:
+                print(f"  R2 路径详细步骤:")
+                for i, step in enumerate(r2_path_steps):
+                    node = step.get("node", "?")
+                    edge = step.get("edge", "")
+                    step_cost = step.get("cost", 0)
+                    collected = step.get("collected_r2", "")
+                    turn = step.get("turn", "")
+                    print(f"    [{i}] node={node}, edge={edge}, cost={step_cost}"
+                          f"{', turn=' + str(turn) if turn else ''}"
+                          f"{', collected=' + str(collected) if collected else ''}")
 
             r1_on_path = extract_r1_nodes_on_path(r2_result)
             r1_priority = [
@@ -119,6 +138,18 @@ if __name__ == "__main__":
             ]
             print(f"  R2路径上的R1(zone2 stake): {r1_on_path}")
             print(f"  → R1优先级(kfs下标): {r1_priority}")
+
+            # 提取 R2 实际经过的桩位 (zone2 stake → kfs 下标)
+            r2_traversal_stakes = []
+            for node in r2_path_nodes:
+                try:
+                    n = int(node)
+                    if 1 <= n <= 12:
+                        r2_traversal_stakes.append(n)
+                except (ValueError, TypeError):
+                    pass
+            r2_traversal_kfs = zone2_stakes_to_r1_indices(r2_traversal_stakes, fc)
+            print(f"  R2 实际经过桩位(zone2): {r2_traversal_stakes} → kfs下标: {r2_traversal_kfs}")
         except Exception as e:
             print(f"  ⚠ zone2_model 求解失败: {e}")
             import traceback; traceback.print_exc()
@@ -127,9 +158,12 @@ if __name__ == "__main__":
         print(f"  无 R2 块，跳过 R2 路径推算")
 
     # ----------------------------------------------------------
-    # Step 2: R1 路径规划 (同 kfs_callback 优先级策略)
+    # Step 2: R1 路径规划 (传入 zone2_model 算出的 R2 实际路径)
     # ----------------------------------------------------------
-    if r1_priority:
+    if r2_traversal_kfs:
+        auto_mode = 1
+        print(f"\n  R1 优先级来源: zone2_model R2实际路径 → {r2_traversal_kfs}")
+    elif r1_priority:
         auto_mode = 0
         print(f"\n  R1 优先级来源: zone2_model 节点路径 → {r1_priority}")
     elif r2_blocks:
@@ -152,6 +186,7 @@ if __name__ == "__main__":
         fake_block=fake_block,
         auto_dog_flag=auto_mode,
         priority_block=r1_priority,
+        r2_traversal=r2_traversal_kfs if r2_traversal_kfs else None,
         start_candidates=[2, 0, 16],
         exit_node=11 if fc == 0 else 7,
         verbose=True,
@@ -164,7 +199,9 @@ if __name__ == "__main__":
     # ----------------------------------------------------------
     # 编码输出
     # ----------------------------------------------------------
-    frame = encode_zone2_frame(result['filtered_nodes'])
+    r2_entry_col = compute_r2_entry_col(r2_traversal_kfs, fc)
+    print(f"\n  R2 入口列编码: {r2_entry_col:02b} (00=中 01=左 10=右)")
+    frame = encode_zone2_frame(result['filtered_nodes'], r2_entry_col=r2_entry_col)
     print(f"\n{'=' * 60}")
     print(f"  上位机下发帧 (0xFA 头):")
     print(f"    FA {frame.hex(' ')}")

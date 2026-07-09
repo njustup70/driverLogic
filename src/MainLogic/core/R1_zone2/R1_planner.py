@@ -193,12 +193,15 @@ def compute_r1_zone2_path(
     priority_block: list = None,
     start_candidates: list = None,
     exit_node: int = 11,
+    r2_traversal: list = None,
     verbose: bool = True,
 ) -> dict:
     """根据方块配置计算 R1 二区最优路径。
 
     Args:
         exit_node: 离场过道编号。红半场使用 11，蓝半场使用 7。
+        r2_traversal: zone2_model 算出的 R2 实际经过的 kfs 下标序列。
+                      传入后替代硬编码候选列，R1 优先取该路径上的 R1 块。
 
     Returns: {success, filtered_nodes, best_start_id, r2_path, error}
     """
@@ -207,34 +210,50 @@ def compute_r1_zone2_path(
     if priority_block is None:
         priority_block = []
 
-    # R2 最佳路线自动判定
-    candidate_paths = [
-        [9, 6, 3, 0],
-        [10, 7, 4, 1],
-        [11, 8, 5, 2],
-    ]
-    best_path = []
-    max_r2_count = -1
-    for path in candidate_paths:
-        if any(fb in path for fb in fake_block):
-            continue
-        r2_count = sum(1 for b in path if b in r2_blocks)
-        if r2_count > max_r2_count:
-            max_r2_count = r2_count
-            best_path = path
+    # ---- R2 路线来源 ----
+    if r2_traversal is not None and len(r2_traversal) > 0:
+        # 使用 zone2_model 算出的实际 R2 路径
+        r2_path = list(r2_traversal)
+        use_auto_mode = True
+        path_source = "zone2_model 实际路径"
+    else:
+        # 回退：硬编码三列候选（兼容旧逻辑）
+        candidate_paths = [
+            [9, 6, 3, 0],
+            [10, 7, 4, 1],
+            [11, 8, 5, 2],
+        ]
+        best_path = []
+        max_r2_count = -1
+        for path in candidate_paths:
+            if any(fb in path for fb in fake_block):
+                continue
+            r2_count = sum(1 for b in path if b in r2_blocks)
+            if r2_count > max_r2_count:
+                max_r2_count = r2_count
+                best_path = path
 
-    if not best_path and auto_dog_flag == 1:
-        return {'success': False, 'filtered_nodes': [], 'best_start_id': None,
-                'r2_path': [], 'error': '假块导致无法规划R2路线'}
+        if not best_path and auto_dog_flag == 1:
+            return {'success': False, 'filtered_nodes': [], 'best_start_id': None,
+                    'r2_path': [], 'error': '假块导致无法规划R2路线'}
 
-    r2_path = best_path
+        r2_path = best_path
+        use_auto_mode = (auto_dog_flag == 1)
+        path_source = "硬编码候选列"
+
+    # 强制 auto 模式：使用实际 R2 路径时，R1 优先取路径上的 R1 块
+    if r2_traversal is not None and len(r2_traversal) > 0:
+        auto_dog_flag = 1
+    else:
+        # 回退逻辑保留原行为
+        pass
 
     if verbose:
         print("\n--- 读取配置与战术判定 ---")
         print(f"R1 块: {r1_blocks}")
         print(f"R2 块: {r2_blocks}")
         print(f"假 块: {fake_block}")
-        print(f"R2 路线: {r2_path}")
+        print(f"R2 路线: {r2_path}  (来源: {path_source})")
         print(f"规划模式: {'自动 (避让 R2)' if auto_dog_flag == 1 else '手动 (用户覆盖)'}")
         if auto_dog_flag == 0 and priority_block:
             print(f"指定优先级: {priority_block}")

@@ -43,10 +43,12 @@ def _encode_single_action(
     yaw: float,
     is_pick: bool,
     is_end: bool,
+    r2_entry_col: int = 0b00,
 ):
     """将单个路径点编码为 2 字节动作。
     Byte1: [is_end(1b)] [is_pick(1b)] [yaw(2b)] [seq(4b)]
-    Byte2: [labels(5b)] [reserved(3b)]
+    Byte2: [labels(5b)] [r2_entry_col(2b)] [reserved(1b)]
+      - r2_entry_col: R2 上梅林入口列, 00=中列 01=左列 10=右列
     """
     if not (1 <= seq <= 15):
         raise ValueError(f"序列号超出范围: {seq} (有效 1~15)")
@@ -62,17 +64,51 @@ def _encode_single_action(
         | (seq & 0b1111)
     )
 
-    byte2 = ((aisle_id & 0b11111) << 3) | 0b000  # labels[3-7], reserved[0-2]=0
+    byte2 = ((aisle_id & 0b11111) << 3) | (r2_entry_col & 0b11)
 
     return bytes([byte1, byte2])
 
 
-def encode_zone2_frame(filtered_nodes):
+def compute_r2_entry_col(r2_traversal_kfs: list, field_color: int = 0) -> int:
+    """从 R2 实际经过的 kfs 下标序列，确定 R2 上梅林的入口列。
+
+    编码基于距离红蓝场分割线(中轴线)的远近:
+      00 = 最靠近中轴线 (里场侧)
+      01 = 中间列
+      10 = 最远离中轴线 (外场侧)
+
+    红场(fc=0): kfs col 0(左)=里场→00, col 1(中)→01, col 2(右)=外场→10
+    蓝场(fc=1): kfs col 2(右)=里场→00, col 1(中)→01, col 0(左)=外场→10
+    """
+    if not r2_traversal_kfs:
+        return 0b00  # 默认里场
+
+    first_stake = r2_traversal_kfs[0]
+    col = first_stake % 3  # 0=左, 1=中, 2=右 (R1 视角)
+
+    if field_color == 0:  # 红场: 左列靠里
+        if col == 0:
+            return 0b00  # 里场, 最靠近中轴线
+        elif col == 1:
+            return 0b01  # 中间
+        else:
+            return 0b10  # 外场
+    else:  # 蓝场: 右列靠里 (镜像)
+        if col == 2:
+            return 0b00  # 里场, 最靠近中轴线
+        elif col == 1:
+            return 0b01  # 中间
+        else:
+            return 0b10  # 外场
+
+
+def encode_zone2_frame(filtered_nodes, r2_entry_col: int = 0b00):
     """将 filtered_nodes 编码为 0xBA 完整路径帧。
 
     Args:
         filtered_nodes: pathai 输出的 filtered_nodes 列表，
                         每个元素包含 id, yaw, is_pick, is_at_point, target_block 等
+        r2_entry_col: R2 上梅林入口列编码 (2bit), 00=中 01=左 10=右
 
     Returns:
         完整的 0xBA 帧字节流（不含 0xFA 上位机帧头）
@@ -94,7 +130,7 @@ def encode_zone2_frame(filtered_nodes):
         is_pick = bool(step.get('is_pick', False))
         is_end = (i == n - 1)
 
-        action_bytes = _encode_single_action(seq, aisle_id, yaw, is_pick, is_end)
+        action_bytes = _encode_single_action(seq, aisle_id, yaw, is_pick, is_end, r2_entry_col)
         payload.extend(action_bytes)
 
     return bytes([ZONE2_FRAME_HEADER]) + bytes(payload)

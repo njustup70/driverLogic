@@ -114,7 +114,7 @@ SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
 # === R1 二区 KFS 属性帧 (0xC2) ===
 # 遥控器或下位机发送方块属性 → 触发路径规划 → 编码0xBA帧 → 串口下发
-from MainLogic.core.R1_zone2 import compute_r1_zone2_path, encode_zone2_frame
+from MainLogic.core.R1_zone2 import compute_r1_zone2_path, compute_r2_entry_col, encode_zone2_frame
 
 KFS_LABELS = {0: "空", 1: "R1", 2: "R2", 3: "假块"}
 zone2_kfs_state: list[int] = [0] * 12
@@ -198,9 +198,10 @@ def kfs_callback(data: bytes):
         return
 
     # ============================================================
-    # Step 1: R2 路径推算 (zone2_model) — 仅供 R1 优先级参考
+    # Step 1: R2 路径推算 (zone2_model) — 确定 R1 优先级 + R2 实际经过桩位
     # ============================================================
     r1_priority_blocks: list[int] = []
+    r2_traversal_kfs: list[int] = []
 
     if r2_blocks:
         try:
@@ -210,6 +211,7 @@ def kfs_callback(data: bytes):
             print("[KFS] → 推算 R2 路径用以确定 R1 优先级...")
             r2_result = run_solver_on_states(meilin_states, render_map=True)
 
+            # 提取 R1 优先级：R2 路径上经过的 R1 块
             r1_nodes_on_r2_path = extract_r1_nodes_on_path(r2_result)
             r1_priority_blocks = [
                 idx for idx in zone2_stakes_to_r1_indices(r1_nodes_on_r2_path, fc)
@@ -217,13 +219,26 @@ def kfs_callback(data: bytes):
             ]
             print(f"[KFS] zone2 stake: {r1_nodes_on_r2_path} → R1优先(kfs下标): {r1_priority_blocks}")
 
+            # 提取 R2 实际经过的桩位 (zone2 stake → kfs 下标)，传给 R1 planner 做避让
+            r2_path_nodes = r2_result.get("path", [])
+            r2_traversal_stakes = []
+            for node in r2_path_nodes:
+                try:
+                    n = int(node)
+                    if 1 <= n <= 12:
+                        r2_traversal_stakes.append(n)
+                except (ValueError, TypeError):
+                    pass
+            r2_traversal_kfs = zone2_stakes_to_r1_indices(r2_traversal_stakes, fc)
+            print(f"[KFS] R2 实际经过桩位(zone2): {r2_traversal_stakes} → kfs下标: {r2_traversal_kfs}")
+
         except Exception as e:
             print(f"[KFS] R2路径推算异常，回退到无优先级模式: {e}")
 
     # ============================================================
     # Step 2: R1 路径规划
-    #   优先用 zone2_model 节点路径 → priority_block
-    #   无结果时 fallback 到格子级 R2 路线 (auto_dog_flag=1, block_id in r2_path)
+    #   传入 zone2_model 算出的 R2 实际路径 (r2_traversal_kfs)
+    #   R1 优先取该路径上的 R1 块，再取其余 R1 块
     # ============================================================
     if not r1_blocks:
         print("[Zone2] 未检测到R1方块，跳过R1路径规划")
@@ -232,9 +247,9 @@ def kfs_callback(data: bytes):
     # 红蓝半场决定离场过道：红场→11，蓝场→7
     exit_node = 11 if TFManagerInstance.field_color_flag == 0 else 7
 
-    if r1_priority_blocks:
-        auto_mode = 0
-        print(f"[KFS] R1 优先级来源: zone2_model 节点路径 → {r1_priority_blocks}")
+    if r2_traversal_kfs:
+        auto_mode = 1
+        print(f"[KFS] R1 优先级来源: zone2_model R2实际路径 → {r2_traversal_kfs}")
     elif r2_blocks:
         auto_mode = 1
         print(f"[KFS] R1 优先级来源: 格子级 R2 路线 (auto_dog_flag=1)")
@@ -246,6 +261,7 @@ def kfs_callback(data: bytes):
         r1_blocks=r1_blocks, r2_blocks=r2_blocks, fake_block=fake_block,
         auto_dog_flag=auto_mode,
         priority_block=r1_priority_blocks,
+        r2_traversal=r2_traversal_kfs if r2_traversal_kfs else None,
         start_candidates=[2, 0, 16],
         exit_node=exit_node, verbose=True,
     )
@@ -254,7 +270,9 @@ def kfs_callback(data: bytes):
         print(f"[Zone2] R1路径规划失败: {result['error']}")
         return
 
-    ba_frame = encode_zone2_frame(result['filtered_nodes'])
+    r2_entry_col = compute_r2_entry_col(r2_traversal_kfs, TFManagerInstance.field_color_flag)
+    print(f"[KFS] R2 入口列编码: {r2_entry_col:02b} (00=中 01=左 10=右)")
+    ba_frame = encode_zone2_frame(result['filtered_nodes'], r2_entry_col=r2_entry_col)
 
     # === 调试打印：动作序列 ===
     _print_action_sequence(ba_frame)
