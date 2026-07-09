@@ -2,7 +2,7 @@
 Author: Nagisa 2964793117@qq.com
 Date: 2026-06-26 11:01:15
 LastEditors: Nagisa 2964793117@qq.com
-LastEditTime: 2026-07-09 16:21:59
+LastEditTime: 2026-07-09 19:30:16
 FilePath: \driverLogic\src\MainLogic\MAIN\R2n_Main.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -57,9 +57,9 @@ async def async_main():
     # R2n Skill 场地坐标（在 register_tf_chain 之前注入）
     # ============================================================
     TFManagerInstance.FIELD_ZONE_MAP2BASE_CONFIG.update({
-        (0, 1): Odom(7.152, 1.2 - 0.39, 0.0),            # 红场一区
+        (0, 1): Odom(6.8+0.352, 2.4 - 0.39, 0.0),            # 红场一区
         (0, 3): Odom(12 - 0.352, 0.39, 0.0),             # 红场三区
-        (1, 1): Odom(7.152, 6 - (1.2 - 0.39), 0.0),      # 蓝场一区
+        (1, 1): Odom(6.8+0.352, 6 - (2.4 - 0.39), 0.0),      # 蓝场一区
         (1, 3): Odom(12 - 0.352, 6 - 0.39, 0.0),         # 蓝场三区
     })
     TFManagerInstance.zone_retry_flag = 1
