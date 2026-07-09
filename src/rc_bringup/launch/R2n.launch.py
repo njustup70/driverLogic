@@ -2,7 +2,7 @@
 Author: Nagisa 2964793117@qq.com
 Date: 2026-06-26 11:01:15
 LastEditors: Nagisa 2964793117@qq.com
-LastEditTime: 2026-06-27 16:05:58
+LastEditTime: 2026-07-09 19:15:05
 FilePath: \driverLogic\src\rc_bringup\launch\R2n.launch.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -61,7 +61,7 @@ def generate_launch_description():
                     emulate_tty=True,
                     parameters=[
                         # {'topic_blacklist':LaunchConfiguration("topic_blacklist")}
-                        {'topic_blacklist':['*/compressed*','/livox/lidar','/map*','/hik_camera*']}
+                        {'topic_blacklist':['*/compressed*','/livox/lidar','/map*','/hik_camera*','serial_tx','serial_rx']}
                     ]
                 )
     ros_bag_action=TimerAction(

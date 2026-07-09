@@ -9,7 +9,7 @@ x-common-env: &common_env
   RMW_IMPLEMENTATION: rmw_zenoh_cpp
   ROS_LOCALHOST_ONLY: 1
   ZENOH_CONFIG_OVERRIDE: 'transport/shared_memory/enabled=true'
-  ZENOH_SHM_ALLOC_SIZE: 8388608
+  ZENOH_SHM_ALLOC_SIZE: 67108864
 x-common: &common
   tty: true
   network_mode: host
