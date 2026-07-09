@@ -7,6 +7,8 @@ x-common-env: &common_env
   NVIDIA_DRIVER_CAPABILITIES: all
   OMP_WAIT_POLICY: passive
   TERM: xterm-256color
+  ZENOH_CONFIG_OVERRIDE: 'transport/shared_memory/enabled=true'
+  ZENOH_SHM_ALLOC_SIZE: 8388608
   RMW_IMPLEMENTATION: rmw_zenoh_cpp
   ROS_LOCALHOST_ONLY: 1
 
@@ -19,7 +21,10 @@ x-common: &common
   privileged: true
   user: "Elaina"
   stdin_open: true
-
+  ulimits:
+    memlock:
+      soft: -1
+      hard: -1
 services:
   driverLogic-service:
     image: elainasuki/rc2026:driverLogic
