@@ -135,9 +135,18 @@ def generate_full_route(start_id, start_yaw, r1_blocks, r2_path, exit_id, auto_d
             options = get_valid_pickups(tgt['id'])
             if not options:
                 return float('inf')
-            aisle, yaw = options[0]
-            seg = find_shortest_path(curr_id, curr_yaw, aisle, yaw)
-            return len(seg) if seg else (0 if curr_id == aisle and abs(curr_yaw - yaw) < 0.1 else float('inf'))
+            best_dist = float('inf')
+            for aisle, yaw in options:
+                seg = find_shortest_path(curr_id, curr_yaw, aisle, yaw)
+                if seg:
+                    d = len(seg)
+                elif curr_id == aisle and abs(curr_yaw - yaw) < 0.1:
+                    d = 0
+                else:
+                    d = float('inf')
+                if d < best_dist:
+                    best_dist = d
+            return best_dist
 
         nearest = min(same_prio, key=dist_to)
         remaining.remove(nearest)
@@ -146,8 +155,28 @@ def generate_full_route(start_id, start_yaw, r1_blocks, r2_path, exit_id, auto_d
         if not options:
             continue
 
-        target_aisle, target_yaw = options[0]
-        segment = find_shortest_path(curr_id, curr_yaw, target_aisle, target_yaw)
+        # 从所有可取位置中，选离当前位置路径最短的那个
+        best_option = None
+        best_option_dist = float('inf')
+        best_option_segment = None
+        for aisle, yaw in options:
+            segment = find_shortest_path(curr_id, curr_yaw, aisle, yaw)
+            if segment:
+                d = len(segment)
+            elif curr_id == aisle and abs(curr_yaw - yaw) < 0.1:
+                d = 0
+                segment = []  # 已在目标位置，无需移动
+            else:
+                continue
+            if d < best_option_dist:
+                best_option_dist = d
+                best_option = (aisle, yaw)
+                best_option_segment = segment
+        if best_option is None:
+            continue
+
+        target_aisle, target_yaw = best_option
+        segment = best_option_segment
 
         if not segment and curr_id == target_aisle and abs(curr_yaw - target_yaw) < 0.1:
             full_path[-1]['is_pick'] = True
