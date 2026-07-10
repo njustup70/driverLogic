@@ -105,6 +105,7 @@ class TFManager:
         self._sickYawCorrection = 0.0
         self._baseinitYaw=(self._mapToSlamInit@self.laser_to_base).yaw
         self._slaminitYaw=self._mapToSlamInit.yaw
+        self._slamBaseOdom=Odom(0,0,0)
         self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
         # 注册 Vector3Stamped 发布者
         self._tf_chain_registered = True
@@ -216,10 +217,14 @@ class TFManager:
 
     def apply_sick_initial_yaw_correction(self) -> bool:
         """使用 sick 缓存值修正 map->slam_init 的初始 yaw（增量更新，可撤销前次修正）。"""
-        if not self.left_sick_buffer or not self.right_sick_buffer or not self._has_slam_pose:
-            return False
-        self.left_sick_y = sum(self.left_sick_buffer) / len(self.left_sick_buffer)
-        self.right_sick_y = sum(self.right_sick_buffer) / len(self.right_sick_buffer)
+        # if not self.left_sick_buffer or not self.right_sick_buffer or not self._has_slam_pose:
+        #     return False
+        try:
+            self.left_sick_y = sum(self.left_sick_buffer) / len(self.left_sick_buffer)
+            self.right_sick_y = sum(self.right_sick_buffer) / len(self.right_sick_buffer)
+        except :
+            self.left_sick_y=0.0
+            self.right_sick_y=0.0
         self.mapToBaseInit=Odom(self.mapToBaseInit.x,self.mapToBaseInit.y,self._baseinitYaw)
         #在当前座标系下求BaseInit->Base的值
         baseinit2base=self.laser_to_base.inverse()@self._slamBaseOdom
@@ -240,7 +245,7 @@ class TFManager:
                 #    - sick_y * math.cos(theta + self._baseinitodom.yaw)
                 #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
                 #)
-            dyaw =  fsolve(lambda theta:-calculate_y_real+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
             # dyaw =  self._baseinitodom.yaw - math.pi/2 - theta
         # elif self.sick_direction_flag==1:
             # dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
@@ -251,7 +256,7 @@ class TFManager:
         elif self.sick_direction_flag==1:
             def calculate_y_real(theta):
                 return 0.39
-            dyaw =  fsolve(lambda theta:-calculate_y_real+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
         else:
             self.left_sick_buffer.clear()
             self.right_sick_buffer.clear()

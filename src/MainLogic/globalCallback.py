@@ -189,7 +189,7 @@ def serial_correct_callback(data: bytes): # 0xB2
         return False
     try:
         result = TFManagerInstance.apply_sick_initial_yaw_correction()
-        result = TFOdinInstance.apply_sick_initial_yaw_correction()
+        # result = TFOdinInstance.apply_sick_initial_yaw_correction()
         if result:
             print("✓ SLAM correct 纠正指令已触发，SICK yaw 纠正成功")
         else:
