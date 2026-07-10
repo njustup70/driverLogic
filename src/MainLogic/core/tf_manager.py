@@ -116,9 +116,9 @@ class TFManager:
     # zone_retry_flag:  1=一区, 3=三区
     FIELD_ZONE_MAP2BASE_CONFIG = {
         (0, 1): Odom(0.45, 0.45, 0),                       # 红场一区 （现有参数）
-        (0, 3): Odom(8+0.45+0.025, 0.6533, 0.0),               # 红场三区 PLACEHOLDER
+        (0, 3): Odom(8+0.478, 0.45, 0.0),               # 红场三区 PLACEHOLDER
         (1, 1): Odom(0.45, 6-0.9817+0.45, 0.0),            # 蓝场一区 PLACEHOLDER
-        (1, 3): Odom(8+0.45+0.025, 4.8+0.025+0.45, 0.0),          # 蓝场三区 PLACEHOLDER
+        (1, 3): Odom(8+0.478, 5.465, 0.0),          # 蓝场三区 PLACEHOLDER
     }
 
     def _check_and_apply_field_zone_config(self):
