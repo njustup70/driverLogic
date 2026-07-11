@@ -53,7 +53,7 @@ async def async_main():
     sick2Base=Odom(0.0, -0.3511, 0.0)
     map2BaseInit=Odom(0.390, 5-0.352, -3.1415926/2) # 704 * 780
     # laser2Base=Odom(-0.10, -0.336, 0.0)
-    base2laser=Odom(0.10, 0.336, -0.8*3.1415926/180) # 704 * 780
+    base2laser=Odom(0.10, 0.336, -0.4*3.1415926/180) # 704 * 780
     TFManagerInstance.register_tf_chain(sick2Base, map2BaseInit, base2laser, sick_correct_width=6.0)
     asyncio.create_task(TFManagerInstance.tf_update_loop())
     # 【优先注册】先把所有通道建好，防止移动过程中漏掉数据
