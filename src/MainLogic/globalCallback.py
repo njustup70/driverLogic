@@ -304,6 +304,8 @@ def slam_restart_callback(data: bytes):  # 0x13
             timeout=30,
         )
         print("✓ voxel_slam_ros2_runtime 容器重启成功")
+        # SLAM 重启后，重新发布当前场/区对应的 map→slam_init 静态 TF
+        TFManagerInstance.force_republish_field_zone_tf()
     except subprocess.CalledProcessError as e:
         print(f"✗ voxel_slam_ros2_runtime 容器重启失败 (exit={e.returncode}): {e.stderr}")
     except subprocess.TimeoutExpired:

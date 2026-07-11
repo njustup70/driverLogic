@@ -176,6 +176,37 @@ class TFManager:
         self._last_applied_match_type = mt
         self._field_zone_config_applied = True
 
+    def force_republish_field_zone_tf(self):
+        """
+        强制重新发布当前场/区对应的 map→slam_init 静态 TF。
+        """
+        fc = self.field_color_flag
+        zr = self.zone_retry_flag
+        mt = self.match_type_flag
+
+        new_map2base = self.FIELD_ZONE_MAP2BASE_CONFIG.get((fc, zr, mt))
+        if new_map2base is None:
+            print(f"[FieldZone] force_republish: 未知场地/区域/赛场组合: field={fc}, zone={zr}, match_type={mt}，跳过")
+            return
+
+        field_name = "蓝场" if fc else "红场"
+        zone_name = f"{zr}区"
+        match_name = "九宫藏宝" if mt else "竞技赛/崇武探幽"
+        print(f"[FieldZone] force_republish (SLAM重启): {field_name} {zone_name} {match_name} → map2BaseInit={new_map2base}")
+
+        self.mapToBaseInit = new_map2base
+        self._mapToSlamInit = self.mapToBaseInit @ self.laser_to_base.inverse()
+        # 同步所有依赖 mapToBaseInit 的派生变量
+        self._sickYawCorrection = 0.0
+        self._baseinitYaw = (self._mapToSlamInit @ self.laser_to_base).yaw
+        self._slaminitYaw = self._mapToSlamInit.yaw
+        self.rosBridge.publish_static_tf(self.map_frame, self.slam_init_frame, self._mapToSlamInit)
+
+        self._last_applied_field_color = fc
+        self._last_applied_zone_retry = zr
+        self._last_applied_match_type = mt
+        self._field_zone_config_applied = True
+
     def odom(self, x: float, y: float, yaw: float):
         """码盘数据入口：更新 odom->base_link。"""
         self._odomToBase = Odom(x, y, yaw)
