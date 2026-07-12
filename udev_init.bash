@@ -29,9 +29,8 @@ echo 'KERNEL=="ttyACM*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", ATTR
 echo 'KERNEL=="ttyUSB*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0777", GROUP:="dialout", SYMLINK+="ch340"' >> /etc/udev/rules.d/my_dev.rules
 echo 'KERNEL=="ttyACM*", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0777", GROUP:="dialout", SYMLINK+="ch340"' >> /etc/udev/rules.d/my_dev.rules
 
-# 立即
 # CP210x 规则（精确匹配序列号 "0001"）
-echo 'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", MODE:="0777", GROUP:="dialout", SYMLINK+="cp210x"' >> /etc/udev/rules.d/my_dev.rules
+echo 'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0eb26b60fe05f011a9b07d6b72aab386", MODE="0777", GROUP="dialout", SYMLINK+="cp210"' >> /etc/udev/rules.d/my_dev.rules
 
 #安装ms_200规则
 # 设置设备别名并设置权限
