@@ -1,37 +1,35 @@
 import os
 import time
-import shutil
-import threading  # 【新增】引入线程锁
 import rclpy
 import rclpy.executors
 from rclpy.node import Node
+import rclpy.qos
+from rosbag2_py import SequentialWriter, StorageOptions, ConverterOptions, TopicMetadata
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 from rclpy.serialization import serialize_message
-from rosbag2_py import SequentialWriter, StorageOptions, ConverterOptions, TopicMetadata
 from rosidl_runtime_py.utilities import get_message
+import shutil
 
 
 class SmartBagRecorder(Node):
     def __init__(self):
         super().__init__('smart_bag_recorder')
 
-        # 【新增】创建互斥锁，保护非线程安全的 SequentialWriter
-        self.write_lock = threading.Lock()
-        self.is_recording = True  # 录制状态标志位
-
         # 声明ROS参数
-        self.declare_parameter('max_size_gb', 10.0)
-        self.declare_parameter('max_folder_num', 10)
-        self.declare_parameter('mcap', True)
-        self.declare_parameter('topic_blacklist', [
-            "*/image_raw*",       
-            "*/compressed_image*",
-            "/camera/*",          
-            "depth_image*",       
+        self.declare_parameter('max_size_gb', 10.0)  # 最大单个bag大小(GB)
+        self.declare_parameter('max_folder_num', 10)  # 最大保存文件夹数量
+        self.declare_parameter('mcap', True)  # 是否使用mcap格式
+        self.declare_parameter('topic_blacklist', [  # 类似.gitignore的黑名单语法
+            # 示例规则
+            "*/image_raw*",       # 匹配任何层级下的image_raw开头话题
+            "*/compressed_image*",# 匹配任何层级下的compressed_image开头话题
+            "/camera/*",          # 精确匹配/camera/下的所有子话题
+            "depth_image*",       # 匹配任何depth_image开头的话题
+            
         ])
 
         # 参数解析
-        self.max_size_bytes: int = int((self.get_parameter('max_size_gb').value or 0) * 1024 ** 3)
+        self.max_size_bytes:int = int((self.get_parameter('max_size_gb').value or 0)* 1024 ** 3)
         self.max_folder_num = self.get_parameter('max_folder_num').value or 4
         self.topic_blacklist: list[str] = self.get_parameter('topic_blacklist').value or []
         self.record_dir_root = os.path.abspath(os.path.join(
@@ -55,43 +53,37 @@ class SmartBagRecorder(Node):
         # 初始化变量
         self.subscribers = []
         self.subscribed_topics = set()
-        self.blacklisted_topics_checked = set()
+        self.blacklisted_topics_checked = set()  # 记录已检查过的黑名单话题
+        # 预处理黑名单规则（转换为匹配函数）
         self.blacklist_rules = [self._compile_rule(rule) for rule in self.topic_blacklist]
 
         # 创建定时器
         self.timer = self.create_timer(3.0, self.timer_callback)
         print(f'\033[92m📋 Topic blacklist (gitignore style): {self.topic_blacklist}\033[0m')
 
-    def stop_recording(self):
-        """【新增】安全关闭写入器，确保元数据和索引安全写入磁盘"""
-        with self.write_lock:
-            if not self.is_recording:
-                return
-            self.is_recording = False
-            print("\033[93m💾 Flushing data and closing rosbag writer...\033[0m")
-            # 显式删除或关闭 writer，触发底层 C++ 析构函数写入 MCAP footer 或 SQLite 索引
-            if hasattr(self, 'writer') and self.writer is not None:
-                del self.writer
-                self.writer = None
-            print("\033[92m✅ Rosbag safely closed.\033[0m")
-
-    def destroy_node(self):
-        """重写 destroy_node，确保节点销毁时关闭录制"""
-        self.stop_recording()
-        super().destroy_node()
-
     def _compile_rule(self, rule):
-        rule_parts = [p for p in rule.split('/') if p]
+        """将.gitignore风格的规则转换为匹配函数"""
+        # 分割路径组件（处理类似/namespace/*的规则）
+        rule_parts = rule.split('/')
+        # 移除空字符串（处理开头或结尾的/）
+        rule_parts = [p for p in rule_parts if p]
+        
         def matcher(topic):
-            topic_parts = [p for p in topic.split('/') if p]
+            topic_parts = topic.split('/')
+            topic_parts = [p for p in topic_parts if p]  # 移除空组件
+            
+            # 规则以/开头（绝对路径匹配）
             if rule.startswith('/'):
+                # 必须完全匹配前n个组件
                 if len(topic_parts) < len(rule_parts):
                     return False
                 for r_part, t_part in zip(rule_parts, topic_parts[:len(rule_parts)]):
                     if not self._wildcard_match(r_part, t_part):
                         return False
                 return True
+            # 非绝对路径匹配（任意层级）
             else:
+                # 检查是否有任意连续的组件匹配规则
                 for i in range(len(topic_parts) - len(rule_parts) + 1):
                     match = True
                     for j in range(len(rule_parts)):
@@ -101,21 +93,28 @@ class SmartBagRecorder(Node):
                     if match:
                         return True
                 return False
+        
         return matcher
 
     def _wildcard_match(self, pattern, text):
+        """处理*通配符的匹配（类似shell的*）"""
+        # 分割pattern为不含*的片段
         parts = pattern.split('*')
+        # 边缘情况处理
         if not parts:
             return text == ''
+        # 检查前缀
         if parts[0] and not text.startswith(parts[0]):
             return False
+        # 检查后缀
         if parts[-1] and not text.endswith(parts[-1]):
             return False
+        # 检查中间部分
         current = parts[0]
         remaining = text[len(current):] if current else text
         for part in parts[1:-1]:
             if not part:
-                continue
+                continue  # 连续*等同于单个*
             idx = remaining.find(part)
             if idx == -1:
                 return False
@@ -144,18 +143,18 @@ class SmartBagRecorder(Node):
 
     def create_callback(self, topic_name):
         def callback(msg):
-            # 【修改】获取锁后执行写入，且检查是否仍在录制
-            with self.write_lock:
-                if not self.is_recording or self.writer is None:
-                    return
-                try:
-                    self.writer.write(topic_name, serialize_message(msg), self.get_clock().now().nanoseconds)
-                except Exception as e:
-                    print(f'\033[91m⚠️ Error writing message from {topic_name}: {e}\033[0m')
+            try:
+                self.writer.write(topic_name, serialize_message(msg), self.get_clock().now().nanoseconds)
+            except Exception as e:
+                print(f'\033[91m⚠️ Error writing message from {topic_name}: {e}\033[0m')
         return callback
 
     def subscribe_topic(self, topic_name, msg_type_str, qos_profile: QoSProfile = None):
-        if topic_name in self.subscribed_topics or topic_name in self.blacklisted_topics_checked:
+        if topic_name in self.subscribed_topics:
+            return
+
+        # 检查是否在黑名单中
+        if topic_name in self.blacklisted_topics_checked:
             return
 
         for matcher in self.blacklist_rules:
@@ -167,18 +166,14 @@ class SmartBagRecorder(Node):
         try:
             msg_type = get_message(msg_type_str)
             if qos_profile is None:
+                # 默认QoS配置
                 qos_profile = QoSProfile(
                     depth=10,
                     reliability=QoSReliabilityPolicy.BEST_EFFORT
                 )
-            
-            topic_info = TopicMetadata(name=topic_name, type=msg_type_str, serialization_format='cdr')
-
-            # 【修改】使用锁，并且必须【先】调用 create_topic，【再】创建订阅
-            with self.write_lock:
-                if not self.is_recording or self.writer is None:
-                    return
-                self.writer.create_topic(topic_info)
+                topic_info = TopicMetadata(name=topic_name, type=msg_type_str, serialization_format='cdr')
+            else:
+                topic_info = TopicMetadata(name=topic_name, type=msg_type_str, serialization_format='cdr')
 
             sub = self.create_subscription(
                 msg_type,
@@ -186,7 +181,7 @@ class SmartBagRecorder(Node):
                 self.create_callback(topic_name),
                 qos_profile
             )
-            
+            self.writer.create_topic(topic_info)
             self.subscribers.append(sub)
             self.subscribed_topics.add(topic_name)
             print(f'\033[95m✅ Recording topic: {topic_name} [{msg_type_str}]\033[0m')
@@ -194,14 +189,14 @@ class SmartBagRecorder(Node):
             print(f'\033[91m⛔ Failed to subscribe to {topic_name}: {e}\033[0m')
 
     def check_new_topics(self):
-        if not self.is_recording:
-            return
+        """检查并订阅新出现的话题"""
         topic_names_and_types = self.get_topic_names_and_types()
         for topic_name, types in topic_names_and_types:
             if not types:
                 continue
             msg_type_str = types[0]
             
+            # 特殊处理TF话题的QoS
             if topic_name == '/tf_static':
                 qos_profile = QoSProfile(
                     depth=10,
@@ -213,7 +208,8 @@ class SmartBagRecorder(Node):
                 self.subscribe_topic(topic_name, msg_type_str)
 
     def check_size_limit(self):
-        if not os.path.exists(self.bag_path) or not self.is_recording:
+        """检查当前bag大小是否超过限制"""
+        if not os.path.exists(self.bag_path):
             return
 
         total_size = 0
@@ -223,8 +219,6 @@ class SmartBagRecorder(Node):
         
         if total_size > self.max_size_bytes:
             print(f'\033[91m🚫 Reached size limit ({self.max_size_bytes / 1024**3:.2f} GB). Stopping recording...\033[0m')
-            # 【修改】不要直接在定时器线程里野蛮 shutdown，先安全停止录制
-            self.stop_recording()
             rclpy.shutdown()
 
     def timer_callback(self):
@@ -243,10 +237,6 @@ def main(args=None):
     except KeyboardInterrupt:
         print("\033[92m🛑 Recording stopped by user.\033[0m")
     finally:
-        # 【修改】确保退出时明确关闭写入器并销毁节点
-        recorder.stop_recording()
-        exe.remove_node(recorder)
-        recorder.destroy_node()
         exe.shutdown()
         if rclpy.ok():
             rclpy.shutdown()
