@@ -234,7 +234,7 @@ class SmartBagRecorder(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    exe = rclpy.executors.MultiThreadedExecutor()
+    exe = rclpy.executors.SingleThreadedExecutor()
     recorder = SmartBagRecorder()
     exe.add_node(recorder)
     
