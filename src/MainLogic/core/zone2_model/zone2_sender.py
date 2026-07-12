@@ -324,24 +324,28 @@ async def _repeated_send_loop(
     import time as _time
     from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
 
-    cnt = 0
+    first = True
     while True:
-        cnt += 1
-        print(f"[repeated_send] 第 {cnt} 次发送 (间隔={interval}s)")
+        if first:
+            print(f"[repeated_send] 开始间隔发送: 间隔={interval}s")
 
         # 发送动作序列
         start_stake_id = determine_start_position(actions) or 0
         column_stake_id = determine_column_stake_id(actions) or 0
         data = encode_action_sequence(actions, start_stake_id=start_stake_id, column_stake_id=column_stake_id)
         if data:
-            print(f"[repeated_send] actions #{cnt}: 起始桩={start_stake_id}, 列桩={column_stake_id}, {len(actions)} 个动作 → {data.hex(' ')}")
+            if first:
+                print(f"[repeated_send] actions: 起始桩={start_stake_id}, 列桩={column_stake_id}, {len(actions)} 个动作 → {data.hex(' ')}")
             RosBridgeNodeInstance.writeBytes(data)
 
         # 发送 R1 节点
         r1_data = encode_r1_frame([n - 1 for n in r1_nodes])
         if r1_data and r1_data[0] != 0:
-            print(f"[repeated_send] R1 #{cnt}: {r1_nodes} → {r1_data.hex(' ')}")
+            if first:
+                print(f"[repeated_send] R1: {r1_nodes} → {r1_data.hex(' ')}")
             RosBridgeNodeInstance.writeBytes(r1_data)
+
+        first = False
 
         await asyncio.sleep(interval)
 

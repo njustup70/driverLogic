@@ -43,12 +43,12 @@ def debug_spear_offset_callback(msg):
     payload = gcb.SPEAR_OFFSET_COMMAND + turn_to_bytes([left_mm, up_mm])
     frame = b'\xFA' + payload
     bridge.writeBytes(payload)
-    print(
-        "[build_spear] publish serial_tx "
-        f"frame={frame.hex(' ')} "
-        f"left_mm={left_mm:.2f} up_mm={up_mm:.2f}",
-        flush=True,
-    )
+    # print(
+    #     "[build_spear] publish serial_tx "
+    #     f"frame={frame.hex(' ')} "
+    #     f"left_mm={left_mm:.2f} up_mm={up_mm:.2f}",
+    #     flush=True,
+    # )
 
 
 async def build_spear_until_finish():
