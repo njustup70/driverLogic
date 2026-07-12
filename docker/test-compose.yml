@@ -36,21 +36,21 @@ services:
           echo '[zenoh] starting rmw_zenohd...'
           exec ros2 run rmw_zenoh_cpp rmw_zenohd
         fi
-  # driverLogic_service:
-  #   image: elainasuki/rc2026:driverLogic
-  #   container_name: driverLogic_runtime
-  #   restart: always
-  #   <<: *common
-  #   environment:
-  #     <<: *common_env
-  #     PYTHONPATH: /home/Elaina/ros2_ws/src:$$PYTHONPATH
-  #   volumes:
-  #     - /tmp/.X11-unix:/tmp/.X11-unix
-  #     - driverLogic_volume:/home/Elaina/ros2_ws
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #     - /dev:/dev
-  #   working_dir: "/home/Elaina/ros2_ws"
-  #   entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch rc_bringup test.launch.py"]
+  driverLogic_service:
+    image: elainasuki/rc2026:driverLogic
+    container_name: driverLogic_runtime
+    restart: always
+    <<: *common
+    environment:
+      <<: *common_env
+      PYTHONPATH: /home/Elaina/ros2_ws/src:$$PYTHONPATH
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - driverLogic_volume:/home/Elaina/ros2_ws
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /dev:/dev
+    working_dir: "/home/Elaina/ros2_ws"
+    entrypoint: ["/bin/bash", "-i", "-c", "source ~/.bashrc && ros2 launch rc_bringup test.launch.py"]
   voxel_service:
     image: elainasuki/rc2026:voxel_slam_ros2
     container_name: voxel_slam_ros2_runtime

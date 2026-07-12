@@ -66,7 +66,7 @@ def generate_launch_description():
                     emulate_tty=True,
                     parameters=[
                         # {'topic_blacklist':LaunchConfiguration("topic_blacklist")}
-                        {'topic_blacklist':['*/compressed*','/livox/lidar','/map*','/hik_camera*','serial_tx','serial_rx']}
+                        {'topic_blacklist':['*/compressed*','/livox/lidar','/map*','/hik_camera*','serial_tx','serial_rx','/*imu*']}
                     ]
                 )
     ros_bag_action=TimerAction(

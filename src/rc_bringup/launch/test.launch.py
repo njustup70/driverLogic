@@ -23,7 +23,7 @@ def generate_launch_description():
     # )
     airy_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('my_driver'), 'launch', 'rs_airy.launch.py')
+            os.path.join(get_package_share_directory('my_driver'), 'launch', 'orbbec_setup.launch.py')
         ),
         launch_arguments={
             'use_rviz': 'false',
@@ -66,5 +66,5 @@ def generate_launch_description():
     ld.add_action(airy_launch)
     ld.add_action(slam_main)
     ld.add_action(foxglove)
-    ld.add_action(ros_bag_action)
+    # ld.add_action(ros_bag_action)
     return ld
