@@ -16,7 +16,7 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-from launch.actions import TimerAction
+from launch.actions import TimerAction,ExecuteProcess
 
 def generate_launch_description():
     ld = LaunchDescription()
@@ -52,6 +52,11 @@ def generate_launch_description():
         emulate_tty=False,
         arguments=['--ros-args', '--log-level', 'FATAL'],
     )
+    mcu_log=ExecuteProcess(
+        cmd=['python3', os.path.join( '/home/Elaina/ros2_ws/src/my_driver/scripts', 'mcu_log.py')],
+        output='screen',
+        emulate_tty=True,
+    )
     ros_bag_node=  Node(
                     # condition=IfCondition(LaunchConfiguration('use_rosbag_record')),
                     package='python_pkg',
@@ -73,4 +78,5 @@ def generate_launch_description():
     ld.add_action(slam_main)
     ld.add_action(foxglove)
     ld.add_action(ros_bag_action)
+    ld.add_action(mcu_log)
     return ld
