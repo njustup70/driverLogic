@@ -24,3 +24,4 @@ result.json
 *.core
 *.csv
 *.npy
+*.txt
