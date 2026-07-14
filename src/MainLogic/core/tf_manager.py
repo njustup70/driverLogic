@@ -125,7 +125,7 @@ class TFManager:
         (0, 1, 1): Odom(8+0.352, 2.4 - 0.39, 0.0),          # 红场启动区 九宫藏宝
         (0, 3, 0): Odom(12-0.39, 0.352, math.pi/2),         # 红场三区 竞技赛/崇武探幽（同）
         (0, 3, 1): Odom(12-0.39, 0.352, math.pi/2),         # 红场三区 九宫藏宝（同）
-        (1, 1, 0): Odom(0.352, 1 + 0.39, 0.35*3.1415926/180),              # 蓝场一区 竞技赛/崇武探幽
+        (1, 1, 0): Odom(0.352, 1 + 0.39, 0.0),              # 蓝场一区 竞技赛/崇武探幽
         (1, 1, 1): Odom(8+0.352, 6 - (2.4 - 0.39), 0.0),    # 蓝场启动区 九宫藏宝
         (1, 3, 0): Odom(12-0.39, 6 - 0.352, -math.pi/2),    # 蓝场三区 竞技赛/崇武探幽（同）
         (1, 3, 1): Odom(12-0.39, 6 - 0.352, -math.pi/2),    # 蓝场三区 九宫藏宝（同）
@@ -188,7 +188,7 @@ class TFManager:
         if new_map2base is None:
             print(f"[FieldZone] force_republish: 未知场地/区域/赛场组合: field={fc}, zone={zr}, match_type={mt}，跳过")
             return
-
+    
         field_name = "蓝场" if fc else "红场"
         zone_name = f"{zr}区"
         match_name = "九宫藏宝" if mt else "竞技赛/崇武探幽"
@@ -276,8 +276,10 @@ class TFManager:
                 #    - sick_y * math.cos(theta + self._baseinitodom.yaw)
                 #    - self.sick_dist_to_base * math.sin(self.sick_yaw_in_base + theta + self._baseinitodom.yaw)
                 #)
-            dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
-            # dyaw =  self._baseinitodom.yaw - math.pi/2 - theta
+            # 标定场地的dyaw公式
+            # dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            # # dyaw =  self._baseinitodom.yaw - math.pi/2 - theta
         # elif self.sick_direction_flag==1:
             # dyaw = - fsolve(lambda theta:-sick_y*math.cos(theta+self._baseinitodom.yaw)+self._baseinitodom.x*math.sin(theta+self._baseinitYaw)+self._baseinitodom.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
             print(f"{-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(self._baseinitodom.yaw+self._baseinitYaw)}")
@@ -287,7 +289,8 @@ class TFManager:
         elif self.sick_direction_flag==1:
             def calculate_y_real(theta):
                 return 0.39
-            dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            # dyaw =  fsolve(lambda theta:-calculate_y_real(theta)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
+            dyaw =  fsolve(lambda theta:-6+(self.left_sick_y+self.sick_dist_to_base)*math.cos(theta+self._baseinitodom.yaw+self._baseinitYaw)+baseinit2base.x*math.sin(theta+self._baseinitYaw)+baseinit2base.y*math.cos(theta+self._baseinitYaw)+self.mapToBaseInit.y,0)[0]
         else:
             self.left_sick_buffer.clear()
             self.right_sick_buffer.clear()
