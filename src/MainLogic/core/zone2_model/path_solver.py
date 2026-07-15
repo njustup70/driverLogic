@@ -68,10 +68,10 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 # normal: 非“指向衍生节点”的边（对应 plot 中红色箭头性质）
 # to_derived: 指向衍生节点的边（对应 plot 中紫色箭头性质）
 # 这里先把它们作为“基础动作代价”使用，真正的转向代价在状态搜索中单独叠加。
-MOVE_COST: float = 10.0   # 红色边基础代价
-PICK_COST: float = 2.0   # 紫色边基础代价
-TURN_COST: float = 1.0            # 转向代价（与边基础代价分离）
-REQUIRED_R2_COUNT: int = 2        # 到达 end 前至少获取的不同 R2 数量（默认 3）
+MOVE_COST: float = 5.0   # 红色边基础代价
+PICK_COST: float = 7.0   # 紫色边基础代价
+TURN_COST: float = 2.0            # 转向代价（与边基础代价分离）
+REQUIRED_R2_COUNT: int = 2        # 到达 end 前只需要获取的不同 R2 数量（默认 3）
 R1_REMOVE_COST: float = 0.01      # R1物块消除代价
 
 
@@ -587,7 +587,8 @@ def dijkstra_min_cost_path(
     规则：
     1) 经过“指向衍生节点”的边（to_derived）视为获取一次该衍生节点对应的 R2。
     2) 若该 R2 已经获取过，则再次经过指向同一 R2 的衍生边代价为 0。
-    3) 仅当到达 end 且已获取的不同 R2 数量 >= required_r2_count 时，才算有效终点。
+    3) 仅当到达 end 且已获取的不同 R2 数量恰好等于 required_r2_count 时，才算有效终点；
+       途中不允许获取超过 required_r2_count 个不同 R2（会新增第 required_r2_count+1 个 R2 的转移被剪枝）。
     4) 转向代价从边代价中独立出来，作为相邻两步之间的状态代价单独叠加。
     5) R1_REMOVE_COST 可通过 r1_remove_cost 覆盖。
     """
@@ -717,7 +718,7 @@ def dijkstra_min_cost_path(
             continue
         visited.add(state)
 
-        if u == end and _mask_count(r2_mask) >= required_r2_count:
+        if u == end and _mask_count(r2_mask) == required_r2_count:
             best_end_state = state
             break
 
@@ -729,6 +730,9 @@ def dijkstra_min_cost_path(
             step_cost, next_r2_mask, next_r1_mask, next_heading, applied_turn = _edge_step_cost_and_mask(
                 u, v, edge_class, r2_mask, r1_mask, base_w, heading, rule
             )
+            # 只取 required_r2_count 个：会新增额外 R2 的转移直接剪枝
+            if next_r2_mask != r2_mask and _mask_count(next_r2_mask) > required_r2_count:
+                continue
             new_cost = cur_cost + step_cost
             next_state = (v, next_r2_mask, next_r1_mask, next_heading)
             if next_state not in dist or new_cost < dist[next_state]:

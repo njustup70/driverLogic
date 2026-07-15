@@ -193,8 +193,10 @@ def kfs_callback(data: bytes):
     fake_block = [i for i, v in enumerate(kfs_raw) if v == 3]
     print(f"[KFS] 二区属性更新: R1={r1_blocks}, R2={r2_blocks}, Fake={fake_block}")
 
-    if len(fake_block) > 1:
-        print("[Zone2] 假块数量超过1个，无法规划")
+
+    # 修改错误块个数，提升到3个
+    if len(fake_block) > 3:
+        print("[Zone2] 假块数量超过3个，无法规划")
         return
 
     # ============================================================
