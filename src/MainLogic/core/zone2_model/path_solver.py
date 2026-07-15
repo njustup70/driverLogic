@@ -34,12 +34,13 @@ A. 全局默认参数（文件内常量）
 1) MOVE_COST：normal 边基础代价（默认 1.0）
 2) PICK_COST：to_derived 边基础代价（默认 2.0）
 3) TURN_COST：转向代价（默认 0.5）
-4) REQUIRED_R2_COUNT：到达 end 前至少获取的不同 R2 数量（默认 3）
+4) MIN_REQUIRED_R2_COUNT / MAX_REQUIRED_R2_COUNT：到达 end 前获取 R2 的数量区间（默认 1~2）
 
 B. dijkstra_min_cost_path(...) 调用参数
 1) start / end：起终点（默认 start/end）
 2) normal_cost / to_derived_cost：覆盖基础边代价
-3) required_r2_count：到达 end 前至少获取的不同 R2 数量
+3) min_required_r2_count / max_required_r2_count：到达 end 前获取 R2 的数量区间
+   （兼容旧参数 required_r2_count，传入后退化为"恰好取 N 个"）
 4) enforce_top_entry_after_one_pick：是否启用顶排进入约束
 5) turn_cost：覆盖转向代价
 6) turn_free_rules：免转向规则集合（如爬坡类 rule）
@@ -71,7 +72,10 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 MOVE_COST: float = 5.0   # 红色边基础代价
 PICK_COST: float = 7.0   # 紫色边基础代价
 TURN_COST: float = 2.0            # 转向代价（与边基础代价分离）
-REQUIRED_R2_COUNT: int = 1        # 到达 end 前只需要获取的不同 R2 数量（默认 3）
+MIN_REQUIRED_R2_COUNT: int = 1    # 到达 end 前至少获取的不同 R2 数量
+MAX_REQUIRED_R2_COUNT: int = 2    # 到达 end 前最多获取的不同 R2 数量
+# 兼容旧代码导入：历史上 REQUIRED_R2_COUNT 表示固定取块数，当前默认等效为最小值 1。
+REQUIRED_R2_COUNT: int = MIN_REQUIRED_R2_COUNT
 R1_REMOVE_COST: float = 0.01      # R1物块消除代价
 
 
@@ -506,12 +510,14 @@ def build_weighted_adjacency(
 
 
 def solve_route(
-    strategy: str = "straight",
+    strategy: str = "dijkstra",
     start: str = "start",
     end: str = "end",
     normal_cost: Optional[float] = None,
     to_derived_cost: Optional[float] = None,
-    required_r2_count: int = REQUIRED_R2_COUNT,
+    min_required_r2_count: int = MIN_REQUIRED_R2_COUNT,
+    max_required_r2_count: int = MAX_REQUIRED_R2_COUNT,
+    required_r2_count: Optional[int] = None,
     enforce_top_entry_after_one_pick: bool = True,
     turn_cost: Optional[float] = None,
     r1_remove_cost: Optional[float] = None,
@@ -523,12 +529,17 @@ def solve_route(
     print(f"求解策略: {strategy}")
     strategy_key = str(strategy).strip().lower()
     if strategy_key in {"dijkstra", "min_cost", "minimum_cost", "mincost"}:
+        # 兼容旧调用：传 required_r2_count 时，退化为"恰好取 N 个"。
+        if required_r2_count is not None:
+            min_required_r2_count = int(required_r2_count)
+            max_required_r2_count = int(required_r2_count)
         return dijkstra_min_cost_path(
             start=start,
             end=end,
             normal_cost=normal_cost,
             to_derived_cost=to_derived_cost,
-            required_r2_count=required_r2_count,
+            min_required_r2_count=min_required_r2_count,
+            max_required_r2_count=max_required_r2_count,
             enforce_top_entry_after_one_pick=enforce_top_entry_after_one_pick,
             turn_cost=turn_cost,
             r1_remove_cost=r1_remove_cost,
@@ -573,7 +584,9 @@ def dijkstra_min_cost_path(
     end: str = "end",
     normal_cost: Optional[float] = None,
     to_derived_cost: Optional[float] = None,
-    required_r2_count: int = REQUIRED_R2_COUNT,
+    min_required_r2_count: int = MIN_REQUIRED_R2_COUNT,
+    max_required_r2_count: int = MAX_REQUIRED_R2_COUNT,
+    required_r2_count: Optional[int] = None,
     enforce_top_entry_after_one_pick: bool = True,
     turn_cost: Optional[float] = None,
     r1_remove_cost: Optional[float] = None,
@@ -587,8 +600,8 @@ def dijkstra_min_cost_path(
     规则：
     1) 经过“指向衍生节点”的边（to_derived）视为获取一次该衍生节点对应的 R2。
     2) 若该 R2 已经获取过，则再次经过指向同一 R2 的衍生边代价为 0。
-    3) 仅当到达 end 且已获取的不同 R2 数量恰好等于 required_r2_count 时，才算有效终点；
-       途中不允许获取超过 required_r2_count 个不同 R2（会新增第 required_r2_count+1 个 R2 的转移被剪枝）。
+    3) 仅当到达 end 且已获取的不同 R2 数量位于 [min_required_r2_count, max_required_r2_count] 时，才算有效终点；
+       途中不允许获取超过 max_required_r2_count 个不同 R2（会新增第 max_required_r2_count+1 个 R2 的转移被剪枝）。
     4) 转向代价从边代价中独立出来，作为相邻两步之间的状态代价单独叠加。
     5) R1_REMOVE_COST 可通过 r1_remove_cost 覆盖。
     """
@@ -609,7 +622,14 @@ def dijkstra_min_cost_path(
 
     start = str(start)
     end = str(end)
-    required_r2_count = max(0, int(required_r2_count))
+    if required_r2_count is not None:
+        min_required_r2_count = int(required_r2_count)
+        max_required_r2_count = int(required_r2_count)
+
+    min_required_r2_count = max(0, int(min_required_r2_count))
+    max_required_r2_count = max(0, int(max_required_r2_count))
+    if min_required_r2_count > max_required_r2_count:
+        min_required_r2_count, max_required_r2_count = max_required_r2_count, min_required_r2_count
 
     model = weighted["model"]
     graph_nodes: Dict[str, dict] = model["graph_nodes"]
@@ -626,8 +646,10 @@ def dijkstra_min_cost_path(
     )
     r2_to_bit: Dict[str, int] = {r2: i for i, r2 in enumerate(r2_values)}
     max_collectable = len(r2_values)
-    if required_r2_count > max_collectable:
-        required_r2_count = max_collectable
+    if max_required_r2_count > max_collectable:
+        max_required_r2_count = max_collectable
+    if min_required_r2_count > max_collectable:
+        min_required_r2_count = max_collectable
 
     # 统计模型中的所有 R1 节点并构建位图索引
     r1_values = sorted([str(s) for s in range(1, 13) if stake_kinds.get(s) == "R1"])
@@ -718,7 +740,8 @@ def dijkstra_min_cost_path(
             continue
         visited.add(state)
 
-        if u == end and _mask_count(r2_mask) == required_r2_count:
+        current_r2_count = _mask_count(r2_mask)
+        if u == end and min_required_r2_count <= current_r2_count <= max_required_r2_count:
             best_end_state = state
             break
 
@@ -730,8 +753,8 @@ def dijkstra_min_cost_path(
             step_cost, next_r2_mask, next_r1_mask, next_heading, applied_turn = _edge_step_cost_and_mask(
                 u, v, edge_class, r2_mask, r1_mask, base_w, heading, rule
             )
-            # 只取 required_r2_count 个：会新增额外 R2 的转移直接剪枝
-            if next_r2_mask != r2_mask and _mask_count(next_r2_mask) > required_r2_count:
+            # 只取到 max_required_r2_count 个：会新增额外 R2 的转移直接剪枝
+            if next_r2_mask != r2_mask and _mask_count(next_r2_mask) > max_required_r2_count:
                 continue
             new_cost = cur_cost + step_cost
             next_state = (v, next_r2_mask, next_r1_mask, next_heading)
@@ -750,7 +773,9 @@ def dijkstra_min_cost_path(
             "path_edges": [],
             "path_steps": [],
             "costs": weighted["costs"],
-            "required_r2_count": required_r2_count,
+            "required_r2_count": max_required_r2_count,
+            "min_required_r2_count": min_required_r2_count,
+            "max_required_r2_count": max_required_r2_count,
             "collected_r2_count": 0,
             "collected_r2": [],
             "r1_nodes_on_path": [],
@@ -813,7 +838,9 @@ def dijkstra_min_cost_path(
         "path_edges": path_edges,
         "path_steps": path_steps,
         "costs": weighted["costs"],
-        "required_r2_count": required_r2_count,
+        "required_r2_count": max_required_r2_count,
+        "min_required_r2_count": min_required_r2_count,
+        "max_required_r2_count": max_required_r2_count,
         "collected_r2_count": len(collected_r2),
         "collected_r2": collected_r2,
         "r1_nodes_on_path": r1_nodes_on_path,

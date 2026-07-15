@@ -17,6 +17,8 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from MainLogic.core.zone2_model import (
+    MIN_REQUIRED_R2_COUNT,
+    MAX_REQUIRED_R2_COUNT,
     MOVE_COST,
     PICK_COST,
     R1_REMOVE_COST,
@@ -62,6 +64,8 @@ class Zone2ModelAPI:
     MOVE_COST = MOVE_COST
     PICK_COST = PICK_COST
     R1_REMOVE_COST = R1_REMOVE_COST
+    MIN_REQUIRED_R2_COUNT = MIN_REQUIRED_R2_COUNT
+    MAX_REQUIRED_R2_COUNT = MAX_REQUIRED_R2_COUNT
     REQUIRED_R2_COUNT = REQUIRED_R2_COUNT
     TURN_COST = TURN_COST
 

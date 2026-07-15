@@ -21,6 +21,8 @@ from .merlin_model_plot import draw_merlin_model
 from .path_solver import (
     ArrowClass,
     EdgeTuple,
+    MIN_REQUIRED_R2_COUNT,
+    MAX_REQUIRED_R2_COUNT,
     MOVE_COST,
     PICK_COST,
     R1_REMOVE_COST,
@@ -55,6 +57,8 @@ __all__ = [
     'MOVE_COST',
     'PICK_COST',
     'R1_REMOVE_COST',
+    'MIN_REQUIRED_R2_COUNT',
+    'MAX_REQUIRED_R2_COUNT',
     'REQUIRED_R2_COUNT',
     'TURN_COST',
     'build_weighted_adjacency',

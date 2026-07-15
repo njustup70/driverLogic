@@ -107,12 +107,15 @@ if __name__ == "__main__":
                 "blocks": blocks,
             }
 
-            r2_result = solve_route(strategy="dijkstra", map_data=map_data, required_r2_count=2)
+            r2_result = solve_route(strategy="dijkstra", map_data=map_data)
             r2_result["map_data"] = map_data
 
             print(f"\n  R2 求解结果: found={r2_result.get('found')}, "
                   f"cost={r2_result.get('cost')}, "
                   f"collected_r2={r2_result.get('collected_r2')}")
+            print(f"  R2 取块区间: [{r2_result.get('min_required_r2_count')}, "
+                  f"{r2_result.get('max_required_r2_count')}]  "
+                  f"(实际取了 {r2_result.get('collected_r2_count')} 个)")
 
             # 输出 R2 路径序列
             r2_path_nodes = r2_result.get("path", [])
