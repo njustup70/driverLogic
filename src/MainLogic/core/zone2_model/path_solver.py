@@ -71,7 +71,7 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 MOVE_COST: float = 5.0   # 红色边基础代价
 PICK_COST: float = 7.0   # 紫色边基础代价
 TURN_COST: float = 2.0            # 转向代价（与边基础代价分离）
-REQUIRED_R2_COUNT: int = 2        # 到达 end 前只需要获取的不同 R2 数量（默认 3）
+REQUIRED_R2_COUNT: int = 1        # 到达 end 前只需要获取的不同 R2 数量（默认 3）
 R1_REMOVE_COST: float = 0.01      # R1物块消除代价
 
 
