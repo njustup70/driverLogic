@@ -68,9 +68,9 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 # normal: 非“指向衍生节点”的边（对应 plot 中红色箭头性质）
 # to_derived: 指向衍生节点的边（对应 plot 中紫色箭头性质）
 # 这里先把它们作为“基础动作代价”使用，真正的转向代价在状态搜索中单独叠加。
-MOVE_COST: float = 10.0   # 红色边基础代价
-PICK_COST: float = 2.0   # 紫色边基础代价
-TURN_COST: float = 1.0            # 转向代价（与边基础代价分离）
+MOVE_COST: float = 5.0   # 红色边基础代价
+PICK_COST: float = 7.0   # 紫色边基础代价
+TURN_COST: float = 2.0            # 转向代价（与边基础代价分离）
 REQUIRED_R2_COUNT: int = 2        # 到达 end 前需获取的不同 R2 数量（恰好取这么多，不多取）
 R1_REMOVE_COST: float = 0.01      # R1物块消除代价
 
