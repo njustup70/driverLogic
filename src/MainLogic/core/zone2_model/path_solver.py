@@ -34,21 +34,13 @@ A. 全局默认参数（文件内常量）
 1) MOVE_COST：normal 边基础代价（默认 1.0）
 2) PICK_COST：to_derived 边基础代价（默认 2.0）
 3) TURN_COST：转向代价（默认 0.5）
-<<<<<<< Updated upstream
-4) REQUIRED_R2_COUNT：到达 end 前需获取的不同 R2 数量（恰好取这么多，默认 2）
-=======
 4) MIN_REQUIRED_R2_COUNT / MAX_REQUIRED_R2_COUNT：到达 end 前获取 R2 的数量区间（默认 1~2）
->>>>>>> Stashed changes
 
 B. dijkstra_min_cost_path(...) 调用参数
 1) start / end：起终点（默认 start/end）
 2) normal_cost / to_derived_cost：覆盖基础边代价
-<<<<<<< Updated upstream
-3) required_r2_count：到达 end 前需获取的不同 R2 数量（恰好取这么多）
-=======
 3) min_required_r2_count / max_required_r2_count：到达 end 前获取 R2 的数量区间
     （兼容旧参数 required_r2_count，传入后退化为“恰好取 N 个”）
->>>>>>> Stashed changes
 4) enforce_top_entry_after_one_pick：是否启用顶排进入约束
 5) turn_cost：覆盖转向代价
 6) turn_free_rules：免转向规则集合（如爬坡类 rule）
@@ -80,15 +72,11 @@ WeightedEdge = Tuple[str, str, float, str, ArrowClass]
 MOVE_COST: float = 5.0   # 红色边基础代价
 PICK_COST: float = 7.0   # 紫色边基础代价
 TURN_COST: float = 2.0            # 转向代价（与边基础代价分离）
-<<<<<<< Updated upstream
-REQUIRED_R2_COUNT: int = 2        # 到达 end 前需获取的不同 R2 数量（恰好取这么多，不多取）
-=======
 MIN_REQUIRED_R2_COUNT: int = 1    # 到达 end 前至少获取的不同 R2 数量
 MAX_REQUIRED_R2_COUNT: int = 2    # 到达 end 前最多获取的不同 R2 数量
 # 兼容旧代码导入：历史上 REQUIRED_R2_COUNT 表示固定取块数，当前默认等效为最小值 1。
 REQUIRED_R2_COUNT: int = MIN_REQUIRED_R2_COUNT
->>>>>>> Stashed changes
-R1_REMOVE_COST: float = 0.01      # R1物块消除代价
+R1_REMOVE_COST: float = 5      # R1物块消除代价
 
 
 
