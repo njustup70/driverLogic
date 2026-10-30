@@ -95,3 +95,22 @@ async def chassic_move_to(target,min_distance=0.05):
     assert target.shape ==(3,), "目标位置必须是一个包含 x, y, yaw 的数组"
     TFManagerInstance.rosBridge.writeBytes(b'\xA1' + turn_to_bytes(target.tolist()))
     await _listen_tf(target,min_distance)
+
+async def send_test_speed(vx: float, vy: float, wz: float):
+    """
+    仅发送固定速度的测试指令
+    :param vx: X轴线速度 (m/s)
+    :param vy: Y轴线速度 (m/s)
+    :param wz: Z轴角速度 (rad/s)
+    """
+    serial_cmd_prefix = b'\xBB'
+    # 使用 turn_to_bytes 将三个 float 转为 12 字节小端浮点数
+    speed_bytes = turn_to_bytes([vx, vy, wz])
+    
+    ros_bridge = RosBridgeNodeInstance
+    if ros_bridge is not None:
+        # writeBytes 内部会自动加上 0xFA 帧头
+        ros_bridge.writeBytes(serial_cmd_prefix + speed_bytes)
+        print(f"[Move.py] 发送测试速度: vx={vx:.2f}, vy={vy:.2f}, wz={wz:.2f}")
+    else:
+        print("[Move.py] 错误: RosBridgeNode 未初始化")
