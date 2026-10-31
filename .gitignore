@@ -10,6 +10,8 @@ install/
 metadata.yaml
 .cache/
 *.pyc
+__pycache__/
+.DS_Store
 *.cpy
 *.zip
 *.mcap

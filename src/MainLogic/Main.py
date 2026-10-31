@@ -11,7 +11,7 @@ import threading
 import traceback
 import rclpy
 from rclpy.executors import MultiThreadedExecutor,SingleThreadedExecutor
-from MainLogic.core import ros_bridge_node as ros_bridge_module
+from MainLogic.link import ros_bridge_node as ros_bridge_module
 
 # 设置多进程启动方法为 'spawn'，确保子进程完全独立，不共享 ROS2 上下文
 multiprocessing.set_start_method('spawn', force=True)

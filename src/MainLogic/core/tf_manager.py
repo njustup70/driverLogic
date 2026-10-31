@@ -11,11 +11,11 @@ import rclpy.time
 from geometry_msgs.msg import Vector3Stamped,Vector3
 
 from MainLogic.Lib.odomVec import Odom,SE3
-from MainLogic.Lib.bytes import turn_to_bytes
+from MainLogic.link.bytes import turn_to_bytes
 from MainLogic.Lib.AsyncTools import AsyncVariable
 
-from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.Lib.Visual import PathVisualInstance
+from MainLogic.link import ros_bridge_node as ros_bridge_module
+from MainLogic.tools.Visual import PathVisualInstance
 BASE_LINK_ODOM_TOPIC = '/state/base_link_odom'
 
 class TFManager:

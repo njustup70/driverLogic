@@ -233,7 +233,7 @@ imu_data = {
 self.imu_channel.log(imu_data)
 '''
 # foxgloveViusalInstance=FoxgloveVisual(port=8766)
-from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
+from MainLogic.link.ros_bridge_node import RosBridgeNodeInstance
 import numpy as np
 from geometry_msgs.msg import Point, Pose, PoseStamped
 from nav_msgs.msg import Path

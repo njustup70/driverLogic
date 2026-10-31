@@ -3,7 +3,7 @@
 '''
 from MainLogic.Lib import odomVec
 from MainLogic.core.tf_manager import TFManagerInstance
-from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
+from MainLogic.link.ros_bridge_node import RosBridgeNodeInstance
 import numpy as np
 import asyncio
 _enable_mpc=False
@@ -50,7 +50,7 @@ async def mpc_move_to_baseodom(target,min_distance=0.05):
     await _listen_tf(target_odom_map,min_distance)
 
 # 🔴不可用🔴
-from MainLogic.Lib.bytes import turn_to_bytes
+from MainLogic.link.bytes import turn_to_bytes
 async def mpc_control_loop():
     '''
     固定100hz控制频率而不是每次TF更新都发控制指令，避免过度控制

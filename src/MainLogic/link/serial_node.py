@@ -1,5 +1,5 @@
 from rclpy.node import Node
-from MainLogic.core.my_serial import AsyncSerial_t
+from MainLogic.link.my_serial import AsyncSerial_t
 from std_msgs.msg import UInt8MultiArray
 
 

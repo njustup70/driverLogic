@@ -4,7 +4,7 @@
 import asyncio
 import struct
 from MainLogic.core.tf_manager import TFManagerInstance
-from MainLogic.core.ros_bridge_node import RosBridgeNodeInstance
+from MainLogic.link.ros_bridge_node import RosBridgeNodeInstance
 from typing import List
 _MEILIN_MAP_FRAME_LEN = 12
 
@@ -59,9 +59,9 @@ def meilin_map_frame_callback(data: bytes):
 '''
 全局回调函数串口接收回调和ros2话题回调
 '''
-from MainLogic.core import ros_bridge_node as ros_bridge_module
+from MainLogic.link import ros_bridge_node as ros_bridge_module
 from MainLogic.core.tf_manager import TFManagerInstance, TFOdinInstance
-from MainLogic.Lib.bytes import turn_to_bytes
+from MainLogic.link.bytes import turn_to_bytes
 from std_msgs.msg import Float32
 
 
@@ -110,7 +110,7 @@ def sick_callback(data: bytes): # 0xAA
             sick_floats = struct.unpack('<4f', sick_data)
             left_distance = sick_floats[0]
             # print(id(TFManagerInstance), id(TFOdinInstance))
-            TFManagerInstance.sick(float(left_distance))
+            TFManagerInstance.left_sick(float(left_distance))
             # TFOdinInstance.sick(float(left_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
                 SICK_LEFT_DISTANCE_TOPIC,
@@ -119,7 +119,7 @@ def sick_callback(data: bytes): # 0xAA
             print(f"SICK数据解析成功: distance={left_distance:.3f} m")
 
             right_distance = sick_floats[1]
-            TFManagerInstance.sick_right(float(right_distance))
+            TFManagerInstance.right_sick(float(right_distance))
             # TFOdinInstance.sick_right(float(right_distance))
             ros_bridge_module.RosBridgeNodeInstance.publish_ros2(
                 SICK_RIGHT_DISTANCE_TOPIC,

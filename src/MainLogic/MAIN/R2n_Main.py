@@ -9,17 +9,17 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 '''
 异步主逻辑和其他函数
 '''
-from MainLogic.core import ros_bridge_node as ros_bridge_module
-from MainLogic.core.serial_node import start_serial_process
+from MainLogic.link import ros_bridge_node as ros_bridge_module
+from MainLogic.link.serial_node import start_serial_process
 import asyncio
 from MainLogic.core.tf_manager import TFManagerInstance,TFOdin
 import MainLogic.core.tf_manager as tf_manager
 from MainLogic.Lib.odomVec import Odom,SE3
-import MainLogic.core.Move as Move
+import MainLogic.app.Move as Move
 import numpy as np
 from geometry_msgs.msg import PointStamped
 from std_msgs.msg import String, UInt8MultiArray
-from MainLogic import globalCallback as gcb
+from MainLogic.link import globalCallback as gcb
 
 async def continuous_move(vx, vy, wz, duration):
     """保持某个速度行驶一段时间"""

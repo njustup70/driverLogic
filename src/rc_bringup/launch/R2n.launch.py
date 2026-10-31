@@ -1,76 +1,40 @@
-'''
-Author: Nagisa 2964793117@qq.com
-Date: 2026-06-26 11:01:15
-LastEditors: Nagisa 2964793117@qq.com
-LastEditTime: 2026-06-27 16:05:58
-FilePath: \driverLogic\src\rc_bringup\launch\R2n.launch.py
-Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
-'''
 #!/usr/bin/env python3
-"""启动底盘测试：airy + MainLogic(slamMain) + foxglove。"""
+"""R2n 单车入口：只启动主逻辑，用于速度发送/底盘联调。
+
+说明：
+- 不拉雷达、相机、foxglove、rosbag，减少联调时的失败点。
+- 串口和波特率目前写在 MAIN/R2n_Main.py 里：/dev/serial_ch340 @ 921600。
+- 仓库根目录按容器约定放在 ~/ros2_ws（src 在 ~/ros2_ws/src）。
+
+用法：
+    ros2 launch rc_bringup R2n.launch.py
+"""
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_ros.actions import Node
-from launch.actions import TimerAction
+from launch.actions import ExecuteProcess
+
 
 def generate_launch_description():
-    ld = LaunchDescription()
+    # 容器里仓库根是 ~/ros2_ws；直接从源码目录 launch 时用 launch/../.. 回退。
+    ws_src = os.path.expanduser("~/ros2_ws/src")
+    source_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    src_path = ws_src if os.path.isdir(os.path.join(ws_src, "MainLogic")) else source_src
 
-    airy_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('my_driver'), 'launch', 'rs_airy.launch.py')
-        ),
-        launch_arguments={
-            'use_rviz': 'false',
-        }.items(),
-    )
-    hik_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('my_driver'), 'launch', 'hik_camera.launch.py')
-        )
-    )
-
-    slam_main = ExecuteProcess(
+    r2n_main = ExecuteProcess(
         cmd=[
-            'bash',
-            '-c',
-            'python3 ~/ros2_ws/src/MainLogic/Main.py --main-module R2n_Main --main-func async_main',
+            "bash",
+            "-c",
+            (
+                f"export PYTHONPATH={src_path}:$PYTHONPATH; "
+                "export PYTHONUNBUFFERED=1; "
+                "exec python3 -m MainLogic.Main "
+                "--main-module R2n_Main --main-func async_main"
+            ),
         ],
-        output='screen',
+        output="screen",
         emulate_tty=True,
     )
 
-    foxglove = Node(
-        package='foxglove_bridge',
-        executable='foxglove_bridge',
-        name='foxglove_bridge',
-        emulate_tty=False,
-        arguments=['--ros-args', '--log-level', 'FATAL'],
-    )
-    ros_bag_node=  Node(
-                    # condition=IfCondition(LaunchConfiguration('use_rosbag_record')),
-                    package='python_pkg',
-                    executable='rosbag_record',
-                    name='rosbag_record',
-                    output='screen',
-                    emulate_tty=True,
-                    parameters=[
-                        # {'topic_blacklist':LaunchConfiguration("topic_blacklist")}
-                        {'topic_blacklist':['*/compressed*','/livox/lidar','livox/imu']}
-                    ]
-                )
-    ros_bag_action=TimerAction(
-        period=5.0,  # Delay in seconds
-        actions=[ros_bag_node]
-    )
-    ld.add_action(airy_launch)
-    ld.add_action(hik_launch)
-    ld.add_action(slam_main)
-    ld.add_action(foxglove)
-    ld.add_action(ros_bag_action)
-    return ld
+    return LaunchDescription([r2n_main])
