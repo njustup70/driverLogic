@@ -27,6 +27,9 @@ class AsyncSerial_t:
         self.writer = None
         self.reader = None
         self.is_online = False  # 新增：状态标识
+        # 阶段 0 诊断计数：只打印前若干帧，避免 921600 下刷屏
+        self._rx_chunks = 0
+        self._rx_frames = 0
         
         self._thread = threading.Thread(target=self._run_thread, daemon=True)
         self._thread.start()
@@ -111,6 +114,13 @@ class AsyncSerial_t:
                     bytes = await asyncio.wait_for(self.reader.read(4096), timeout=1.0)
                     if not bytes: 
                         raise ConnectionError("读取到空字节，连接可能关闭")
+                    self._rx_chunks += 1
+                    if self._rx_chunks <= 10 or self._rx_chunks % 100 == 0:
+                        print(
+                            f"[SERIAL RAW #{self._rx_chunks}] {len(bytes)}B "
+                            f"{bytes[:64].hex(' ')}",
+                            flush=True,
+                        )
                     await self.read_queue.put(bytes)
                 except (asyncio.TimeoutError, Exception):
                     # 读取异常通常意味着硬件问题
@@ -137,6 +147,13 @@ class AsyncSerial_t:
                 
                 # 提取 payload
                 payload = buffer[2:total_frame_len]
+                self._rx_frames += 1
+                if self._rx_frames <= 20:
+                    print(
+                        f"[SERIAL FRAME #{self._rx_frames}] len={length} "
+                        f"payload={payload[:32].hex(' ')}",
+                        flush=True,
+                    )
                 if length not in [3,13,21]:
                     print(payload.hex(' '))                
                 if self.callback:

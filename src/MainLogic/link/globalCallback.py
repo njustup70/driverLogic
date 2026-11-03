@@ -3,6 +3,7 @@
 '''
 import asyncio
 import struct
+import time
 from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.link.ros_bridge_node import RosBridgeNodeInstance
 from typing import List
@@ -69,8 +70,15 @@ SPEAR_OFFSET_COMMAND = b'\xB1'
 SICK_LEFT_DISTANCE_TOPIC = '/state/sick_left_distance'
 SICK_RIGHT_DISTANCE_TOPIC = '/state/sick_right_distance'
 
+# 串口帧率很高（odom 100Hz、SICK 50Hz），只限制日志，不限制数据处理。
+_ODOM_LOG_INTERVAL = 1.0
+_SICK_LOG_INTERVAL = 1.0
+_last_odom_log = 0.0
+_last_sick_log = 0.0
+
 def mcu_transmit_callback(data: bytes):
     """下位机串口回调：单帧输入模式，完成 odom/sick 的检测与解包，sick纠正指令的回调"""
+    global _last_odom_log
     # odom数据帧：
     _ODOM_FRAME_LEN = 12
     
@@ -84,7 +92,10 @@ def mcu_transmit_callback(data: bytes):
             #if have nan value
             if any(map(lambda v: not isinstance(v, float) or v != v, [x, y, yaw])):
                 print(f"ODOM数据包含无效值: x={x}, y={y}, yaw={yaw}")
-            print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
+            now = time.monotonic()
+            if now - _last_odom_log >= _ODOM_LOG_INTERVAL:
+                print(f"ODOM数据解析成功: x={x:.3f}, y={y:.3f}, yaw={yaw:.3f}")
+                _last_odom_log = now
         except Exception as e:
             print(f"ODOM解析错误: {e}")
         return
@@ -92,6 +103,7 @@ def mcu_transmit_callback(data: bytes):
 
 def sick_callback(data: bytes): # 0xAA
     """下位机串口数据帧回调（新协议：无帧头、无功能码）。"""
+    global _last_sick_log
     # sick数据帧：4个float加头3位，尾1位，共20字节
     _SICK_FRAME_LEN = 20
     if not data:
@@ -116,7 +128,6 @@ def sick_callback(data: bytes): # 0xAA
                 SICK_LEFT_DISTANCE_TOPIC,
                 Float32(data=float(left_distance))
             )
-            print(f"SICK数据解析成功: distance={left_distance:.3f} m")
 
             right_distance = sick_floats[1]
             TFManagerInstance.right_sick(float(right_distance))
@@ -125,7 +136,10 @@ def sick_callback(data: bytes): # 0xAA
                 SICK_RIGHT_DISTANCE_TOPIC,
                 Float32(data=float(right_distance))
             )
-            print(f"SICK右侧数据解析成功: distance={right_distance:.3f} m")
+            now = time.monotonic()
+            if now - _last_sick_log >= _SICK_LOG_INTERVAL:
+                print(f"SICK数据解析成功: left={left_distance:.3f} m, right={right_distance:.3f} m")
+                _last_sick_log = now
         except Exception as e:
             print(f"SICK解析错误: {e}")
 
