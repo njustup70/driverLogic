@@ -20,6 +20,24 @@ from MainLogic.link.bytes import turn_to_bytes
 STATE_MPC_CONTROL_TOPIC = '/state/mpc_control'
 CMD_VEL_TOPIC = '/cmd_vel'
 
+# 整车平移速度上限。MPC 库内部仍允许更大的 u，接口层统一做安全限幅。
+MAX_LINEAR_SPEED = 0.5
+
+
+def limit_linear_speed(vx: float, vy: float, max_linear: float = MAX_LINEAR_SPEED):
+    """按合速度限幅，保证 sqrt(vx^2 + vy^2) <= max_linear。"""
+    norm = float(np.hypot(vx, vy))
+    if norm > max_linear and norm > 1e-9:
+        scale = max_linear / norm
+        return vx * scale, vy * scale
+    return vx, vy
+
+
+def limit_control(u) -> np.ndarray:
+    """对 MPC 输出做整车安全限幅，wz 暂不在这里限制。"""
+    vx, vy = limit_linear_speed(float(u[0]), float(u[1]))
+    return np.asarray([vx, vy, float(u[2])])
+
 
 class MPCPathFollower(_MPCPathFollower):
     """MainLogic 侧的 MPC 适配器。"""
@@ -49,42 +67,54 @@ async def mpc_loop(send_to_mcu: bool = False):
     from MainLogic.core.tf_manager import TFManagerInstance
     serial_cmd_prefix = b'\xBB'
     zero_frame = serial_cmd_prefix + turn_to_bytes([0.0, 0.0, 0.0])
-    while True:
-        ros_bridge = ros_bridge_module.RosBridgeNodeInstance
-        if ros_bridge is None:
-            await asyncio.sleep(MPCPathFollowerInstance.dt)
-            continue
+    ros_bridge = ros_bridge_module.RosBridgeNodeInstance
 
-        if not MPCPathFollowerInstance.is_following_path:
+    try:
+        while True:
+            ros_bridge = ros_bridge_module.RosBridgeNodeInstance
+            if ros_bridge is None:
+                await asyncio.sleep(MPCPathFollowerInstance.dt)
+                continue
+
+            if not MPCPathFollowerInstance.is_following_path:
+                if send_to_mcu:
+                    ros_bridge.writeBytes(zero_frame)
+                await asyncio.sleep(MPCPathFollowerInstance.dt)
+                continue
+
+            current_odom = TFManagerInstance.baseLinkOdom.value
+            try:
+                x = np.asarray(current_odom).reshape((3, 1))
+                u = await MPCPathFollowerInstance.async_update(x)
+                u = limit_control(u)
+            except Exception as exc:
+                print(f"[MPC] solve failed: {exc!r}; stop")
+                if send_to_mcu:
+                    ros_bridge.writeBytes(zero_frame)
+                MPCPathFollowerInstance.clear_path()
+                await asyncio.sleep(MPCPathFollowerInstance.dt)
+                continue
+
+            state_msg = Vector3(x=float(u[0]), y=float(u[1]), z=float(u[2]))
+            ros_bridge.publish_ros2(STATE_MPC_CONTROL_TOPIC, state_msg)
+
+            cmd_msg = Twist()
+            cmd_msg.linear.x = float(u[0])
+            cmd_msg.linear.y = float(u[1])
+            cmd_msg.angular.z = float(u[2])
+            ros_bridge.publish_ros2(CMD_VEL_TOPIC, cmd_msg)
+
             if send_to_mcu:
-                ros_bridge.writeBytes(zero_frame)
+                ros_bridge.writeBytes(
+                    serial_cmd_prefix
+                    + turn_to_bytes([float(u[0]), float(u[1]), float(u[2])])
+                )
             await asyncio.sleep(MPCPathFollowerInstance.dt)
-            continue
-
-        current_odom = TFManagerInstance.baseLinkOdom.value
-        try:
-            x = np.asarray(current_odom).reshape((3, 1))
-            u = await MPCPathFollowerInstance.async_update(x)
-        except Exception as exc:
-            print(f"[MPC] solve failed: {exc!r}; stop")
-            if send_to_mcu:
+    finally:
+        # 任务被取消 / 进程退出时，尽量补一帧 0 速，避免 MCU 保持最后速度。
+        if send_to_mcu and ros_bridge is not None:
+            try:
                 ros_bridge.writeBytes(zero_frame)
-            MPCPathFollowerInstance.clear_path()
-            await asyncio.sleep(MPCPathFollowerInstance.dt)
-            continue
+            except Exception as exc:
+                print(f"[MPC] final zero frame failed: {exc!r}")
 
-        state_msg = Vector3(x=float(u[0]), y=float(u[1]), z=float(u[2]))
-        ros_bridge.publish_ros2(STATE_MPC_CONTROL_TOPIC, state_msg)
-
-        cmd_msg = Twist()
-        cmd_msg.linear.x = float(u[0])
-        cmd_msg.linear.y = float(u[1])
-        cmd_msg.angular.z = float(u[2])
-        ros_bridge.publish_ros2(CMD_VEL_TOPIC, cmd_msg)
-
-        if send_to_mcu:
-            ros_bridge.writeBytes(
-                serial_cmd_prefix
-                + turn_to_bytes([float(u[0]), float(u[1]), float(u[2])])
-            )
-        await asyncio.sleep(MPCPathFollowerInstance.dt)

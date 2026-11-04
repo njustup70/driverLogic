@@ -14,7 +14,7 @@ import time
 import numpy as np
 
 from MainLogic.Lib.odomVec import Odom
-from MainLogic.core.mpc import MPCPathFollowerInstance
+from MainLogic.core.mpc import MPCPathFollowerInstance, limit_linear_speed
 from MainLogic.core.tf_manager import TFManagerInstance
 from MainLogic.link.bytes import turn_to_bytes
 from MainLogic.link.ros_bridge_node import RosBridgeNodeInstance
@@ -148,6 +148,7 @@ async def send_test_speed(vx: float, vy: float, wz: float, verbose: bool = False
         print("[Move] 错误: RosBridgeNode 未初始化")
         return
 
+    vx, vy = limit_linear_speed(float(vx), float(vy))
     ros_bridge.writeBytes(b'\xBB' + turn_to_bytes([vx, vy, wz]))
     if verbose:
         print(
