@@ -48,7 +48,6 @@ async def async_main():
 
     bridge.register_serial_sub(gcb.mcu_transmit_callback, 0xAA)
     bridge.register_serial_sub(gcb.sick_callback, 0xB3)
-    # 阶段 0 先不注册 0xB2：serial_correct_callback 还会走 TFOdin，先避开。
 
     TFManagerInstance.register_tf_chain(
         SICK2BASE,
